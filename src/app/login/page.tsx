@@ -1,11 +1,29 @@
 
+'use client'; // Add 'use client' directive
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 export default function LoginPage() {
+  const { toast } = useToast(); // Initialize toast
+  const router = useRouter(); // Initialize router
+
+  const handleLogin = () => {
+    // Simulate login logic - replace with actual authentication
+    console.log("Attempting login...");
+    toast({
+      title: "Login Successful",
+      description: "Redirecting to dashboard (simulation).",
+    });
+    // Redirect to dashboard or main app page
+    router.push('/');
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-sm">
@@ -30,12 +48,17 @@ export default function LoginPage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button className="w-full" onClick={() => alert('Login functionality not implemented yet.')}>
+           {/* Update Button to use handleLogin */}
+          <Button className="w-full" onClick={handleLogin}>
             Login
           </Button>
            <p className="text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <Link href="/signup" className="underline"> {/* Assuming a signup page exists */}
+            {/* Link to a potential signup page */}
+            <Link href="/signup" className="underline" onClick={(e) => {
+              e.preventDefault(); // Prevent navigation for now
+              toast({ title: "Info", description: "Signup page not implemented yet." });
+            }}>
               Sign up
             </Link>
           </p>

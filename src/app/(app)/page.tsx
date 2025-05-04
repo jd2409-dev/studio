@@ -7,9 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import { BarChart, FileText, Calendar, AlertTriangle, Activity, Target, Clock } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation"; // Import useRouter
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const router = useRouter(); // Initialize useRouter
 
   // Placeholder data - replace with actual data fetching
   const upcomingHomework = [
@@ -34,7 +36,12 @@ export default function DashboardPage() {
      toast({
        title: "Feature Coming Soon",
        description: `${featureName} functionality is not yet implemented.`,
+       variant: "default" // Use default variant for info messages
      });
+   };
+
+   const navigateTo = (path: string) => {
+       router.push(path);
    };
 
 
@@ -50,9 +57,11 @@ export default function DashboardPage() {
           <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
         </CardContent>
          <CardFooter className="flex gap-2">
+           {/* Link Button */}
            <Button asChild>
              <Link href="/upload-textbook"><FileText className="mr-2 h-4 w-4" /> Upload Textbook</Link>
            </Button>
+           {/* Link Button */}
            <Button variant="secondary" asChild>
              <Link href="/quiz"><Activity className="mr-2 h-4 w-4" /> Take a Quiz</Link>
            </Button>
@@ -80,6 +89,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
         <CardFooter>
+          {/* Placeholder Button */}
           <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View All Homework')}>
             View All Homework
           </Button>
@@ -107,6 +117,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
          <CardFooter>
+          {/* Placeholder Button */}
           <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View Exam Schedule')}>
             View Exam Schedule
           </Button>
@@ -131,6 +142,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
         <CardFooter>
+          {/* Placeholder Button */}
           <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('Customize Plan')}>
             Customize Plan
           </Button>
@@ -156,6 +168,7 @@ export default function DashboardPage() {
           ))}
         </CardContent>
         <CardFooter>
+           {/* Placeholder Button */}
            <Button variant="default" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View Detailed Report')}>
             View Detailed Report
             </Button>
@@ -168,12 +181,15 @@ export default function DashboardPage() {
            <CardTitle className="flex items-center gap-2"><Clock className="text-secondary" /> Quick Actions</CardTitle>
          </CardHeader>
          <CardContent className="grid grid-cols-1 gap-2">
-           <Button variant="outline" asChild>
-              <Link href="/textbook-summary">Generate Summary</Link>
+           {/* Navigation Button */}
+           <Button variant="outline" onClick={() => navigateTo('/textbook-summary')}>
+              Generate Summary
             </Button>
-            <Button variant="outline" asChild>
-              <Link href="/quiz">Start Practice Quiz</Link>
+            {/* Navigation Button */}
+            <Button variant="outline" onClick={() => navigateTo('/quiz')}>
+              Start Practice Quiz
             </Button>
+             {/* Placeholder Button */}
              <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
                 AI Tutor Session
              </Button>
@@ -192,6 +208,7 @@ export default function DashboardPage() {
            <p><span className="font-semibold text-muted-foreground">Reminder:</span> Mock test for Mathematics scheduled for Saturday.</p>
          </CardContent>
           <CardFooter>
+           {/* Placeholder Button */}
            <Button variant="default" size="sm" onClick={() => handlePlaceholderClick('Generate Detailed Study Plan')}>
             Generate Detailed Study Plan
             </Button>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -7,7 +8,7 @@ import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button" // Import buttonVariants
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -533,13 +534,16 @@ const sidebarMenuButtonVariants = cva(
   }
 )
 
-const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
+type SidebarMenuButtonProps =
   React.ComponentProps<"button"> & {
     asChild?: boolean
     isActive?: boolean
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
   } & VariantProps<typeof sidebarMenuButtonVariants>
+
+const SidebarMenuButton = React.forwardRef<
+  HTMLButtonElement,
+  SidebarMenuButtonProps
 >(
   (
     {
@@ -549,15 +553,15 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
-      children, // Keep children prop here
+      children,
       ...props
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button"
-    const { isMobile, state } = useSidebar()
+    const Comp = asChild ? Slot : "button";
+    const { isMobile, state } = useSidebar();
 
-    const buttonElement = (
+    const buttonContent = (
       <Comp
         ref={ref}
         data-sidebar="menu-button"
@@ -566,22 +570,23 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       >
-        {/* When asChild is true, Slot handles passing children, so we don't pass them explicitly here. */}
-        {!asChild ? children : undefined}
+         {children}
       </Comp>
     );
 
     if (!tooltip) {
-      return buttonElement
+      return buttonContent;
     }
 
-    const tooltipContentProps = typeof tooltip === "string" ? { children: tooltip } : tooltip;
+    const tooltipContentProps =
+      typeof tooltip === "string" ? { children: tooltip } : tooltip;
 
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-         {/* Ensure the buttonElement itself is the direct child */}
-          {buttonElement}
+          {/* When asChild is true, Slot ensures its child receives the props.
+              We pass the button content directly. */}
+          {buttonContent}
         </TooltipTrigger>
         <TooltipContent
           side="right"
@@ -589,12 +594,13 @@ const SidebarMenuButton = React.forwardRef<
           hidden={state !== "collapsed" || isMobile}
           {...tooltipContentProps}
         >
-         {typeof tooltip === 'string' ? tooltip : undefined} {/* Provide simple content if tooltip is a string */}
+          {typeof tooltip === 'string' ? tooltip : undefined}
         </TooltipContent>
       </Tooltip>
-    )
+    );
   }
-)
+);
+
 SidebarMenuButton.displayName = "SidebarMenuButton"
 
 

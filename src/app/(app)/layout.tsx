@@ -1,17 +1,20 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut } from 'lucide-react';
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, FileText, BarChart, Target, Clock, AlertTriangle, BrainCircuit, AudioLines, Text } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation'; // Import useRouter
+import { usePathname } from 'next/navigation'; // Import usePathname
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const router = useRouter(); // Initialize useRouter
+  const pathname = usePathname(); // Get current path
 
   const handleLogout = () => {
     // Simulate logout logic
@@ -53,71 +56,71 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={false}> {/* Update isActive logic based on current route */}
-                <Link href="/">
-                  <>
-                    <Home />
-                    Dashboard
-                  </>
-                </Link>
-              </SidebarMenuButton>
+               <Link href="/" passHref legacyBehavior>
+                 <SidebarMenuButton asChild isActive={pathname === '/'}>
+                   <a>
+                     <Home />
+                     Dashboard
+                   </a>
+                 </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="/textbook-summary">
-                  <>
-                    <BookOpen />
-                    Textbook Summary
-                  </>
-                </Link>
-              </SidebarMenuButton>
+               <Link href="/textbook-summary" passHref legacyBehavior>
+                 <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
+                   <a>
+                     <BookOpen />
+                     Textbook Summary
+                   </a>
+                 </SidebarMenuButton>
+               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                 <Link href="/quiz">
-                   <>
+               <Link href="/quiz" passHref legacyBehavior>
+                <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
+                  <a>
                     <HelpCircle />
                     Quiz Generation
-                   </>
-                 </Link>
-              </SidebarMenuButton>
+                  </a>
+                </SidebarMenuButton>
+               </Link>
             </SidebarMenuItem>
               <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                 <Link href="/upload-textbook">
-                   <>
+                <Link href="/upload-textbook" passHref legacyBehavior>
+                 <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
+                   <a>
                     <Upload />
                     Upload Textbook
-                   </>
-                 </Link>
-              </SidebarMenuButton>
+                   </a>
+                 </SidebarMenuButton>
+                </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="/settings">
-                  <>
+               <Link href="/settings" passHref legacyBehavior>
+                <SidebarMenuButton asChild isActive={pathname === '/settings'}>
+                   <a>
                     <Settings />
                     Settings
-                  </>
-                </Link>
-              </SidebarMenuButton>
+                   </a>
+                </SidebarMenuButton>
+               </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <Link href="/profile">
-                  <>
+                <Link href="/profile" passHref legacyBehavior>
+                 <SidebarMenuButton asChild isActive={pathname === '/profile'}>
+                   <a>
                     <User />
                     Profile
-                  </>
+                   </a>
+                 </SidebarMenuButton>
                 </Link>
-              </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
-               {/* Log Out Button - Does not use asChild */}
+               {/* Log Out Button - Does not use Link or asChild */}
               <SidebarMenuButton onClick={handleLogout}>
                 <LogOut />
                 Log Out
