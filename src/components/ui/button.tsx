@@ -43,12 +43,13 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, children, ...props }, ref) => { // Explicitly destructure children
     const Comp = asChild ? Slot : "button";
     return (
+      // Pass children explicitly *inside* the Comp
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props} // Pass the rest of the props
       >
-        {children} {/* Pass children explicitly inside the component */}
+        {children}
       </Comp>
     );
   }

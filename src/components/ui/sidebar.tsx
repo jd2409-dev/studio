@@ -553,7 +553,7 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
-      children,
+      children, // Destructure children here
       ...props
     },
     ref
@@ -561,7 +561,8 @@ const SidebarMenuButton = React.forwardRef<
     const Comp = asChild ? Slot : "button";
     const { isMobile, state } = useSidebar();
 
-    const buttonContent = (
+    const buttonElement = (
+      // Pass children explicitly *inside* the Comp
       <Comp
         ref={ref}
         data-sidebar="menu-button"
@@ -570,12 +571,12 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       >
-         {children}
+        {children}
       </Comp>
     );
 
     if (!tooltip) {
-      return buttonContent;
+      return buttonElement;
     }
 
     const tooltipContentProps =
@@ -585,8 +586,8 @@ const SidebarMenuButton = React.forwardRef<
       <Tooltip>
         <TooltipTrigger asChild>
           {/* When asChild is true, Slot ensures its child receives the props.
-              We pass the button content directly. */}
-          {buttonContent}
+              We pass the button element directly. */}
+          {buttonElement}
         </TooltipTrigger>
         <TooltipContent
           side="right"
@@ -600,6 +601,7 @@ const SidebarMenuButton = React.forwardRef<
     );
   }
 );
+
 
 SidebarMenuButton.displayName = "SidebarMenuButton"
 
