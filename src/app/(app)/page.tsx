@@ -1,10 +1,16 @@
+
+'use client';
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { BarChart, FileText, Calendar, AlertTriangle, Activity, Target, Clock } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function DashboardPage() {
+  const { toast } = useToast();
+
   // Placeholder data - replace with actual data fetching
   const upcomingHomework = [
     { id: 1, subject: 'Math', title: 'Algebra Chapter 5', dueDate: 'Tomorrow' },
@@ -23,6 +29,14 @@ export default function DashboardPage() {
     { id: 1, title: 'Review Chemistry formulas', reason: 'Low quiz scores' },
     { id: 2, title: 'Practice Physics problems', reason: 'Approaching exam' },
   ];
+
+  const handlePlaceholderClick = (featureName: string) => {
+     toast({
+       title: "Feature Coming Soon",
+       description: `${featureName} functionality is not yet implemented.`,
+     });
+   };
+
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -66,7 +80,9 @@ export default function DashboardPage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" className="w-full">View All Homework</Button>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View All Homework')}>
+            View All Homework
+          </Button>
         </CardFooter>
       </Card>
 
@@ -91,7 +107,9 @@ export default function DashboardPage() {
           )}
         </CardContent>
          <CardFooter>
-          <Button variant="outline" size="sm" className="w-full">View Exam Schedule</Button>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View Exam Schedule')}>
+            View Exam Schedule
+          </Button>
         </CardFooter>
       </Card>
 
@@ -113,7 +131,9 @@ export default function DashboardPage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" className="w-full">Customize Plan</Button>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => handlePlaceholderClick('Customize Plan')}>
+            Customize Plan
+          </Button>
         </CardFooter>
       </Card>
 
@@ -136,7 +156,9 @@ export default function DashboardPage() {
           ))}
         </CardContent>
         <CardFooter>
-           <Button variant="default" size="sm" className="w-full">View Detailed Report</Button>
+           <Button variant="default" size="sm" className="w-full" onClick={() => handlePlaceholderClick('View Detailed Report')}>
+            View Detailed Report
+            </Button>
         </CardFooter>
       </Card>
 
@@ -152,7 +174,9 @@ export default function DashboardPage() {
             <Button variant="outline" asChild>
               <Link href="/quiz">Start Practice Quiz</Link>
             </Button>
-             <Button variant="outline">AI Tutor Session</Button>
+             <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
+                AI Tutor Session
+             </Button>
          </CardContent>
        </Card>
 
@@ -168,7 +192,9 @@ export default function DashboardPage() {
            <p><span className="font-semibold text-muted-foreground">Reminder:</span> Mock test for Mathematics scheduled for Saturday.</p>
          </CardContent>
           <CardFooter>
-           <Button variant="default" size="sm">Generate Detailed Study Plan</Button>
+           <Button variant="default" size="sm" onClick={() => handlePlaceholderClick('Generate Detailed Study Plan')}>
+            Generate Detailed Study Plan
+            </Button>
          </CardFooter>
        </Card>
 
