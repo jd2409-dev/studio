@@ -1,10 +1,39 @@
+
+'use client';
+
 import type { ReactNode } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload } from 'lucide-react';
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  const { toast } = useToast();
+  const router = useRouter(); // Initialize useRouter
+
+  const handleLogout = () => {
+    // Simulate logout logic
+    console.log("User logging out...");
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully (simulation).",
+    });
+    // Redirect to a login page (assuming one exists at '/login')
+    // In a real app, you'd clear auth tokens/session here.
+    router.push('/login'); // Redirect to login page
+  };
+
+   // Placeholder handler for unimplemented features
+   const handlePlaceholderClick = (featureName: string) => {
+     toast({
+       title: "Feature Coming Soon",
+       description: `${featureName} functionality is not yet implemented.`,
+     });
+   };
+
+
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar>
@@ -22,7 +51,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={true}>
+              <SidebarMenuButton asChild isActive={false}> {/* Update isActive logic based on current route */}
                 <Link href="/">
                   <Home />
                   Dashboard
@@ -71,6 +100,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <User />
                   Profile
                 </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+               {/* Log Out Button */}
+              <SidebarMenuButton onClick={handleLogout}>
+                <LogOut />
+                Log Out
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
