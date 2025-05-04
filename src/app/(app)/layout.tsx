@@ -1,15 +1,16 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, FileText, BarChart, Target, Clock, AlertTriangle, BrainCircuit, AudioLines, Text } from 'lucide-react';
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BarChart, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { auth } from '@/lib/firebase/config'; // Import Firebase auth instance
+import { auth, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import Firebase auth instance and helper
 import { signOut } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -28,7 +29,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth!); // Add null check or ensure auth is initialized
+       ensureFirebaseInitialized(); // Ensure Firebase is initialized before using auth
+      await signOut(auth!); // Use non-null assertion as we check initialization
       toast({
         title: "Logged Out",
         description: "You have been logged out successfully.",
@@ -86,37 +88,36 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/'}>
-                    {/* No <a> tag needed here when using asChild */}
+              <SidebarMenuButton asChild isActive={pathname === '/'}>
+                  <Link href="/">
                     <Home />
                     Dashboard
-                </SidebarMenuButton>
-              </Link>
+                  </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/textbook-summary" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
+               <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
+                  <Link href="/textbook-summary">
                     <BookOpen />
                     Textbook Summary
-                </SidebarMenuButton>
-              </Link>
+                  </Link>
+               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/quiz" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
+               <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
+                 <Link href="/quiz">
                     <HelpCircle />
                     Quiz Generation
-                </SidebarMenuButton>
-              </Link>
+                 </Link>
+               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/upload-textbook" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
+               <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
+                  <Link href="/upload-textbook">
                     <Upload />
                     Upload Textbook
-                </SidebarMenuButton>
-              </Link>
+                  </Link>
+               </SidebarMenuButton>
             </SidebarMenuItem>
              {/* Placeholder Menu Items */}
             <SidebarMenuItem>
@@ -142,20 +143,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/settings" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/settings'}>
+               <SidebarMenuButton asChild isActive={pathname === '/settings'}>
+                  <Link href="/settings">
                     <Settings />
                     Settings
-                </SidebarMenuButton>
-              </Link>
+                  </Link>
+               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/profile" passHref>
-                <SidebarMenuButton asChild isActive={pathname === '/profile'}>
+               <SidebarMenuButton asChild isActive={pathname === '/profile'}>
+                 <Link href="/profile">
                     <User />
                     Profile
+                  </Link>
                 </SidebarMenuButton>
-              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={handleLogout}>
