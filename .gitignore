@@ -24,11 +24,9 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
 # local env files
 .env*.local
-!.env.example.local
 
 # vercel
 .vercel
@@ -37,9 +35,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# studio
-.runtime
-
-# genkit
-.genkit/log/*
-.genkit/trace/*
+# turborepo
+.turbo
