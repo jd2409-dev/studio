@@ -37,6 +37,8 @@ export default function LoginPage() {
   }, [user, loading, router]);
 
   const createFirestoreUserProfile = async (userId: string, userEmail: string, userName: string, photoURL?: string | null) => {
+       // Check Firebase initialization *before* trying to use Firestore
+       ensureFirebaseInitialized();
       // No need to check db here, as ensureFirebaseInitialized covers it
       const userDocRef = doc(db!, 'users', userId); // Use non-null assertion after check
       const docSnap = await getDoc(userDocRef);
@@ -81,13 +83,16 @@ export default function LoginPage() {
        let description = "An unexpected error occurred during login.";
        if (error.code) {
            switch (error.code) {
-               case 'auth/invalid-credential':
-               case 'auth/invalid-email':
-               case 'auth/wrong-password': // Note: 'auth/wrong-password' is deprecated, use 'auth/invalid-credential'
+                case 'auth/invalid-credential':
+                case 'auth/user-not-found': // Deprecated, but handle just in case
+                case 'auth/wrong-password': // Deprecated, but handle just in case
                    description = "Invalid email or password. Please check your credentials.";
                    break;
-               case 'auth/user-not-found': // Note: 'auth/user-not-found' is deprecated, use 'auth/invalid-credential'
-                   description = "No account found with this email address.";
+                case 'auth/invalid-email':
+                     description = "Please enter a valid email address.";
+                     break;
+               case 'auth/user-disabled':
+                   description = "This account has been disabled.";
                    break;
                case 'auth/too-many-requests':
                     description = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
@@ -95,12 +100,16 @@ export default function LoginPage() {
                 case 'auth/network-request-failed':
                     description = "Network error. Please check your internet connection and try again.";
                     break;
+                case 'auth/api-key-not-valid':
+                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
+                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
+                    break;
                default:
                   // Use the error message if available, otherwise use the code
                  description = error.message || `Login failed with code: ${error.code}`;
            }
-       } else if (error.message.includes("Firebase is not initialized")) {
-            description = "Application configuration error. Please contact support.";
+       } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
+            description = "Application configuration error. Could not connect to authentication service.";
        }
 
       toast({
@@ -157,11 +166,15 @@ export default function LoginPage() {
                  case 'auth/network-request-failed':
                     description = "Network error. Please check your internet connection and try again.";
                     break;
+                 case 'auth/api-key-not-valid':
+                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
+                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
+                    break;
                 default:
                     description = error.message || `Signup failed with code: ${error.code}`;
             }
-        } else if (error.message.includes("Firebase is not initialized")) {
-            description = "Application configuration error. Please contact support.";
+        } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
+            description = "Application configuration error. Could not connect to authentication service.";
        }
 
         toast({
@@ -213,12 +226,16 @@ export default function LoginPage() {
                  case 'auth/network-request-failed':
                     description = "Network error. Please check your internet connection and try again.";
                     break;
+                 case 'auth/api-key-not-valid':
+                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
+                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
+                    break;
                  default:
                      description = error.message || `Google Sign-In failed with code: ${error.code}`;
              }
 
-         } else if (error.message.includes("Firebase is not initialized")) {
-            description = "Application configuration error. Please contact support.";
+         } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
+            description = "Application configuration error. Could not connect to authentication service.";
          }
 
          toast({
@@ -248,7 +265,7 @@ export default function LoginPage() {
               <Alert variant="destructive" className="max-w-md">
                 <AlertTitle>Application Error</AlertTitle>
                 <AlertDescription>
-                  Could not connect to authentication service. Please ensure the application is configured correctly.
+                  Could not connect to authentication service. {firebaseInitializationError.message}
                 </AlertDescription>
               </Alert>
            </div>
@@ -300,6 +317,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                autoComplete="email"
               />
             </div>
             <div className="space-y-2">
@@ -312,6 +330,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoggingIn || isSigningUp || isGoogleLoading}
                 placeholder={showSignupFields ? 'Create a password (min. 6 characters)' : 'Enter your password'}
+                autoComplete={showSignupFields ? "new-password" : "current-password"}
               />
             </div>
           </CardContent>
@@ -359,3 +378,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

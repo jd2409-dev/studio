@@ -28,6 +28,11 @@ let auth: Auth | null = null;       // Initialize with null
 let storage: FirebaseStorage | null = null; // Initialize with null
 let firebaseInitializationError: Error | null = null; // Store initialization error
 
+// Function to check if a config value looks like a placeholder
+const isPlaceholder = (value: string | undefined): boolean => {
+    return !value || value.includes('YOUR_') || value.includes('_HERE');
+}
+
 // Check if Firebase app is already initialized
 if (!getApps().length) {
     // Validate essential configuration values
@@ -35,10 +40,23 @@ if (!getApps().length) {
         'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
     ];
     const missingConfigKeys = requiredKeys.filter(key => !firebaseConfig[key]);
+    const placeholderKeys = requiredKeys.filter(key => isPlaceholder(firebaseConfig[key]));
 
-    if (missingConfigKeys.length > 0) {
-        const errorMessage = `Firebase configuration is missing or invalid for keys: ${missingConfigKeys.join(', ')}. Please check your .env file and ensure all NEXT_PUBLIC_FIREBASE_* variables are set correctly.`;
+    if (missingConfigKeys.length > 0 || placeholderKeys.length > 0) {
+        const errorMessages: string[] = [];
+        if (missingConfigKeys.length > 0) {
+             errorMessages.push(`Firebase configuration is missing environment variables for keys: ${missingConfigKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}.`);
+        }
+         if (placeholderKeys.length > 0) {
+            errorMessages.push(`Firebase configuration contains placeholder values for keys: ${placeholderKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}.`);
+         }
+        errorMessages.push(`Please update your .env file with valid credentials from your Firebase project settings.`);
+
+        const errorMessage = errorMessages.join(' ');
+        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.error("!!! FIREBASE CONFIGURATION ERROR !!!");
         console.error(errorMessage);
+        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         firebaseInitializationError = new Error(errorMessage);
     } else {
         try {
@@ -77,10 +95,11 @@ if (!getApps().length) {
 // Function to check initialization status and throw if failed
 function ensureFirebaseInitialized() {
     if (firebaseInitializationError) {
-        throw new Error(`Firebase failed to initialize. Please check console logs for details. Original error: ${firebaseInitializationError.message}`);
+        // Throw the specific initialization error for clarity
+        throw new Error(`Firebase failed to initialize. Please check console logs and your .env file. Original error: ${firebaseInitializationError.message}`);
     }
     if (!app || !db || !auth || !storage) { // Check storage too
-         throw new Error("Firebase is not initialized. Ensure configuration is correct and initialization succeeded.");
+         throw new Error("Firebase is not initialized, but no specific error was recorded. This is unexpected.");
     }
 }
 
@@ -90,4 +109,3 @@ function ensureFirebaseInitialized() {
 // but this provides a fallback safety net. Consider checking `firebaseInitializationError`
 // or the null status of `app`, `db`, `auth` in components/hooks before use.
 export { app, db, auth, storage, firebaseInitializationError, ensureFirebaseInitialized }; // Export storage
-

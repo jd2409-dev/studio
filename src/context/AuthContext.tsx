@@ -23,12 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // If Firebase itself failed to initialize, don't attempt to use auth
-    if (firebaseInitializationError || !auth) {
-        console.error("Skipping Auth setup due to Firebase initialization error.");
+    // Also set the authError state to reflect this permanent failure.
+    if (firebaseInitializationError) {
+        console.error("Skipping Auth setup due to Firebase initialization error:", firebaseInitializationError);
+        setAuthError(firebaseInitializationError); // Set the specific error
         setLoading(false);
         return;
     }
 
+    // If firebaseInitializationError is null, but auth is still null, it's an unexpected state
+    if (!auth) {
+         console.error("Firebase auth instance is null, but no initialization error was recorded.");
+         const unexpectedError = new Error("Firebase auth instance is unexpectedly null.");
+         setAuthError(unexpectedError);
+         setLoading(false);
+         return;
+    }
+
+    // Only subscribe if Firebase initialized correctly and auth exists
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -45,24 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []); // Run only once on mount
 
-  // Render error state if Firebase initialization failed
-  if (firebaseInitializationError) {
-      return (
-           <div className="flex items-center justify-center min-h-screen bg-background p-4">
-              <Alert variant="destructive" className="max-w-md">
-                <AlertTitle>Application Error</AlertTitle>
-                <AlertDescription>
-                  Failed to initialize Firebase. Please check the environment configuration and console logs.
-                  <br />
-                  <span className="text-xs mt-2 block">({firebaseInitializationError.message})</span>
-                </AlertDescription>
-              </Alert>
-           </div>
-      );
-  }
 
   if (loading) {
-     // Show a loading indicator while checking auth state
+     // Show a loading indicator while checking auth state OR if init failed and we are waiting
      return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -70,16 +67,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      )
   }
 
-  // Render error state if there was an error subscribing to auth changes
+  // Render error state if there was an initialization or auth subscription error
   if (authError) {
+        const isInitError = authError === firebaseInitializationError;
+        const title = isInitError ? "Application Configuration Error" : "Authentication Error";
+        const description = isInitError
+            ? `Could not initialize Firebase. ${authError.message}`
+            : `Could not verify authentication status. Please try refreshing the page. (${authError.message})`;
+
         return (
            <div className="flex items-center justify-center min-h-screen bg-background p-4">
                <Alert variant="destructive" className="max-w-md">
-                 <AlertTitle>Authentication Error</AlertTitle>
+                 <AlertTitle>{title}</AlertTitle>
                  <AlertDescription>
-                   Could not verify authentication status. Please try refreshing the page.
-                   <br />
-                   <span className="text-xs mt-2 block">({authError.message})</span>
+                   {description}
+                   {isInitError && (
+                       <p className="text-xs mt-2">Ensure your <code className="bg-muted px-1 py-0.5 rounded">.env</code> file has the correct <code className="bg-muted px-1 py-0.5 rounded">NEXT_PUBLIC_FIREBASE_*</code> values.</p>
+                   )}
                  </AlertDescription>
                </Alert>
            </div>
@@ -101,4 +105,3 @@ export function useAuth() {
   }
   return context;
 }
-
