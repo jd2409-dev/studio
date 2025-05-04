@@ -1,3 +1,4 @@
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
@@ -48,11 +49,9 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
         const envVarNames = invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`);
         const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${envVarNames.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Without valid credentials, Firebase services will not work. Refer to README.md for setup instructions.`;
 
-        // Log a clear error message to the console
-        console.error("------------------------------------------------------------");
-        console.error("CRITICAL FIREBASE CONFIGURATION ERROR:");
-        console.error(errorMessage);
-        console.error("------------------------------------------------------------");
+        // Log a more subtle warning instead of loud errors that might trigger error reporting tools.
+        // The AuthContext will handle showing a user-facing error.
+        console.warn(`Firebase Configuration Warning: ${errorMessage}`);
 
         // Set the error state to be used by AuthContext
         firebaseInitializationError = new Error(errorMessage);
