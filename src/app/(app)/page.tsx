@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,22 +10,22 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase/config';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled flag
+import { doc, getDoc, setDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore'; // Import Firestore getDoc variants
 
-// Define interfaces for data structures
+// Define interfaces for data structures - Assuming these match your Firestore structure
 interface Homework {
     id: string;
     subject: string;
     title: string;
-    dueDate: string; // Consider using Date type and formatting
+    dueDate: string; // Consider using Timestamp in Firestore and converting to Date/string
 }
 
 interface Exam {
     id: string;
     subject: string;
     title: string;
-    date: string; // Consider using Date type and formatting
+    date: string; // Consider using Timestamp in Firestore and converting to Date/string
 }
 
 interface SubjectMasteryData {
@@ -44,6 +45,7 @@ interface UserProgress {
     upcomingHomework: Homework[];
     upcomingExams: Exam[];
     studyRecommendations: StudyRecommendation[];
+    // lastUpdated?: Timestamp | string; // Optional: Track when data was last updated
 }
 
 export default function DashboardPage() {
@@ -53,6 +55,7 @@ export default function DashboardPage() {
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [userName, setUserName] = useState<string>('Student');
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
 
    // Default placeholder data
    const defaultProgress: UserProgress = {
@@ -71,34 +74,59 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) {
       setIsLoadingData(true);
-      const progressDocRef = doc(db, 'userProgress', user.uid);
-      const userDocRef = doc(db, 'users', user.uid); // For user name
+       ensureFirebaseInitialized(); // Ensure Firebase is ready
+
+      const progressDocRef = doc(db!, 'userProgress', user.uid);
+      const userDocRef = doc(db!, 'users', user.uid); // For user name
 
       const fetchData = async () => {
         try {
-          // Fetch user progress
-          const progressSnap = await getDoc(progressDocRef);
-          if (progressSnap.exists()) {
-            setUserProgress(progressSnap.data() as UserProgress);
-          } else {
-            // Initialize with default data if no progress exists
-            await setDoc(progressDocRef, defaultProgress);
-            setUserProgress(defaultProgress);
-            console.log("No progress data found. Initialized default progress.");
+          // Fetch user name (can often come from cache first)
+          try {
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists() && userSnap.data().name) {
+                setUserName(userSnap.data().name);
+            } else if (user.displayName) {
+                setUserName(user.displayName); // Fallback to auth display name
+            }
+          } catch (userNameError) {
+             console.warn("Could not fetch user name:", userNameError);
+             // Use fallback even on error
+             if (user.displayName) setUserName(user.displayName);
           }
 
-           // Fetch user name from profile
-          const userSnap = await getDoc(userDocRef);
-           if (userSnap.exists() && userSnap.data().name) {
-               setUserName(userSnap.data().name);
-           } else if (user.displayName) {
-                setUserName(user.displayName); // Fallback to auth display name
-           }
 
-        } catch (error) {
+          // Fetch user progress - Firestore handles offline persistence automatically
+          // It first tries cache, then server. We can check metadata for source.
+          const progressSnap = await getDoc(progressDocRef);
+
+          if (progressSnap.exists()) {
+             setUserProgress(progressSnap.data() as UserProgress);
+             // Check if data came from cache (offline) or server
+             setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
+             console.log(`Dashboard data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
+          } else {
+            // Initialize with default data if no progress exists
+             console.log("No progress data found. Initializing default progress in Firestore.");
+            await setDoc(progressDocRef, defaultProgress);
+            setUserProgress(defaultProgress);
+             setDataFetchSource('default');
+          }
+
+        } catch (error: any) {
           console.error("Error fetching dashboard data:", error);
-          toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
-           setUserProgress(defaultProgress); // Fallback to default on error
+           // Differentiate between general errors and offline errors if needed
+           if (error.code === 'unavailable') {
+               // This might happen if persistence isn't working AND network is down
+               toast({ title: "Offline", description: "Could not reach server. Displaying default data.", variant: "default" });
+               console.warn("Firestore data fetch failed: Network unavailable and persistence might not be active or data not cached.");
+               setUserProgress(defaultProgress); // Fallback to default when truly unavailable
+               setDataFetchSource('error');
+           } else {
+                toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
+                setUserProgress(defaultProgress); // Fallback to default on other errors
+                setDataFetchSource('error');
+           }
         } finally {
           setIsLoadingData(false);
         }
@@ -140,13 +168,20 @@ export default function DashboardPage() {
       {/* Welcome Card */}
       <Card className="lg:col-span-3">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle> {/* Display user's name */}
-          <CardDescription>Here's your personalized study dashboard.</CardDescription>
+           <div className="flex justify-between items-center">
+              <div>
+                 <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
+                 <CardDescription>Here's your personalized study dashboard.</CardDescription>
+              </div>
+               {/* Display data source status (optional) */}
+               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Offline Cache)</span>}
+               {dataFetchSource === 'error' && <span className="text-xs text-destructive">(Error Loading)</span>}
+            </div>
         </CardHeader>
         <CardContent>
           <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
         </CardContent>
-         <CardFooter className="flex gap-2">
+         <CardFooter className="flex flex-wrap gap-2">
            <Button asChild>
              <Link href="/upload-textbook"><FileText className="mr-2 h-4 w-4" /> Upload Textbook</Link>
            </Button>

@@ -11,8 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
-import { db, storage, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import storage
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db, storage, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled
+import { doc, getDoc, setDoc, updateDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore'; // Import Firestore getDoc variants
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile as updateAuthProfile } from 'firebase/auth'; // Rename Firebase updateProfile
 import { ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from "firebase/storage"; // Import storage functions
 import { Loader2, UploadCloud } from 'lucide-react';
@@ -39,18 +39,18 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploadProgress, setAvatarUploadProgress] = useState<number | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
 
-
-  // Fetch school boards
+  // Fetch school boards (this typically won't be cached by Firestore persistence)
   useEffect(() => {
       const fetchBoards = async () => {
           setIsLoadingBoards(true);
           try {
-              const boards = await getSchoolBoards();
+              const boards = await getSchoolBoards(); // Assuming this makes a network request
               setSchoolBoards(boards);
           } catch (error) {
               console.error("Failed to fetch school boards:", error);
-              toast({ title: "Error", description: "Could not load school boards.", variant: "destructive" });
+              toast({ title: "Error", description: "Could not load school boards list.", variant: "destructive" });
           } finally {
               setIsLoadingBoards(false);
           }
@@ -63,9 +63,15 @@ export default function ProfilePage() {
     if (user) {
       const fetchProfile = async () => {
         setIsLoading(true);
+        ensureFirebaseInitialized(); // Ensure Firebase is ready
         const userDocRef = doc(db!, 'users', user.uid);
         try {
+          // Fetch user profile - Firestore handles offline persistence
           const docSnap = await getDoc(userDocRef);
+
+          setDataFetchSource(docSnap.metadata.fromCache ? 'cache' : 'server');
+          console.log(`Profile data fetched from ${docSnap.metadata.fromCache ? 'cache' : 'server'}.`);
+
           if (docSnap.exists()) {
             const data = docSnap.data() as UserProfile;
             setProfile(data);
@@ -76,9 +82,8 @@ export default function ProfilePage() {
             setSchoolBoard(data.schoolBoard || '');
             setGrade(data.grade || '');
           } else {
-            // Create a default profile if it doesn't exist (should ideally be created on signup)
+             // Create a default profile if it doesn't exist
              console.warn("User document not found in Firestore for UID:", user.uid);
-             // Attempt to create a profile based on auth info
              const defaultProfile: UserProfile = {
                  uid: user.uid,
                  name: user.displayName || user.email?.split('@')[0] || "New User",
@@ -89,21 +94,34 @@ export default function ProfilePage() {
                  joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : new Date().toISOString(),
              };
               try {
-                  await setDoc(userDocRef, defaultProfile);
+                  await setDoc(userDocRef, defaultProfile); // This write will be queued if offline
                   setProfile(defaultProfile);
                   setName(defaultProfile.name);
                   const currentAvatar = defaultProfile.avatarUrl;
                   setAvatarUrl(currentAvatar);
-                  setAvatarPreview(currentAvatar); // Set initial preview
-                  console.log("Created default profile in Firestore.");
+                  setAvatarPreview(currentAvatar);
+                  setDataFetchSource('default');
+                  console.log("Created default profile in Firestore (queued if offline).");
               } catch (creationError) {
                   console.error("Error creating default profile:", creationError);
                    toast({ title: "Error", description: "Could not create profile data.", variant: "destructive" });
+                   setDataFetchSource('error');
               }
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching user profile:", error);
-          toast({ title: "Error", description: "Could not load profile data.", variant: "destructive" });
+           if (error.code === 'unavailable') {
+               toast({ title: "Offline", description: "Could not reach server to fetch profile. Displaying cached or default data.", variant: "default" });
+               setDataFetchSource('error'); // Indicate data might be stale or default
+           } else {
+              toast({ title: "Error", description: "Could not load profile data.", variant: "destructive" });
+              setDataFetchSource('error');
+           }
+           // Attempt to show fallback data even on error
+           setName(user.displayName || user.email?.split('@')[0] || 'User');
+           const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
+           setAvatarUrl(fallbackAvatar);
+           setAvatarPreview(fallbackAvatar);
         } finally {
           setIsLoading(false);
         }
@@ -123,7 +141,7 @@ export default function ProfilePage() {
           reader.onloadend = () => {
               setAvatarPreview(reader.result as string);
           };
-          reader.readDataURL(file);
+          reader.readAsDataURL(file);
           setAvatarUploadProgress(null); // Reset progress for new file
       } else {
           setAvatarFile(null);
@@ -132,12 +150,16 @@ export default function ProfilePage() {
              toast({ title: "Invalid File", description: "Please select an image file.", variant: "destructive"});
           }
       }
-       // Reset the input value to allow selecting the same file again after clearing
       event.target.value = '';
   };
 
+  // Note: Avatar upload requires network connection. Consider disabling if offline.
   const uploadAvatar = (): Promise<string> => {
       return new Promise(async (resolve, reject) => {
+          if (!navigator.onLine) { // Check network status
+               toast({ title: "Offline", description: "Cannot upload avatar while offline.", variant: "destructive" });
+               return reject(new Error("Offline"));
+           }
           if (!avatarFile || !user) {
               return reject(new Error("No avatar file selected or user not logged in."));
           }
@@ -162,7 +184,7 @@ export default function ProfilePage() {
                             case 'storage/unauthorized': errorMessage = "Permission denied."; break;
                             case 'storage/canceled': errorMessage = "Upload cancelled."; break;
                             case 'storage/unknown': errorMessage = "Unknown storage error."; break;
-                           // Add more specific cases if needed
+                            case 'storage/retry-limit-exceeded': errorMessage = "Network error during upload. Please try again."; break;
                        }
                       toast({ title: "Avatar Upload Failed", description: errorMessage, variant: "destructive" });
                       setIsUploadingAvatar(false);
@@ -173,15 +195,15 @@ export default function ProfilePage() {
                       try {
                           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                           console.log('Avatar uploaded to:', downloadURL);
-                          setAvatarUrl(downloadURL); // Update the URL state used for saving
+                          setAvatarUrl(downloadURL);
                           setIsUploadingAvatar(false);
-                          setAvatarUploadProgress(100); // Ensure it hits 100% on completion
-                          resolve(downloadURL); // Resolve the promise with the new URL
+                          setAvatarUploadProgress(100);
+                          resolve(downloadURL);
                       } catch (urlError) {
                           console.error("Error getting avatar download URL:", urlError);
                           toast({ title: "Avatar Upload Failed", description: "Could not get avatar URL after upload.", variant: "destructive" });
                           setIsUploadingAvatar(false);
-                           setAvatarUploadProgress(null); // Reset progress on error getting URL
+                           setAvatarUploadProgress(null);
                           reject(urlError);
                       }
                   }
@@ -204,9 +226,22 @@ export default function ProfilePage() {
       let finalAvatarUrl = avatarUrl; // Start with the current URL
 
       try {
-           // 1. Upload new avatar if selected
+           // 1. Upload new avatar if selected (Requires network)
            if (avatarFile) {
-               finalAvatarUrl = await uploadAvatar(); // This updates avatarUrl state on success
+                if (!navigator.onLine) {
+                    toast({ title: "Offline", description: "Cannot upload avatar while offline. Other changes will be saved.", variant: "default" });
+                    // Continue with other updates, but don't try to upload
+                } else {
+                    try {
+                       finalAvatarUrl = await uploadAvatar(); // This updates avatarUrl state on success
+                       setAvatarFile(null); // Clear file only if upload was attempted and successful
+                       setAvatarUploadProgress(null);
+                    } catch (uploadError) {
+                        // Error already toasted in uploadAvatar, just stop processing avatar part
+                        console.error("Avatar upload failed, continuing with other profile updates.");
+                        // Do not clear avatarFile here, user might want to retry
+                    }
+                }
            }
 
            // 2. Prepare data to update in Firestore
@@ -216,27 +251,42 @@ export default function ProfilePage() {
                avatarUrl: finalAvatarUrl, // Use the potentially updated URL
                schoolBoard: schoolBoard,
                grade: grade,
+               // lastUpdated: serverTimestamp() // Optional: Track update time
            };
 
-           // 3. Update Firestore document
+           // 3. Update Firestore document (will be queued if offline)
            await updateDoc(userDocRef, updatedProfileData);
+           console.log("Firestore profile update queued (will sync when online).");
 
-            // 4. Update Firebase Auth profile (name and photoURL)
-           await updateAuthProfile(user, {
-               displayName: name,
-               photoURL: finalAvatarUrl,
-           });
+            // 4. Update Firebase Auth profile (name and photoURL) - Requires network
+            // Only attempt if online and avatar didn't fail previously (or wasn't changed)
+           if (navigator.onLine && (finalAvatarUrl === avatarUrl || (avatarFile && finalAvatarUrl !== avatarUrl) ) ) {
+               try {
+                   await updateAuthProfile(user, {
+                       displayName: name,
+                       photoURL: finalAvatarUrl, // Use the final URL (new or existing)
+                   });
+                    console.log("Firebase Auth profile updated.");
+               } catch (authUpdateError: any) {
+                    console.warn("Could not update Firebase Auth profile (requires recent login or network):", authUpdateError);
+                    // Non-critical, don't block the toast
+                    toast({ title: "Auth Update Skipped", description: "Could not update auth profile details (may require re-login). Firestore data saved.", variant: "default"});
+               }
+           } else if (!navigator.onLine) {
+                console.warn("Skipping Firebase Auth profile update while offline.");
+           }
 
 
-           // 5. Handle password change if a new password is entered
+           // 5. Handle password change if a new password is entered (Requires network)
            if (password) {
-               if (!currentPassword) {
+               if (!navigator.onLine) {
+                    toast({ title: "Offline", description: "Cannot change password while offline.", variant: "destructive"});
+               } else if (!currentPassword) {
                    toast({
                        title: "Password Update Skipped",
                        description: "Enter your current password to change it.",
-                       variant: "default", // Use default, not destructive
+                       variant: "default",
                    });
-                   // Don't stop the rest of the profile update for this
                } else {
                   try {
                       // Re-authenticate user before password update
@@ -253,52 +303,51 @@ export default function ProfilePage() {
                       setCurrentPassword('');
                    } catch(passwordError: any) {
                        console.error('Password update error:', passwordError);
+                       let passErrorDesc = "Could not update password.";
                        if (passwordError.code === 'auth/wrong-password') {
-                           toast({
-                               title: "Re-authentication Failed",
-                               description: "Incorrect current password. Password not updated.",
-                               variant: "destructive",
-                           });
+                           passErrorDesc = "Incorrect current password. Password not updated.";
                        } else if (passwordError.code === 'auth/requires-recent-login') {
-                            toast({
-                                title: "Re-authentication Required",
-                                description: "Please log out and log back in to update your password.",
-                                variant: "destructive",
-                            });
+                            passErrorDesc = "Please log out and log back in to update your password.";
+                       } else if (passwordError.code === 'auth/network-request-failed') {
+                            passErrorDesc = "Network error. Could not update password.";
                        } else {
-                            toast({
-                               title: "Password Update Failed",
-                               description: passwordError.message || "Could not update password.",
-                               variant: "destructive",
-                            });
+                            passErrorDesc = passwordError.message || passErrorDesc;
                        }
-                       // Do not stop profile update if only password fails
+                        toast({ title: "Password Update Failed", description: passErrorDesc, variant: "destructive" });
                    }
                }
            }
 
-           // 6. Update local state optimistically or re-fetch (already partially done by uploadAvatar)
+           // 6. Update local state optimistically
             setProfile(prev => prev ? { ...prev, ...updatedProfileData } : null);
-            setAvatarFile(null); // Clear selected file after successful update
-            setAvatarUploadProgress(null); // Clear progress
+            // Clear file/progress only if upload was successful or not attempted
+             if (!avatarFile || (avatarFile && finalAvatarUrl !== avatarUrl)) {
+                setAvatarFile(null);
+                setAvatarUploadProgress(null);
+             }
+
 
            toast({
-               title: "Profile Updated",
-               description: "Your profile information has been saved.",
+               title: "Profile Update Saved",
+               description: `Your profile information has been saved${persistenceEnabled ? ' (changes will sync when online)' : '.'}`,
            });
       } catch (error: any) {
            console.error('Error updating profile:', error);
-            // Handle errors from Firestore update or general upload errors (already handled in uploadAvatar)
-            if (!error.code?.startsWith('storage/')) { // Avoid double-toasting storage errors
+            // Handle errors from Firestore update
+            if (error.code === 'unavailable') {
+                 toast({ title: "Offline", description: "Network unavailable. Profile changes saved locally and will sync later.", variant: "default"});
+                 // Update local state optimistically even if Firestore write failed due to network
+                 setProfile(prev => prev ? { ...prev, ...updatedProfileData } : null);
+            } else if (!error.code?.startsWith('storage/')) { // Avoid double-toasting storage errors
                 toast({
                   title: "Update Failed",
-                  description: error.message || "Could not update profile. Please try again.",
+                  description: error.message || "Could not update profile Firestore data. Please try again.",
                   variant: "destructive",
                 });
             }
       } finally {
           setIsUpdating(false);
-          setIsUploadingAvatar(false); // Ensure this is reset even if upload promise was rejected earlier
+          setIsUploadingAvatar(false); // Ensure this is reset
       }
   };
 
@@ -311,8 +360,7 @@ export default function ProfilePage() {
       );
   }
 
-   if (!user || !profile) {
-       // This should ideally not be reached if layout redirects properly
+   if (!user) { // Removed !profile check as profile might be null briefly during creation
        return <p className="text-center text-muted-foreground">Please log in to view your profile.</p>;
    }
 
@@ -324,20 +372,32 @@ export default function ProfilePage() {
     return initials.slice(0, 2).toUpperCase();
   }
 
-   const formatJoinDate = (dateString?: string | Date) => {
-       if (!dateString) {
+   const formatJoinDate = (dateInput?: Date | string | { seconds: number, nanoseconds: number }) => {
+       let date: Date | undefined;
+
+        if (!dateInput) {
            // Fallback using auth metadata if Firestore data is missing/invalid
-           return user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Not specified';
-       }
+            return user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Not specified';
+        }
+
        try {
-           // Handle both Date objects and ISO strings
-           const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-           // Check if the date is valid before formatting
-            if (isNaN(date.getTime())) {
+           if (typeof dateInput === 'string') {
+                date = new Date(dateInput);
+           } else if (dateInput instanceof Date) {
+                date = dateInput;
+           } else if (typeof dateInput === 'object' && dateInput !== null && 'seconds' in dateInput) {
+                // Handle Firestore Timestamp object { seconds, nanoseconds }
+                date = new Date(dateInput.seconds * 1000);
+           }
+
+            if (date && !isNaN(date.getTime())) {
+               return date.toLocaleDateString();
+            } else {
+                 console.warn("Invalid date format for joinDate:", dateInput);
                 return 'Invalid Date';
             }
-           return date.toLocaleDateString();
-       } catch {
+       } catch (e) {
+            console.error("Error formatting joinDate:", e);
            return 'Invalid Date';
        }
    }
@@ -347,12 +407,14 @@ export default function ProfilePage() {
       <h1 className="text-3xl font-bold mb-6">My Profile</h1>
       <p className="text-muted-foreground mb-8">
         View and update your personal information and account details.
+         {dataFetchSource === 'cache' && <span className="ml-2 text-xs">(Showing offline data)</span>}
       </p>
 
       <Card className="max-w-2xl mx-auto">
         <CardHeader className="flex flex-col items-center text-center">
            <div className="relative group">
              <Avatar className="h-24 w-24 mb-4">
+               {/* Use key to force re-render if preview changes */}
                <AvatarImage key={avatarPreview || avatarUrl} src={avatarPreview || avatarUrl} alt={name} data-ai-hint="user avatar placeholder" />
                <AvatarFallback>{getInitials(name)}</AvatarFallback>
              </Avatar>
@@ -385,7 +447,6 @@ export default function ProfilePage() {
             <Input id="email" type="email" value={user.email!} readOnly disabled />
             <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
           </div>
-          {/* Removed the text input for avatar URL, handled by upload now */}
 
            {/* Learning Preferences */}
           <div className="space-y-2">
@@ -402,7 +463,6 @@ export default function ProfilePage() {
                       {schoolBoards.map(board => (
                           <SelectItem key={board.id} value={board.id}>{board.name}</SelectItem>
                       ))}
-                       {/* Add a default/none option */}
                       <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
@@ -421,7 +481,6 @@ export default function ProfilePage() {
                       {[...Array(12)].map((_, i) => (
                           <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
                       ))}
-                       {/* Add a default/none option */}
                       <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
@@ -454,12 +513,15 @@ export default function ProfilePage() {
                     autoComplete="new-password"
                   />
                </div>
+               {!navigator.onLine && (
+                    <p className="text-xs text-destructive">Password change requires an internet connection.</p>
+               )}
             </div>
 
 
           <div className="border-t pt-4">
             <p className="text-sm text-muted-foreground">
-              Member since: {formatJoinDate(profile.joinDate)}
+              Member since: {profile ? formatJoinDate(profile.joinDate) : 'Loading...'}
             </p>
           </div>
 
