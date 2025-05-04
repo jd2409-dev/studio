@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -40,7 +41,7 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, children, ...props }, ref) => { // Explicitly destructure children
+  ({ className, variant, size, asChild = false, children, ...props }, ref) => { // Re-add children to destructuring
     const Comp = asChild ? Slot : "button";
     return (
       // Pass children explicitly *inside* the Comp
@@ -49,7 +50,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         {...props} // Pass the rest of the props
       >
-        {children}
+        {children} {/* Pass children here */}
       </Comp>
     );
   }
@@ -57,3 +58,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
+
