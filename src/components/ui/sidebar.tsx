@@ -549,7 +549,7 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
-      children,
+      children, // Keep children prop here
       ...props
     },
     ref
@@ -566,7 +566,8 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       >
-         {children} {/* Render children directly */}
+        {/* When asChild is true, Slot handles passing children, so we don't pass them explicitly here. */}
+        {!asChild ? children : undefined}
       </Comp>
     );
 

@@ -30,6 +30,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
      toast({
        title: "Feature Coming Soon",
        description: `${featureName} functionality is not yet implemented.`,
+       variant: "default"
      });
    };
 
@@ -39,11 +40,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar>
         <SidebarHeader className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </svg>
+             {/* Using inline SVG for the logo as requested */}
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
+               <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+               <path d="M2 17l10 5 10-5"/>
+               <path d="M2 12l10 5 10-5"/>
+             </svg>
             <span className="font-semibold text-lg">NexusLearn AI</span>
           </Link>
           <SidebarTrigger className="hidden md:flex" />
@@ -53,32 +55,40 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={false}> {/* Update isActive logic based on current route */}
                 <Link href="/">
-                  <Home />
-                  Dashboard
+                  <>
+                    <Home />
+                    Dashboard
+                  </>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link href="/textbook-summary">
-                  <BookOpen />
-                  Textbook Summary
+                  <>
+                    <BookOpen />
+                    Textbook Summary
+                  </>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                  <Link href="/quiz">
-                  <HelpCircle />
-                  Quiz Generation
+                   <>
+                    <HelpCircle />
+                    Quiz Generation
+                   </>
                  </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
               <SidebarMenuItem>
               <SidebarMenuButton asChild>
                  <Link href="/upload-textbook">
-                  <Upload />
-                  Upload Textbook
+                   <>
+                    <Upload />
+                    Upload Textbook
+                   </>
                  </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -89,21 +99,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link href="/settings">
-                  <Settings />
-                  Settings
+                  <>
+                    <Settings />
+                    Settings
+                  </>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link href="/profile">
-                  <User />
-                  Profile
+                  <>
+                    <User />
+                    Profile
+                  </>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
-               {/* Log Out Button */}
+               {/* Log Out Button - Does not use asChild */}
               <SidebarMenuButton onClick={handleLogout}>
                 <LogOut />
                 Log Out
@@ -115,11 +129,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <SidebarInset>
         <header className="flex items-center justify-between p-4 border-b md:hidden">
            <Link href="/" className="flex items-center gap-2">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
-               <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-               <path d="M2 17l10 5 10-5"/>
-               <path d="M2 12l10 5 10-5"/>
-             </svg>
+              {/* Using inline SVG for the logo as requested */}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
              <span className="font-semibold text-lg">NexusLearn AI</span>
            </Link>
           <SidebarTrigger />
