@@ -64,7 +64,9 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 6.  **Enable Authentication Methods (IMPORTANT):**
     *   In the Firebase Console, go to **Authentication** > **Sign-in method**.
     *   **You MUST enable the "Email/Password" provider.** Click on it, toggle the switch to enable, and save. Failure to do this will result in `auth/configuration-not-found` errors when trying to sign up or log in with email.
-    *   **You MUST enable the "Google" provider** for Google Sign-In to work. Click on it, toggle the switch to enable, select a project support email, and save. Make sure to add your project's authorized domains if prompted (usually handled automatically for localhost during development).
+    *   **You MUST enable the "Google" provider** for Google Sign-In to work. Click on it, toggle the switch to enable, select a project support email, and save.
+    *   Go to **Authentication** > **Settings** > **Authorized domains**.
+    *   **You MUST add the domains from which your app will be served.** For local development, add `localhost`. If deploying, add your deployment domain (e.g., `your-app-name.web.app`, `your-custom-domain.com`). Failure to authorize your domain will result in `auth/unauthorized-domain` errors.
 
 7.  **Set up Firestore:**
     *   In the Firebase Console, go to Firestore Database.
@@ -102,8 +104,10 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 
 *   **Firebase Configuration Errors / `auth/api-key-not-valid` / App Not Loading:** This is the most common issue. **Double-check that all `NEXT_PUBLIC_FIREBASE_...` variables in your `.env` file have been replaced with your actual credentials from your Firebase project settings.** Ensure there are no quotes left around the values if you copied them directly. Restart the development server (`npm run dev`) after modifying `.env`. The application has built-in checks and will show an error message if placeholders are detected.
 *   **Authentication Errors (`auth/configuration-not-found`):** This specifically means you haven't enabled the required sign-in provider in the Firebase console. Go to Authentication > Sign-in method and **enable both Email/Password and Google providers**.
+*   **Authentication Errors (`auth/unauthorized-domain`):** This means the domain you are running the app from (e.g., `localhost` for development) is not listed in the Firebase console under Authentication > Settings > Authorized domains. **You must add `localhost` (and any deployment domains) to this list.**
 *   **Other Authentication Errors:** Check the browser console for specific Firebase error codes (e.g., `auth/invalid-credential`, `auth/user-disabled`).
 *   **Google Sign-In Errors (`auth/popup-closed-by-user`, `auth/account-exists-with-different-credential`):** Check the browser console for details. Ensure popups aren't blocked. If an account exists with the same email via a different method, try that method first.
 *   **Genkit Errors:** Make sure the `GOOGLE_GENAI_API_KEY` is set correctly in your `.env` file if using AI features.
 *   **Firestore/Storage Permission Errors:** Review your Firestore and Storage security rules in the Firebase console. The default rules for development are permissive but might need adjustment or may have been changed. For production, **always** configure secure rules.
+
 
