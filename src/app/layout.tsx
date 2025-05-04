@@ -1,12 +1,7 @@
 import type { Metadata } from 'next';
-import { GeistSans } from 'geist/font/sans'; // Changed import source
+import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-
-const geistSans = GeistSans({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
 
 export const metadata: Metadata = {
   title: 'NexusLearn AI',
@@ -20,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} font-sans antialiased`}>
+      <body className={`${GeistSans.variable} font-sans antialiased`}>
         {children}
         <Toaster />
       </body>
