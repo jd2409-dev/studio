@@ -20,53 +20,66 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app: FirebaseApp;
-let db: Firestore;
-let auth: Auth;
+let app: FirebaseApp | null = null; // Initialize with null
+let db: Firestore | null = null;     // Initialize with null
+let auth: Auth | null = null;       // Initialize with null
+let firebaseInitializationError: Error | null = null; // Store initialization error
 
 // Check if Firebase app is already initialized
 if (!getApps().length) {
-    // Check if all necessary config values are present
-    if (
-        firebaseConfig.apiKey &&
-        firebaseConfig.authDomain &&
-        firebaseConfig.projectId &&
-        firebaseConfig.storageBucket &&
-        firebaseConfig.messagingSenderId &&
-        firebaseConfig.appId
-    ) {
+    // Validate essential configuration values
+    const missingConfigKeys = Object.entries(firebaseConfig)
+      .filter(([key, value]) => key !== 'measurementId' && !value) // measurementId is optional
+      .map(([key]) => key);
+
+    if (missingConfigKeys.length > 0) {
+        const errorMessage = `Firebase configuration is missing or invalid for keys: ${missingConfigKeys.join(', ')}. Please check your .env file and ensure all NEXT_PUBLIC_FIREBASE_* variables are set correctly.`;
+        console.error(errorMessage);
+        firebaseInitializationError = new Error(errorMessage);
+    } else {
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
             console.log("Firebase initialized successfully.");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Firebase initialization error:", error);
-            // Handle initialization error appropriately, maybe show a message to the user
-             // Assign null or default values to prevent runtime errors elsewhere
-            // @ts-ignore - Assigning null for error case
+            firebaseInitializationError = error;
+             // Ensure app, db, auth remain null on error
             app = null;
-            // @ts-ignore
             db = null;
-            // @ts-ignore
             auth = null;
         }
-
-    } else {
-        console.error("Firebase configuration is missing. Please check your environment variables.");
-         // Assign null or default values if config is missing
-         // @ts-ignore
-         app = null;
-         // @ts-ignore
-         db = null;
-         // @ts-ignore
-         auth = null;
     }
 } else {
     app = getApp(); // Get the existing app instance
-    db = getFirestore(app);
-    auth = getAuth(app);
+    // Attempt to get Firestore and Auth instances, handle potential errors if app is invalid
+    try {
+       db = getFirestore(app);
+       auth = getAuth(app);
+    } catch (error: any) {
+        console.error("Error getting Firestore/Auth from existing Firebase app:", error);
+        firebaseInitializationError = error;
+        app = null; // Invalidate app if instances cannot be retrieved
+        db = null;
+        auth = null;
+    }
+}
+
+// Function to check initialization status and throw if failed
+function ensureFirebaseInitialized() {
+    if (firebaseInitializationError) {
+        throw new Error(`Firebase failed to initialize. Please check console logs for details. Original error: ${firebaseInitializationError.message}`);
+    }
+    if (!app || !db || !auth) {
+         throw new Error("Firebase is not initialized. Ensure configuration is correct and initialization succeeded.");
+    }
 }
 
 
-export { app, db, auth };
+// Export initialized instances, throwing an error if accessed when not initialized
+// It's generally better to handle the lack of initialization gracefully where these are used,
+// but this provides a fallback safety net. Consider checking `firebaseInitializationError`
+// or the null status of `app`, `db`, `auth` in components/hooks before use.
+export { app, db, auth, firebaseInitializationError, ensureFirebaseInitialized };
+

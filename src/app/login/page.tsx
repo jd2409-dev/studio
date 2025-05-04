@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
@@ -9,11 +10,12 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config';
+import { auth, db, firebaseInitializationError, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import error status and helper
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { Loader2 } from 'lucide-react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import type { UserProfile } from '@/types/user'; // Import UserProfile type
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -35,7 +37,8 @@ export default function LoginPage() {
   }, [user, loading, router]);
 
   const createFirestoreUserProfile = async (userId: string, userEmail: string, userName: string, photoURL?: string | null) => {
-      const userDocRef = doc(db, 'users', userId);
+      // No need to check db here, as ensureFirebaseInitialized covers it
+      const userDocRef = doc(db!, 'users', userId); // Use non-null assertion after check
       const docSnap = await getDoc(userDocRef);
 
       if (!docSnap.exists()) {
@@ -59,23 +62,50 @@ export default function LoginPage() {
 
   const handleLogin = async (e?: FormEvent) => {
     e?.preventDefault(); // Prevent default form submission if called from form
-    if (!email || !password) {
-        toast({ title: "Error", description: "Please enter email and password.", variant: "destructive"});
-        return;
-    }
-    setIsLoggingIn(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({
-        title: "Login Successful",
-        description: "Redirecting to dashboard.",
-      });
-      router.push('/'); // Redirect on successful login
+        ensureFirebaseInitialized(); // Check if Firebase is ready
+        if (!email || !password) {
+            toast({ title: "Error", description: "Please enter email and password.", variant: "destructive"});
+            return;
+        }
+        setIsLoggingIn(true);
+        await signInWithEmailAndPassword(auth!, email, password); // Use non-null assertion
+        toast({
+            title: "Login Successful",
+            description: "Redirecting to dashboard.",
+        });
+        router.push('/'); // Redirect on successful login
     } catch (error: any) {
       console.error("Login Error:", error);
+       // Check for specific Firebase auth errors
+       let description = "An unexpected error occurred during login.";
+       if (error.code) {
+           switch (error.code) {
+               case 'auth/invalid-credential':
+               case 'auth/invalid-email':
+               case 'auth/wrong-password': // Note: 'auth/wrong-password' is deprecated, use 'auth/invalid-credential'
+                   description = "Invalid email or password. Please check your credentials.";
+                   break;
+               case 'auth/user-not-found': // Note: 'auth/user-not-found' is deprecated, use 'auth/invalid-credential'
+                   description = "No account found with this email address.";
+                   break;
+               case 'auth/too-many-requests':
+                    description = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
+                    break;
+                case 'auth/network-request-failed':
+                    description = "Network error. Please check your internet connection and try again.";
+                    break;
+               default:
+                  // Use the error message if available, otherwise use the code
+                 description = error.message || `Login failed with code: ${error.code}`;
+           }
+       } else if (error.message.includes("Firebase is not initialized")) {
+            description = "Application configuration error. Please contact support.";
+       }
+
       toast({
         title: "Login Failed",
-        description: error.message || "Please check your email and password.",
+        description: description,
         variant: "destructive",
       });
     } finally {
@@ -85,13 +115,15 @@ export default function LoginPage() {
 
   const handleSignup = async (e?: FormEvent) => {
     e?.preventDefault(); // Prevent default form submission if called from form
-    if (!email || !password || !name) {
-        toast({ title: "Error", description: "Please enter name, email, and password.", variant: "destructive"});
-        return;
-    }
-    setIsSigningUp(true);
-    try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+     try {
+        ensureFirebaseInitialized(); // Check if Firebase is ready
+        if (!email || !password || !name) {
+            toast({ title: "Error", description: "Please enter name, email, and password.", variant: "destructive"});
+            return;
+        }
+        setIsSigningUp(true);
+
+        const userCredential = await createUserWithEmailAndPassword(auth!, email, password); // Use non-null assertion
         const newUser = userCredential.user;
 
         // Update Firebase Auth profile with name
@@ -109,9 +141,32 @@ export default function LoginPage() {
         router.push('/');
     } catch (error: any) {
         console.error("Signup Error:", error);
+         // Check for specific Firebase auth errors
+        let description = "An unexpected error occurred during signup.";
+        if (error.code) {
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    description = "This email address is already associated with an account.";
+                    break;
+                case 'auth/invalid-email':
+                    description = "Please enter a valid email address.";
+                    break;
+                case 'auth/weak-password':
+                    description = "Password is too weak. Please choose a stronger password (at least 6 characters).";
+                    break;
+                 case 'auth/network-request-failed':
+                    description = "Network error. Please check your internet connection and try again.";
+                    break;
+                default:
+                    description = error.message || `Signup failed with code: ${error.code}`;
+            }
+        } else if (error.message.includes("Firebase is not initialized")) {
+            description = "Application configuration error. Please contact support.";
+       }
+
         toast({
             title: "Signup Failed",
-            description: error.message || "Could not create account. Please try again.",
+            description: description,
             variant: "destructive",
         });
     } finally {
@@ -120,10 +175,12 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    setIsGoogleLoading(true);
-    const provider = new GoogleAuthProvider();
-    try {
-        const result = await signInWithPopup(auth, provider);
+     try {
+        ensureFirebaseInitialized(); // Check if Firebase is ready
+        setIsGoogleLoading(true);
+        const provider = new GoogleAuthProvider();
+
+        const result = await signInWithPopup(auth!, provider); // Use non-null assertion
         const googleUser = result.user;
 
          // Create or check Firestore user profile
@@ -137,20 +194,39 @@ export default function LoginPage() {
         router.push('/');
     } catch (error: any) {
         console.error("Google Sign-In Error:", error);
+         let description = "An unexpected error occurred during Google Sign-In.";
          // Handle specific errors like account-exists-with-different-credential
-         if (error.code === 'auth/account-exists-with-different-credential') {
-             toast({
-                 title: "Sign-in Failed",
-                 description: "An account already exists with this email address using a different sign-in method.",
-                 variant: "destructive",
-             });
-         } else {
-             toast({
-                 title: "Google Sign-In Failed",
-                 description: error.message || "Could not sign in with Google. Please try again.",
-                 variant: "destructive",
-             });
+         if (error.code) {
+             switch(error.code) {
+                 case 'auth/account-exists-with-different-credential':
+                     description = "An account already exists with this email address using a different sign-in method (e.g., email/password). Try logging in with that method.";
+                     break;
+                 case 'auth/popup-closed-by-user':
+                     description = "Sign-in cancelled. The Google Sign-In popup was closed before completing.";
+                      // Don't show a destructive toast for user cancellation
+                     toast({ title: "Sign-in Cancelled", description: description });
+                     setIsGoogleLoading(false);
+                     return; // Exit early
+                 case 'auth/popup-blocked-by-browser':
+                      description = "Google Sign-In popup blocked by the browser. Please allow popups for this site.";
+                      break;
+                 case 'auth/network-request-failed':
+                    description = "Network error. Please check your internet connection and try again.";
+                    break;
+                 default:
+                     description = error.message || `Google Sign-In failed with code: ${error.code}`;
+             }
+
+         } else if (error.message.includes("Firebase is not initialized")) {
+            description = "Application configuration error. Please contact support.";
          }
+
+         toast({
+             title: "Google Sign-In Failed",
+             description: description,
+             variant: "destructive",
+         });
+
     } finally {
         setIsGoogleLoading(false);
     }
@@ -164,6 +240,21 @@ export default function LoginPage() {
            </div>
        )
    }
+
+    // Display error if Firebase initialization failed
+   if (firebaseInitializationError) {
+      return (
+           <div className="flex items-center justify-center min-h-screen bg-background p-4">
+              <Alert variant="destructive" className="max-w-md">
+                <AlertTitle>Application Error</AlertTitle>
+                <AlertDescription>
+                  Could not connect to authentication service. Please ensure the application is configured correctly.
+                </AlertDescription>
+              </Alert>
+           </div>
+      );
+  }
+
 
    // If user is loaded and exists, don't render the login form (will be redirected)
    if (user) {
@@ -220,7 +311,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoggingIn || isSigningUp || isGoogleLoading}
-                placeholder={showSignupFields ? 'Create a password' : 'Enter your password'}
+                placeholder={showSignupFields ? 'Create a password (min. 6 characters)' : 'Enter your password'}
               />
             </div>
           </CardContent>
