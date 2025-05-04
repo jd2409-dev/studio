@@ -12,12 +12,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled flag
 import { doc, getDoc, setDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore'; // Import Firestore getDoc variants
-import type { UserProgress, SubjectMasteryData, Homework, Exam, StudyRecommendation } from '@/types/user'; // Import types
+import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, StudyRecommendation } from '@/types/user'; // Import types
 
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useRouter(); // Initialize useRouter
   const { user, loading: authLoading } = useAuth();
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -96,9 +96,9 @@ export default function DashboardPage() {
         } catch (error: any) {
           console.error("Error fetching dashboard data:", error);
            // Differentiate between general errors and offline errors if needed
-           if (error.code === 'unavailable') {
+           if (error.code === 'unavailable' || error.message.includes('offline')) {
                // This might happen if persistence isn't working AND network is down
-               toast({ title: "Offline", description: "Could not reach server. Displaying default data.", variant: "default" });
+               toast({ title: "Offline", description: "Could not reach server. Displaying cached or default data.", variant: "default" });
                console.warn("Firestore data fetch failed: Network unavailable and persistence might not be active or data not cached.");
              const fallbackProgress = { ...defaultProgress, uid: user.uid };
                setUserProgress(fallbackProgress); // Fallback to default when truly unavailable
@@ -170,12 +170,12 @@ export default function DashboardPage() {
           <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
         </CardContent>
          <CardFooter className="flex flex-wrap gap-2">
-           <Button asChild>
-             <Link href="/upload-textbook"><FileText className="mr-2 h-4 w-4" /> Upload Textbook</Link>
-           </Button>
-           <Button variant="secondary" asChild>
-             <Link href="/quiz"><Activity className="mr-2 h-4 w-4" /> Take a Quiz</Link>
-           </Button>
+             <Button onClick={() => navigateTo('/upload-textbook')}>
+               <FileText className="mr-2 h-4 w-4" /> Upload Textbook
+             </Button>
+             <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
+               <Activity className="mr-2 h-4 w-4" /> Take a Quiz
+             </Button>
             <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
                 <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
              </Button>
@@ -283,4 +283,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
