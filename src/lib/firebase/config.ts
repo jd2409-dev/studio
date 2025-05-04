@@ -28,34 +28,26 @@ let auth: Auth | null = null;       // Initialize with null
 let storage: FirebaseStorage | null = null; // Initialize with null
 let firebaseInitializationError: Error | null = null; // Store initialization error
 
-// Function to check if a config value looks like a placeholder
-const isPlaceholder = (value: string | undefined): boolean => {
-    return !value || value.includes('YOUR_') || value.includes('_HERE');
+// Function to check if a config value looks like a placeholder or is missing
+const isInvalidConfigValue = (value: string | undefined): boolean => {
+    return !value || value.includes('YOUR_') || value.includes('_HERE') || value.trim() === '';
 }
 
 // Check if Firebase app is already initialized
-if (!getApps().length) {
+if (typeof window !== 'undefined' && !getApps().length) { // Only run initialization on client-side
     // Validate essential configuration values
     const requiredKeys: (keyof typeof firebaseConfig)[] = [
         'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
     ];
-    const missingConfigKeys = requiredKeys.filter(key => !firebaseConfig[key]);
-    const placeholderKeys = requiredKeys.filter(key => isPlaceholder(firebaseConfig[key]));
+    const invalidKeys = requiredKeys.filter(key => isInvalidConfigValue(firebaseConfig[key]));
 
-    if (missingConfigKeys.length > 0 || placeholderKeys.length > 0) {
-        const errorMessages: string[] = [];
-        if (missingConfigKeys.length > 0) {
-             errorMessages.push(`Firebase configuration is missing environment variables for keys: ${missingConfigKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}.`);
-        }
-         if (placeholderKeys.length > 0) {
-            errorMessages.push(`Firebase configuration contains placeholder values for keys: ${placeholderKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}.`);
-         }
-        errorMessages.push(`Please update your .env file with valid credentials from your Firebase project settings.`);
+    if (invalidKeys.length > 0) {
+        const errorMessage = `Firebase configuration is invalid. Please ensure the following environment variables in your .env file are set correctly and do not contain placeholder values: ${invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}. Obtain these values from your Firebase project settings.`;
 
-        const errorMessage = errorMessages.join(' ');
         console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         console.error("!!! FIREBASE CONFIGURATION ERROR !!!");
         console.error(errorMessage);
+        console.error("Firebase features (Auth, Firestore, Storage) will not work until this is fixed.");
         console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         firebaseInitializationError = new Error(errorMessage);
     } else {
@@ -67,7 +59,14 @@ if (!getApps().length) {
             console.log("Firebase initialized successfully.");
         } catch (error: any) {
             console.error("Firebase initialization error:", error);
-            firebaseInitializationError = error;
+            // Make error message more specific if possible
+            let detailedErrorMessage = `Firebase initialization failed.`;
+            if (error.code && error.message) {
+                detailedErrorMessage += ` Code: ${error.code}, Message: ${error.message}`;
+            } else {
+                detailedErrorMessage += ` Error: ${error}`;
+            }
+            firebaseInitializationError = new Error(detailedErrorMessage);
              // Ensure app, db, auth, storage remain null on error
             app = null;
             db = null;
@@ -75,37 +74,42 @@ if (!getApps().length) {
             storage = null;
         }
     }
-} else {
-    app = getApp(); // Get the existing app instance
-    // Attempt to get Firestore, Auth and Storage instances, handle potential errors if app is invalid
+} else if (getApps().length) {
+    // If already initialized (e.g., due to HMR), get the existing instance
+    app = getApp();
     try {
        db = getFirestore(app);
        auth = getAuth(app);
        storage = getStorage(app); // Get Storage instance
     } catch (error: any) {
+        // This case might be less common but handle it defensively
         console.error("Error getting Firebase services from existing app:", error);
-        firebaseInitializationError = error;
+        firebaseInitializationError = new Error(`Failed to get services from existing Firebase app: ${error.message}`);
         app = null; // Invalidate app if instances cannot be retrieved
         db = null;
         auth = null;
         storage = null;
     }
 }
+// Note: Firebase initialization does not run on the server side in this setup.
+
 
 // Function to check initialization status and throw if failed
 function ensureFirebaseInitialized() {
     if (firebaseInitializationError) {
         // Throw the specific initialization error for clarity
-        throw new Error(`Firebase failed to initialize. Please check console logs and your .env file. Original error: ${firebaseInitializationError.message}`);
+        throw new Error(`Firebase failed to initialize. Check console logs and your .env file. Original error: ${firebaseInitializationError.message}`);
     }
-    if (!app || !db || !auth || !storage) { // Check storage too
-         throw new Error("Firebase is not initialized, but no specific error was recorded. This is unexpected.");
+    // Check specifically for the required services if initialization *didn't* error out previously
+    if (!app || !db || !auth || !storage) {
+         // This state might occur if initialization was skipped (e.g., on server) or failed silently
+         // We prioritize the specific initializationError if it exists.
+         throw new Error("Firebase services (app, db, auth, storage) are not available. Initialization may have failed or was skipped.");
     }
 }
 
 
-// Export initialized instances, throwing an error if accessed when not initialized
-// It's generally better to handle the lack of initialization gracefully where these are used,
-// but this provides a fallback safety net. Consider checking `firebaseInitializationError`
-// or the null status of `app`, `db`, `auth` in components/hooks before use.
+// Export initialized instances or null if failed/not applicable (server-side).
+// It's crucial to check `firebaseInitializationError` or the null status of `app`, `db`, `auth`
+// in components/hooks before use, especially on the client-side.
 export { app, db, auth, storage, firebaseInitializationError, ensureFirebaseInitialized }; // Export storage
