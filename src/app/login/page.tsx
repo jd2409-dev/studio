@@ -104,6 +104,10 @@ export default function LoginPage() {
                     description = "Authentication failed: Invalid API key. Please check the application configuration.";
                      console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
                     break;
+                case 'auth/configuration-not-found':
+                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
+                     console.error("Email/Password sign-in method not enabled in Firebase console.");
+                     break;
                default:
                   // Use the error message if available, otherwise use the code
                  description = error.message || `Login failed with code: ${error.code}`;
@@ -170,6 +174,10 @@ export default function LoginPage() {
                     description = "Authentication failed: Invalid API key. Please check the application configuration.";
                      console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
                     break;
+                 case 'auth/configuration-not-found':
+                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
+                     console.error("Email/Password sign-in method not enabled in Firebase console.");
+                     break;
                 default:
                     description = error.message || `Signup failed with code: ${error.code}`;
             }
@@ -230,6 +238,10 @@ export default function LoginPage() {
                     description = "Authentication failed: Invalid API key. Please check the application configuration.";
                      console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
                     break;
+                case 'auth/configuration-not-found':
+                     description = "Authentication configuration error. Please ensure the Google sign-in method is enabled in your Firebase project settings.";
+                     console.error("Google sign-in method not enabled in Firebase console.");
+                     break;
                  default:
                      description = error.message || `Google Sign-In failed with code: ${error.code}`;
              }
@@ -378,4 +390,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
