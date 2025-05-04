@@ -46,14 +46,13 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
     if (invalidKeys.length > 0) {
         // Construct a detailed error message listing the problematic keys
         const envVarNames = invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`);
-        const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${envVarNames.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Without valid credentials, Firebase services will not work.`;
+        const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${envVarNames.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Without valid credentials, Firebase services will not work. Refer to README.md for setup instructions.`;
 
-        // Log prominently to the console
-        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.error("!!! CRITICAL FIREBASE CONFIGURATION ERROR !!!");
+        // Log a clear error message to the console
+        console.error("------------------------------------------------------------");
+        console.error("CRITICAL FIREBASE CONFIGURATION ERROR:");
         console.error(errorMessage);
-        console.error("Refer to the README.md for instructions on setting up .env");
-        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.error("------------------------------------------------------------");
 
         // Set the error state to be used by AuthContext
         firebaseInitializationError = new Error(errorMessage);
@@ -75,7 +74,7 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
             } else {
                 detailedErrorMessage += ` Error: ${error}`;
             }
-            detailedErrorMessage += " Check browser console and network tab for more details.";
+            detailedErrorMessage += " This usually indicates incorrect values in your .env file even if they are not placeholders, or issues connecting to Firebase. Check browser console and network tab for more details.";
             firebaseInitializationError = new Error(detailedErrorMessage);
              // Ensure app, db, auth, storage remain null on error
             app = null;
