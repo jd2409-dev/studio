@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await signOut(auth!); // Add null check or ensure auth is initialized
       toast({
         title: "Logged Out",
         description: "You have been logged out successfully.",
@@ -86,42 +86,35 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/" passHref legacyBehavior>
+              <Link href="/" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/'}>
-                  <a>
+                    {/* No <a> tag needed here when using asChild */}
                     <Home />
                     Dashboard
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/textbook-summary" passHref legacyBehavior>
+              <Link href="/textbook-summary" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
-                  <a>
                     <BookOpen />
                     Textbook Summary
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/quiz" passHref legacyBehavior>
+              <Link href="/quiz" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
-                  <a>
                     <HelpCircle />
                     Quiz Generation
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/upload-textbook" passHref legacyBehavior>
+              <Link href="/upload-textbook" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
-                  <a>
                     <Upload />
                     Upload Textbook
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -149,22 +142,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/settings" passHref legacyBehavior>
+              <Link href="/settings" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/settings'}>
-                  <a>
                     <Settings />
                     Settings
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/profile" passHref legacyBehavior>
+              <Link href="/profile" passHref>
                 <SidebarMenuButton asChild isActive={pathname === '/profile'}>
-                  <a>
                     <User />
                     Profile
-                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
