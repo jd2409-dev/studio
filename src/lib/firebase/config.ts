@@ -30,11 +30,14 @@ let firebaseInitializationError: Error | null = null; // Store initialization er
 
 // Function to check if a config value looks like a placeholder or is missing
 const isInvalidConfigValue = (value: string | undefined): boolean => {
+    // Check for undefined, empty string, or common placeholder patterns
     return !value || value.includes('YOUR_') || value.includes('_HERE') || value.trim() === '';
 }
 
 // Check if Firebase app is already initialized
 if (typeof window !== 'undefined' && !getApps().length) { // Only run initialization on client-side
+    console.log("Attempting Firebase initialization on client...");
+
     // Validate essential configuration values
     const requiredKeys: (keyof typeof firebaseConfig)[] = [
         'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
@@ -42,30 +45,38 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
     const invalidKeys = requiredKeys.filter(key => isInvalidConfigValue(firebaseConfig[key]));
 
     if (invalidKeys.length > 0) {
-        const errorMessage = `Firebase configuration is invalid. Please ensure the following environment variables in your .env file are set correctly and do not contain placeholder values: ${invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`).join(', ')}. Obtain these values from your Firebase project settings.`;
+        // Construct a detailed error message listing the problematic keys
+        const envVarNames = invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`);
+        const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${envVarNames.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Without valid credentials, Firebase services will not work.`;
 
+        // Log prominently to the console
         console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.error("!!! FIREBASE CONFIGURATION ERROR !!!");
+        console.error("!!! CRITICAL FIREBASE CONFIGURATION ERROR !!!");
         console.error(errorMessage);
-        console.error("Firebase features (Auth, Firestore, Storage) will not work until this is fixed.");
+        console.error("Refer to the README.md for instructions on setting up .env");
         console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+        // Set the error state to be used by AuthContext
         firebaseInitializationError = new Error(errorMessage);
     } else {
+        // If configuration seems valid, attempt initialization
         try {
+            console.log("Firebase config appears valid, initializing app...");
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
             storage = getStorage(app); // Initialize Storage
             console.log("Firebase initialized successfully.");
         } catch (error: any) {
-            console.error("Firebase initialization error:", error);
-            // Make error message more specific if possible
+            // Catch errors during the actual initializeApp() call
+            console.error("Firebase initialization error during initializeApp():", error);
             let detailedErrorMessage = `Firebase initialization failed.`;
             if (error.code && error.message) {
                 detailedErrorMessage += ` Code: ${error.code}, Message: ${error.message}`;
             } else {
                 detailedErrorMessage += ` Error: ${error}`;
             }
+            detailedErrorMessage += " Check browser console and network tab for more details.";
             firebaseInitializationError = new Error(detailedErrorMessage);
              // Ensure app, db, auth, storage remain null on error
             app = null;
@@ -76,6 +87,7 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
     }
 } else if (getApps().length) {
     // If already initialized (e.g., due to HMR), get the existing instance
+    console.log("Firebase app already initialized, getting existing instance.");
     app = getApp();
     try {
        db = getFirestore(app);
