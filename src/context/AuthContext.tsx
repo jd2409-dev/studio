@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // If Firebase already failed to initialize, we don't proceed with auth listener setup.
     if (firebaseInitializationError) {
-        console.error("Auth Provider: Skipping Auth setup due to Firebase initialization error.");
+        console.warn("Auth Provider: Skipping Auth setup due to Firebase initialization error.");
         setError(firebaseInitializationError); // Ensure the error state reflects the init error
         setLoading(false);
         return;
@@ -115,3 +115,4 @@ export function useAuth() {
   }
   return context;
 }
+

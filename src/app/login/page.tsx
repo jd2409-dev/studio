@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
@@ -107,6 +108,10 @@ export default function LoginPage() {
                      description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
                      console.error("Email/Password sign-in method not enabled in Firebase console.");
                      break;
+                case 'auth/unauthorized-domain':
+                     description = "This domain is not authorized for this operation. Please add it to the authorized domains list in your Firebase project Authentication settings.";
+                     console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
+                     break;
                default:
                   // Use the error message if available, otherwise use the code
                  description = error.message || `Login failed with code: ${error.code}`;
@@ -177,6 +182,10 @@ export default function LoginPage() {
                      description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
                      console.error("Email/Password sign-in method not enabled in Firebase console.");
                      break;
+                 case 'auth/unauthorized-domain':
+                      description = "This domain is not authorized for this operation. Please add it to the authorized domains list in your Firebase project Authentication settings.";
+                      console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
+                      break;
                 default:
                     description = error.message || `Signup failed with code: ${error.code}`;
             }
@@ -240,6 +249,10 @@ export default function LoginPage() {
                 case 'auth/configuration-not-found':
                      description = "Authentication configuration error. Please ensure the Google sign-in method is enabled in your Firebase project settings.";
                      console.error("Google sign-in method not enabled in Firebase console.");
+                     break;
+                case 'auth/unauthorized-domain':
+                     description = "This domain is not authorized for Google Sign-In. Please add it to the authorized domains list in your Firebase project Authentication settings.";
+                     console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
                      break;
                  default:
                      description = error.message || `Google Sign-In failed with code: ${error.code}`;
@@ -389,3 +402,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

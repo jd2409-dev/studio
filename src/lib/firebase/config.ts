@@ -46,7 +46,8 @@ if (typeof window !== 'undefined' && !getApps().length) { // Only run initializa
 
     if (invalidKeys.length > 0) {
         // Construct a detailed error message listing the problematic keys
-        const envVarNames = invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.toUpperCase()}`);
+        // Use the actual key names from firebaseConfig, not the env var names
+        const envVarNames = invalidKeys.map(k => `NEXT_PUBLIC_FIREBASE_${k.replace(/([A-Z])/g, '_$1').toUpperCase()}`);
         const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${envVarNames.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Without valid credentials, Firebase services will not work. Refer to README.md for setup instructions.`;
 
         // Log a warning to the console. The AuthContext will display a user-facing error.
@@ -121,4 +122,5 @@ function ensureFirebaseInitialized() {
 // It's crucial to check `firebaseInitializationError` or the null status of `app`, `db`, `auth`
 // in components/hooks before use, especially on the client-side.
 export { app, db, auth, storage, firebaseInitializationError, ensureFirebaseInitialized }; // Export storage
+
 
