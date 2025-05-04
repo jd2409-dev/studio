@@ -15,15 +15,7 @@ import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 
 import { Loader2 } from 'lucide-react';
 import { getSchoolBoards, type SchoolBoard } from '@/services/school-board'; // Assuming this exists
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface UserProfile {
-    name: string;
-    email: string; // Email is usually from auth, not Firestore profile
-    avatarUrl: string;
-    schoolBoard: string;
-    grade: string;
-    joinDate?: string; // Might be stored or derived
-}
+import type { UserProfile } from '@/types/user'; // Import UserProfile type
 
 export default function ProfilePage() {
   const { toast } = useToast();
@@ -75,20 +67,28 @@ export default function ProfilePage() {
             setSchoolBoard(data.schoolBoard || '');
             setGrade(data.grade || '');
           } else {
-            // Create a default profile if it doesn't exist
-            const defaultProfile: UserProfile = {
-                name: user.displayName || "New User",
-                email: user.email!,
-                avatarUrl: user.photoURL || `https://avatar.vercel.sh/${user.email}.png`,
-                schoolBoard: '',
-                grade: '',
-                joinDate: new Date().toLocaleDateString(), // Store join date on creation
-            };
-             await setDoc(userDocRef, defaultProfile);
-             setProfile(defaultProfile);
-             setName(defaultProfile.name);
-             setAvatarUrl(defaultProfile.avatarUrl);
-             console.log("No such document! Created default profile.");
+            // Create a default profile if it doesn't exist (should ideally be created on signup)
+             console.warn("User document not found in Firestore for UID:", user.uid);
+             // Attempt to create a profile based on auth info
+             const defaultProfile: UserProfile = {
+                 uid: user.uid,
+                 name: user.displayName || user.email?.split('@')[0] || "New User",
+                 email: user.email!,
+                 avatarUrl: user.photoURL || `https://avatar.vercel.sh/${user.email}.png`,
+                 schoolBoard: '',
+                 grade: '',
+                 joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : new Date().toISOString(),
+             };
+              try {
+                  await setDoc(userDocRef, defaultProfile);
+                  setProfile(defaultProfile);
+                  setName(defaultProfile.name);
+                  setAvatarUrl(defaultProfile.avatarUrl);
+                  console.log("Created default profile in Firestore.");
+              } catch (creationError) {
+                  console.error("Error creating default profile:", creationError);
+                   toast({ title: "Error", description: "Could not create profile data.", variant: "destructive" });
+              }
           }
         } catch (error) {
           console.error("Error fetching user profile:", error);
@@ -112,12 +112,14 @@ export default function ProfilePage() {
 
       try {
           // Prepare data to update in Firestore
-          const updatedProfileData: Partial<UserProfile> = {
+          // Use Partial<UserProfile> to only update changed fields
+          const updatedProfileData: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {
               name: name,
               avatarUrl: avatarUrl,
               schoolBoard: schoolBoard,
               grade: grade,
           };
+
 
           // Update Firestore document
           await updateDoc(userDocRef, updatedProfileData);
@@ -148,7 +150,8 @@ export default function ProfilePage() {
               setCurrentPassword('');
           }
 
-          setProfile(prev => ({ ...prev!, ...updatedProfileData })); // Update local state optimistically
+          // Update local state optimistically or re-fetch
+           setProfile(prev => prev ? { ...prev, ...updatedProfileData } : null);
 
           toast({
               title: "Profile Updated",
@@ -162,7 +165,14 @@ export default function ProfilePage() {
                     description: "Incorrect current password. Please try again.",
                     variant: "destructive",
                 });
-            } else {
+            } else if (error.code === 'auth/requires-recent-login') {
+                 toast({
+                     title: "Re-authentication Required",
+                     description: "Please log out and log back in to update your password.",
+                     variant: "destructive",
+                 });
+            }
+            else {
                 toast({
                   title: "Update Failed",
                   description: error.message || "Could not update profile. Please try again.",
@@ -195,6 +205,18 @@ export default function ProfilePage() {
     const initials = names.map(n => n[0]).join('');
     return initials.slice(0, 2).toUpperCase();
   }
+
+   const formatJoinDate = (dateString?: string | Date) => {
+       if (!dateString) {
+           // Fallback using auth metadata if Firestore data is missing/invalid
+           return user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Not specified';
+       }
+       try {
+           return new Date(dateString).toLocaleDateString();
+       } catch {
+           return 'Invalid Date';
+       }
+   }
 
   return (
     <div className="container mx-auto py-8">
@@ -229,6 +251,7 @@ export default function ProfilePage() {
           <div className="space-y-2">
             <Label htmlFor="avatar">Profile Picture URL</Label>
             <Input id="avatar" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} disabled={isUpdating} placeholder="https://example.com/avatar.png"/>
+             <p className="text-xs text-muted-foreground">Enter the URL of your desired profile image.</p>
           </div>
 
            {/* Learning Preferences */}
@@ -246,7 +269,8 @@ export default function ProfilePage() {
                       {schoolBoards.map(board => (
                           <SelectItem key={board.id} value={board.id}>{board.name}</SelectItem>
                       ))}
-                      <SelectItem value="" disabled>Select board...</SelectItem> {/* Default/empty option */}
+                       {/* Add a default/none option */}
+                      <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
           </div>
@@ -264,7 +288,8 @@ export default function ProfilePage() {
                       {[...Array(12)].map((_, i) => (
                           <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
                       ))}
-                      <SelectItem value="" disabled>Select grade...</SelectItem> {/* Default/empty option */}
+                       {/* Add a default/none option */}
+                      <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
           </div>
@@ -281,6 +306,7 @@ export default function ProfilePage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     disabled={isUpdating}
+                    autoComplete="current-password"
                   />
               </div>
                <div className="space-y-2">
@@ -292,6 +318,7 @@ export default function ProfilePage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isUpdating}
+                    autoComplete="new-password"
                   />
                </div>
             </div>
@@ -299,7 +326,7 @@ export default function ProfilePage() {
 
           <div className="border-t pt-4">
             <p className="text-sm text-muted-foreground">
-              Member since: {profile.joinDate || new Date(user.metadata.creationTime!).toLocaleDateString() || 'Not specified'}
+              Member since: {formatJoinDate(profile.joinDate)}
             </p>
           </div>
 

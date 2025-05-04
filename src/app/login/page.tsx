@@ -8,17 +8,21 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase/config';
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { Loader2 } from 'lucide-react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import type { UserProfile } from '@/types/user'; // Import UserProfile type
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState(''); // Added state for name during signup
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false); // State for signup loading
   const [isGoogleLoading, setIsGoogleLoading] = useState(false); // State for Google Sign-in loading
+  const [showSignupFields, setShowSignupFields] = useState(false); // Toggle between Login and Signup view
   const { toast } = useToast();
   const router = useRouter();
   const { user, loading } = useAuth(); // Get user and loading state
@@ -30,9 +34,35 @@ export default function LoginPage() {
       }
   }, [user, loading, router]);
 
+  const createFirestoreUserProfile = async (userId: string, userEmail: string, userName: string, photoURL?: string | null) => {
+      const userDocRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(userDocRef);
 
-  const handleLogin = async (e: FormEvent) => {
-    e.preventDefault(); // Prevent default form submission
+      if (!docSnap.exists()) {
+          const defaultProfile: UserProfile = {
+              uid: userId,
+              name: userName || userEmail.split('@')[0] || "New User", // Use provided name, fallback to email part or default
+              email: userEmail,
+              avatarUrl: photoURL || `https://avatar.vercel.sh/${userEmail}.png`, // Use photoURL or generate fallback
+              schoolBoard: '',
+              grade: '',
+              joinDate: new Date().toISOString(), // Store join date on creation
+          };
+          await setDoc(userDocRef, defaultProfile);
+          console.log("Created Firestore user profile for:", userId);
+      } else {
+         console.log("Firestore user profile already exists for:", userId);
+         // Optionally update existing fields like lastLogin here if needed
+      }
+  };
+
+
+  const handleLogin = async (e?: FormEvent) => {
+    e?.preventDefault(); // Prevent default form submission if called from form
+    if (!email || !password) {
+        toast({ title: "Error", description: "Please enter email and password.", variant: "destructive"});
+        return;
+    }
     setIsLoggingIn(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -53,17 +83,30 @@ export default function LoginPage() {
     }
   };
 
-  const handleSignup = async () => {
+  const handleSignup = async (e?: FormEvent) => {
+    e?.preventDefault(); // Prevent default form submission if called from form
+    if (!email || !password || !name) {
+        toast({ title: "Error", description: "Please enter name, email, and password.", variant: "destructive"});
+        return;
+    }
     setIsSigningUp(true);
     try {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const newUser = userCredential.user;
+
+        // Update Firebase Auth profile with name
+        await updateProfile(newUser, { displayName: name });
+
+        // Create Firestore user profile
+        await createFirestoreUserProfile(newUser.uid, newUser.email!, name, newUser.photoURL);
+
+
         toast({
             title: "Signup Successful",
-            description: "Account created. Please log in.",
+            description: "Account created. Redirecting to dashboard.",
         });
-        // Optionally redirect to login or dashboard after signup
-        // router.push('/'); // Or stay on login page
-        setPassword(''); // Clear password after signup
+        // Redirect to dashboard after signup
+        router.push('/');
     } catch (error: any) {
         console.error("Signup Error:", error);
         toast({
@@ -80,7 +123,13 @@ export default function LoginPage() {
     setIsGoogleLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-        await signInWithPopup(auth, provider);
+        const result = await signInWithPopup(auth, provider);
+        const googleUser = result.user;
+
+         // Create or check Firestore user profile
+        await createFirestoreUserProfile(googleUser.uid, googleUser.email!, googleUser.displayName || '', googleUser.photoURL);
+
+
         toast({
             title: "Google Sign-In Successful",
             description: "Redirecting to dashboard.",
@@ -88,11 +137,20 @@ export default function LoginPage() {
         router.push('/');
     } catch (error: any) {
         console.error("Google Sign-In Error:", error);
-        toast({
-            title: "Google Sign-In Failed",
-            description: error.message || "Could not sign in with Google. Please try again.",
-            variant: "destructive",
-        });
+         // Handle specific errors like account-exists-with-different-credential
+         if (error.code === 'auth/account-exists-with-different-credential') {
+             toast({
+                 title: "Sign-in Failed",
+                 description: "An account already exists with this email address using a different sign-in method.",
+                 variant: "destructive",
+             });
+         } else {
+             toast({
+                 title: "Google Sign-In Failed",
+                 description: error.message || "Could not sign in with Google. Please try again.",
+                 variant: "destructive",
+             });
+         }
     } finally {
         setIsGoogleLoading(false);
     }
@@ -123,10 +181,24 @@ export default function LoginPage() {
                <path d="M2 12l10 5 10-5"/>
              </svg>
           <CardTitle className="text-2xl font-bold">NexusLearn AI</CardTitle>
-          <CardDescription>Login or Sign up to continue</CardDescription>
+          <CardDescription>{showSignupFields ? 'Create an account to get started' : 'Login to your account'}</CardDescription>
         </CardHeader>
-        <form onSubmit={handleLogin}>
+        <form onSubmit={showSignupFields ? handleSignup : handleLogin}>
           <CardContent className="space-y-4">
+             {showSignupFields && (
+                 <div className="space-y-2">
+                 <Label htmlFor="name">Name</Label>
+                 <Input
+                     id="name"
+                     type="text"
+                     placeholder="Your Name"
+                     required
+                     value={name}
+                     onChange={(e) => setName(e.target.value)}
+                     disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                 />
+                 </div>
+             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -148,19 +220,23 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                placeholder={showSignupFields ? 'Create a password' : 'Enter your password'}
               />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password}>
-              {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Login
-            </Button>
-             <Button type="button" variant="secondary" className="w-full" onClick={handleSignup} disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password}>
-                {isSigningUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Sign Up
-             </Button>
-             {/* Google Sign-in Button */}
+             {showSignupFields ? (
+                <Button type="submit" className="w-full" disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password || !name}>
+                    {isSigningUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Sign Up
+                </Button>
+             ) : (
+                <Button type="submit" className="w-full" disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password}>
+                    {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Login
+                </Button>
+             )}
+
              <Button type="button" variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoggingIn || isSigningUp || isGoogleLoading}>
                  {isGoogleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (
                      <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
@@ -169,10 +245,23 @@ export default function LoginPage() {
                  )}
                  Sign in with Google
              </Button>
+
+             <Button
+                type="button"
+                variant="link"
+                className="w-full text-sm"
+                onClick={() => setShowSignupFields(!showSignupFields)}
+                disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                >
+                {showSignupFields ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+             </Button>
+
              {/* Link for password reset (optional) */}
-             {/* <Link href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
-                Forgot password?
-             </Link> */}
+             {/* {!showSignupFields && (
+                 <Link href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
+                    Forgot password?
+                 </Link>
+             )} */}
           </CardFooter>
         </form>
       </Card>
