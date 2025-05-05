@@ -3,11 +3,18 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read/write access to all paths for any authenticated user
-    // WARNING: This is insecure and should NOT be used in production.
-    // Replace with specific rules (e.g., based on user ID) before deploying.
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Allow authenticated users to upload/read/delete files in their own directory
+    // user_avatars/{userId}/{fileName}
+    // user_uploads/{userId}/textbooks/{fileName}
+    match /{folder}/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Add rules for other storage paths as needed.
+    // Example: Public read access for general assets (if any)
+    // match /public/{allPaths=**} {
+    //   allow read;
+    //   allow write: if false;
+    // }
   }
 }
