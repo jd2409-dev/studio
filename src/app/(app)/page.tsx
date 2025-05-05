@@ -142,7 +142,7 @@ export default function DashboardPage() {
             } else if (error.code === 'permission-denied') {
                 errorTitle = "Permissions Error";
                 errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
-                console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed using `firebase deploy --only firestore:rules`.");
+                console.error("Firestore permission denied error occurred. This usually means the Firestore security rules defined in 'firestore.rules' have not been deployed, or they are incorrect. Please ensure the rules are deployed using the command: `firebase deploy --only firestore:rules`");
                 setDataFetchSource('error');
            } else {
                 // Generic error

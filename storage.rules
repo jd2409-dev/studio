@@ -3,20 +3,26 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Allow users to read/write their own avatars in their specific folder
+    // User Avatars: Allow read access to anyone, but only allow authenticated users
+    // to write to their *own* avatar path.
     match /user_avatars/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Public read access for avatars is common
+      allow read: if true;
+      // Write access restricted to the owner of the avatar
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow users to read/write their own uploads (e.g., textbooks) in their specific folder
+    // User Uploads (e.g., textbooks): Only allow authenticated users to read and write
+    // files within their *own* directory.
     match /user_uploads/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Add rules for other storage paths if needed
-    // Example: Allow public read access to a 'public_files' folder
-    // match /public_files/{allPaths=**} {
-    //   allow read: if true;
-    // }
+    // --- Potentially add rules for other storage paths as needed ---
+
+    // Default rule: Deny all reads and writes to any other path
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
   }
 }

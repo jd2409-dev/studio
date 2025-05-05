@@ -79,7 +79,7 @@ This is a Next.js starter application featuring AI-powered learning tools, built
     *   Click "Get started".
     *   Follow the prompts to set up Storage, using the **production** default security rules (secure by default - requires rules).
 
-9.  **Deploy Security Rules (CRITICAL for Development & Fixing Permissions):**
+9.  **Deploy Security Rules (CRITICAL for Fixing Permission Errors):**
     *   You need the Firebase CLI installed (`npm install -g firebase-tools`).
     *   Log in to Firebase: `firebase login`
     *   Select your Firebase project: `firebase use <your-project-id>`
@@ -91,7 +91,10 @@ This is a Next.js starter application featuring AI-powered learning tools, built
         ```bash
         firebase deploy --only storage
         ```
-    *   The provided rules in `firestore.rules` and `storage.rules` allow any *authenticated* user to access their *own* data (`users/{userId}`, `userProgress/{userId}`, `user_avatars/{userId}`, `user_uploads/{userId}`), which is suitable for development. **Failure to deploy these rules WILL result in `permission-denied` errors when trying to access Firestore or Storage.** This is the most common cause for seeing "Error Loading Data" on the dashboard.
+    *   <br/>
+    *   **🚨 VERY IMPORTANT:** **Failure to deploy these rules WILL cause `permission-denied` errors** when the application tries to read or write data (e.g., loading the dashboard, saving profile information, uploading files). Seeing messages like **"Error Loading Data"** or **"Could not load dashboard data due to insufficient permissions"** is a strong indicator that **rules have not been deployed.**
+    *   <br/>
+    *   The provided rules in `firestore.rules` and `storage.rules` are designed for development and allow any *authenticated* user to access their *own* data (documents under `/users/{userId}`, `/userProgress/{userId}`, or files under `user_avatars/{userId}`, `user_uploads/{userId}` where `{userId}` matches their logged-in ID).
     *   **Review and tighten these rules before going to production.**
 
 10. **Run the development server:**
@@ -129,7 +132,8 @@ This is a Next.js starter application featuring AI-powered learning tools, built
     *   This *almost always* means your Firestore or Firebase Storage security rules are either blocking the action because they are too restrictive, OR **they haven't been deployed correctly**. Seeing "Error Loading" on the dashboard is a strong indicator of this issue.
     *   **FIX FOR DEVELOPMENT:**
         1.  Ensure you have `firestore.rules` and `storage.rules` files in your project root (these should be included).
-        2.  **Deploy the rules using the Firebase CLI:** Run `firebase deploy --only firestore:rules` and `firebase deploy --only storage` (after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`).
+        2.  **Deploy the rules using the Firebase CLI:** Run `firebase deploy --only firestore:rules` and `firebase deploy --only storage` (after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`). **This is the most critical step to fix permission errors.**
         3.  The provided development rules allow any authenticated user access to their *own* data (e.g., documents under `/users/{userId}` or `/userProgress/{userId}` where `userId` matches their authenticated ID). **If you don't deploy these rules, the default production rules (secure by default, deny all access) will likely be active, causing permission errors.**
         4.  If you started Firestore in **test mode** (`allow read, write: if true;`), it allows *anyone* access, which is highly insecure but might bypass permission errors during initial setup. It's strongly recommended to use production mode and deploy the provided development rules instead.
     *   **VERY IMPORTANT FOR PRODUCTION:** The development rules (`allow ... : if request.auth != null && request.auth.uid == userId;`) are a starting point. Before deploying to production, you **MUST** write more specific rules based on your application's needs. For example, you might want to allow users to read public data but only write to their own documents. Use the Firebase Console Rules Simulator to test your production rules thoroughly.
+
