@@ -73,46 +73,39 @@ export default function ProfilePage() {
           console.log(`Profile data fetched from ${docSnap.metadata.fromCache ? 'cache' : 'server'}.`);
 
           if (docSnap.exists()) {
-            const data = docSnap.data() as UserProfile;
-            setProfile(data);
-            setName(data.name || user.displayName || '');
-            const currentAvatar = data.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
-            setAvatarUrl(currentAvatar);
-            setAvatarPreview(currentAvatar); // Set initial preview
-            setSchoolBoard(data.schoolBoard || '');
-            setGrade(data.grade || '');
+            const data = docSnap.data();
+             // Basic validation
+             if (data && typeof data.name === 'string' && typeof data.email === 'string') {
+                const validProfile = data as UserProfile; // Assume type after basic check
+                setProfile(validProfile);
+                setName(validProfile.name || user.displayName || '');
+                const currentAvatar = validProfile.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
+                setAvatarUrl(currentAvatar);
+                setAvatarPreview(currentAvatar); // Set initial preview
+                setSchoolBoard(validProfile.schoolBoard || '');
+                setGrade(validProfile.grade || '');
+             } else {
+                  console.warn("Fetched profile data has invalid structure:", data);
+                  // Handle invalid structure by creating/overwriting with default
+                  await createDefaultProfile(userDocRef, user);
+                  setDataFetchSource('default'); // Mark as default data
+             }
+
           } else {
              // Create a default profile if it doesn't exist
-             console.warn("User document not found in Firestore for UID:", user.uid);
-             const defaultProfile: UserProfile = {
-                 uid: user.uid,
-                 name: user.displayName || user.email?.split('@')[0] || "New User",
-                 email: user.email!,
-                 avatarUrl: user.photoURL || `https://avatar.vercel.sh/${user.email}.png`,
-                 schoolBoard: '',
-                 grade: '',
-                 joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : new Date().toISOString(),
-             };
-              try {
-                  await setDoc(userDocRef, defaultProfile); // This write will be queued if offline
-                  setProfile(defaultProfile);
-                  setName(defaultProfile.name);
-                  const currentAvatar = defaultProfile.avatarUrl;
-                  setAvatarUrl(currentAvatar);
-                  setAvatarPreview(currentAvatar);
-                  setDataFetchSource('default');
-                  console.log("Created default profile in Firestore (queued if offline).");
-              } catch (creationError) {
-                  console.error("Error creating default profile:", creationError);
-                   toast({ title: "Error", description: "Could not create profile data.", variant: "destructive" });
-                   setDataFetchSource('error');
-              }
+             console.log("User document not found in Firestore for UID:", user.uid, ". Creating default profile.");
+             await createDefaultProfile(userDocRef, user);
+              setDataFetchSource('default');
           }
         } catch (error: any) {
           console.error("Error fetching user profile:", error);
            if (error.code === 'unavailable') {
                toast({ title: "Offline", description: "Could not reach server to fetch profile. Displaying cached or default data.", variant: "default" });
                setDataFetchSource('error'); // Indicate data might be stale or default
+           } else if (error.code === 'permission-denied') {
+               toast({ title: "Permissions Error", description: "Could not load profile data due to insufficient permissions. Check Firestore rules.", variant: "destructive" });
+               console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
+               setDataFetchSource('error');
            } else {
               toast({ title: "Error", description: "Could not load profile data.", variant: "destructive" });
               setDataFetchSource('error');
@@ -132,6 +125,38 @@ export default function ProfilePage() {
         setIsLoading(false);
     }
   }, [user, authLoading, toast]);
+
+    // Helper function to create and set the default profile
+   const createDefaultProfile = async (docRef: any, currentUser: any) => {
+        const defaultProfile: UserProfile = {
+            uid: currentUser.uid,
+            name: currentUser.displayName || currentUser.email?.split('@')[0] || "New User",
+            email: currentUser.email!,
+            avatarUrl: currentUser.photoURL || `https://avatar.vercel.sh/${currentUser.email}.png`,
+            schoolBoard: '',
+            grade: '',
+             joinDate: currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toISOString() : new Date().toISOString(),
+        };
+         try {
+             await setDoc(docRef, defaultProfile); // This write will be queued if offline
+             setProfile(defaultProfile);
+             setName(defaultProfile.name);
+             const currentAvatar = defaultProfile.avatarUrl;
+             setAvatarUrl(currentAvatar);
+             setAvatarPreview(currentAvatar);
+             console.log("Created/set default profile in Firestore (queued if offline).");
+         } catch (creationError) {
+             console.error("Error creating/setting default profile:", creationError);
+             toast({ title: "Error", description: "Could not initialize profile data.", variant: "destructive" });
+             // Attempt to set local state even if Firestore write fails
+             setProfile(defaultProfile);
+             setName(defaultProfile.name);
+             const currentAvatar = defaultProfile.avatarUrl;
+             setAvatarUrl(currentAvatar);
+             setAvatarPreview(currentAvatar);
+         }
+   }
+
 
   const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -181,7 +206,7 @@ export default function ProfilePage() {
                       console.error("Avatar Upload Error:", error);
                        let errorMessage = "Failed to upload avatar.";
                        switch (error.code) {
-                            case 'storage/unauthorized': errorMessage = "Permission denied."; break;
+                            case 'storage/unauthorized': errorMessage = "Permission denied. Check storage rules."; break;
                             case 'storage/canceled': errorMessage = "Upload cancelled."; break;
                             case 'storage/unknown': errorMessage = "Unknown storage error."; break;
                             case 'storage/retry-limit-exceeded': errorMessage = "Network error during upload. Please try again."; break;
@@ -195,10 +220,10 @@ export default function ProfilePage() {
                       try {
                           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                           console.log('Avatar uploaded to:', downloadURL);
-                          setAvatarUrl(downloadURL);
+                          setAvatarUrl(downloadURL); // Update state for Firestore save
                           setIsUploadingAvatar(false);
                           setAvatarUploadProgress(100);
-                          resolve(downloadURL);
+                          resolve(downloadURL); // Resolve with the new URL
                       } catch (urlError) {
                           console.error("Error getting avatar download URL:", urlError);
                           toast({ title: "Avatar Upload Failed", description: "Could not get avatar URL after upload.", variant: "destructive" });
@@ -220,47 +245,64 @@ export default function ProfilePage() {
 
 
    const handleUpdateProfile = async () => {
-      if (!user || !profile) return;
+      if (!user) {
+          toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
+          return;
+      }
+       // Re-check initialization just in case
+       try {
+           ensureFirebaseInitialized();
+       } catch (initErr: any) {
+            toast({ title: "Error", description: `Application Error: ${initErr.message}`, variant: "destructive" });
+            return;
+       }
 
       setIsUpdating(true);
-      let finalAvatarUrl = avatarUrl; // Start with the current URL
+      let finalAvatarUrl = avatarUrl; // Start with the current URL from state
+      let updatedProfileData: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {}; // Keep track of changes for optimistic update
 
       try {
            // 1. Upload new avatar if selected (Requires network)
            if (avatarFile) {
                 if (!navigator.onLine) {
-                    toast({ title: "Offline", description: "Cannot upload avatar while offline. Other changes will be saved.", variant: "default" });
-                    // Continue with other updates, but don't try to upload
+                    toast({ title: "Offline", description: "Cannot upload avatar while offline. Other changes will be saved locally.", variant: "default" });
+                    // Continue with other updates, but don't try to upload or change finalAvatarUrl
                 } else {
                     try {
                        finalAvatarUrl = await uploadAvatar(); // This updates avatarUrl state on success
-                       setAvatarFile(null); // Clear file only if upload was attempted and successful
+                       updatedProfileData.avatarUrl = finalAvatarUrl; // Add to changes
+                       setAvatarFile(null); // Clear file state on successful upload attempt
                        setAvatarUploadProgress(null);
                     } catch (uploadError) {
                         // Error already toasted in uploadAvatar, just stop processing avatar part
                         console.error("Avatar upload failed, continuing with other profile updates.");
                         // Do not clear avatarFile here, user might want to retry
+                        // Do not update finalAvatarUrl or updatedProfileData.avatarUrl
                     }
                 }
            }
 
-           // 2. Prepare data to update in Firestore
+           // 2. Prepare other data to update in Firestore
            const userDocRef = doc(db!, 'users', user.uid);
-           const updatedProfileData: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {
+           const changesToSave: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {
                name: name,
                avatarUrl: finalAvatarUrl, // Use the potentially updated URL
                schoolBoard: schoolBoard,
                grade: grade,
-               // lastUpdated: serverTimestamp() // Optional: Track update time
+               // lastUpdated: serverTimestamp() // Optional: Track update time server-side
            };
+           // Merge changes for optimistic update
+           updatedProfileData = { ...updatedProfileData, ...changesToSave };
+
 
            // 3. Update Firestore document (will be queued if offline)
-           await updateDoc(userDocRef, updatedProfileData);
+           await updateDoc(userDocRef, changesToSave);
            console.log("Firestore profile update queued (will sync when online).");
 
             // 4. Update Firebase Auth profile (name and photoURL) - Requires network
-            // Only attempt if online and avatar didn't fail previously (or wasn't changed)
-           if (navigator.onLine && (finalAvatarUrl === avatarUrl || (avatarFile && finalAvatarUrl !== avatarUrl) ) ) {
+            // Only attempt if online AND if the name or avatar URL actually changed
+           const authProfileNeedsUpdate = (name !== user.displayName || finalAvatarUrl !== user.photoURL);
+           if (navigator.onLine && authProfileNeedsUpdate) {
                try {
                    await updateAuthProfile(user, {
                        displayName: name,
@@ -269,10 +311,15 @@ export default function ProfilePage() {
                     console.log("Firebase Auth profile updated.");
                } catch (authUpdateError: any) {
                     console.warn("Could not update Firebase Auth profile (requires recent login or network):", authUpdateError);
-                    // Non-critical, don't block the toast
-                    toast({ title: "Auth Update Skipped", description: "Could not update auth profile details (may require re-login). Firestore data saved.", variant: "default"});
+                     // Check for re-authentication requirement
+                     if (authUpdateError.code === 'auth/requires-recent-login') {
+                          toast({ title: "Auth Update Required", description: "Please log out and log back in to fully update your profile display name/picture.", variant: "default"});
+                     } else {
+                        // Non-critical, don't block the main success toast
+                         toast({ title: "Auth Update Skipped", description: "Could not update auth profile details. Firestore data saved.", variant: "default"});
+                     }
                }
-           } else if (!navigator.onLine) {
+           } else if (!navigator.onLine && authProfileNeedsUpdate) {
                 console.warn("Skipping Firebase Auth profile update while offline.");
            }
 
@@ -290,11 +337,19 @@ export default function ProfilePage() {
                } else {
                   try {
                       // Re-authenticate user before password update
-                      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+                      ensureFirebaseInitialized(); // Ensure auth is still available
+                      if (!user.email) throw new Error("User email is not available for re-authentication.");
+                      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+
+                       console.log("Attempting re-authentication for password change...");
                       await reauthenticateWithCredential(user, credential);
+                       console.log("Re-authentication successful.");
 
                       // Update password in Firebase Auth
+                      console.log("Attempting password update...");
                       await updatePassword(user, password);
+                       console.log("Password update successful.");
+
                       toast({
                           title: "Password Updated",
                           description: "Your password has been successfully updated.",
@@ -304,23 +359,25 @@ export default function ProfilePage() {
                    } catch(passwordError: any) {
                        console.error('Password update error:', passwordError);
                        let passErrorDesc = "Could not update password.";
-                       if (passwordError.code === 'auth/wrong-password') {
+                       if (passwordError.code === 'auth/wrong-password' || passwordError.code === 'auth/invalid-credential') {
                            passErrorDesc = "Incorrect current password. Password not updated.";
                        } else if (passwordError.code === 'auth/requires-recent-login') {
-                            passErrorDesc = "Please log out and log back in to update your password.";
+                            passErrorDesc = "Security check failed. Please log out and log back in to update your password.";
                        } else if (passwordError.code === 'auth/network-request-failed') {
                             passErrorDesc = "Network error. Could not update password.";
+                       } else if (passwordError.code === 'auth/weak-password') {
+                           passErrorDesc = "New password is too weak. Please choose a stronger one.";
                        } else {
-                            passErrorDesc = passwordError.message || passErrorDesc;
+                            passErrorDesc = `Password update failed: ${passwordError.message || passwordError.code}`;
                        }
                         toast({ title: "Password Update Failed", description: passErrorDesc, variant: "destructive" });
                    }
                }
            }
 
-           // 6. Update local state optimistically
+           // 6. Update local state optimistically with all successful changes
             setProfile(prev => prev ? { ...prev, ...updatedProfileData } : null);
-            // Clear file/progress only if upload was successful or not attempted
+            // Clear file/progress only if upload was attempted and successful OR if file wasn't present
              if (!avatarFile || (avatarFile && finalAvatarUrl !== avatarUrl)) {
                 setAvatarFile(null);
                 setAvatarUploadProgress(null);
@@ -332,12 +389,15 @@ export default function ProfilePage() {
                description: `Your profile information has been saved${persistenceEnabled ? ' (changes will sync when online)' : '.'}`,
            });
       } catch (error: any) {
-           console.error('Error updating profile:', error);
-            // Handle errors from Firestore update
+           console.error('Error updating profile (Firestore or other):', error);
+            // Handle errors from Firestore update specifically
             if (error.code === 'unavailable') {
                  toast({ title: "Offline", description: "Network unavailable. Profile changes saved locally and will sync later.", variant: "default"});
                  // Update local state optimistically even if Firestore write failed due to network
                  setProfile(prev => prev ? { ...prev, ...updatedProfileData } : null);
+            } else if (error.code === 'permission-denied') {
+                 toast({ title: "Permissions Error", description: "Could not save profile data due to insufficient permissions. Check Firestore rules.", variant: "destructive" });
+                 console.error("Firestore permission denied during update. Check your security rules in firestore.rules and ensure they are deployed.");
             } else if (!error.code?.startsWith('storage/')) { // Avoid double-toasting storage errors
                 toast({
                   title: "Update Failed",
@@ -347,7 +407,7 @@ export default function ProfilePage() {
             }
       } finally {
           setIsUpdating(false);
-          setIsUploadingAvatar(false); // Ensure this is reset
+          setIsUploadingAvatar(false); // Ensure this is reset regardless of outcome
       }
   };
 

@@ -47,12 +47,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       // When asChild is true, Slot expects a single React element child.
       // We pass the props directly to Slot, which will merge them onto its child.
       // Ensure that the component using Button with asChild provides exactly one child.
+      // React.Children.only might be too strict if the child is conditionally rendered.
+      // Instead, rely on the developer to provide a single valid element.
       return (
         <Slot
           className={buttonClasses}
           ref={ref}
           {...props}
         >
+          {/* Explicitly pass children to Slot */}
           {children}
         </Slot>
       );
@@ -65,6 +68,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         {...props}
       >
+        {/* Explicitly pass children to button */}
         {children}
       </button>
     );

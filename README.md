@@ -51,7 +51,7 @@ This is a Next.js starter application featuring AI-powered learning tools, built
         NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_APP_ID_HERE"
         # NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="YOUR_MEASUREMENT_ID_HERE" # Optional
         ```
-    *   **WARNING:** Leaving placeholder values like `"YOUR_API_KEY_HERE"` will cause the application to fail, specifically preventing Firebase services (Authentication, Firestore, Storage) from working.
+    *   **WARNING:** Leaving placeholder values like `"YOUR_API_KEY_HERE"` will cause the application to fail, specifically preventing Firebase services (Authentication, Firestore, Storage) from working. The application has built-in checks and will show an error message if placeholders are detected.
 
 5.  **Configure Google AI API Key (Optional but Recommended):**
     *   If you plan to use the Genkit AI features (Summarization, Quiz Generation), you need a Google AI API key.
@@ -72,27 +72,28 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 7.  **Set up Firestore:**
     *   In the Firebase Console, go to Firestore Database.
     *   Click "Create database".
-    *   Start in **test mode** for development (allows open access - **change security rules before production!**). Select a server location.
+    *   Start in **production mode** (secure by default - requires rules). Select a server location.
     *   Click "Enable".
 
 8.  **Set up Firebase Storage:**
     *   In the Firebase Console, go to Storage.
     *   Click "Get started".
-    *   Follow the prompts to set up Storage, using the default security rules for development (allows authenticated access - **review rules before production!**).
+    *   Follow the prompts to set up Storage, using the **production** default security rules (secure by default - requires rules).
 
-9.  **Deploy Security Rules (IMPORTANT for Development & Fixing Permissions):**
+9.  **Deploy Security Rules (CRITICAL for Development & Fixing Permissions):**
     *   You need the Firebase CLI installed (`npm install -g firebase-tools`).
     *   Log in to Firebase: `firebase login`
     *   Select your Firebase project: `firebase use <your-project-id>`
-    *   Deploy the Firestore rules (found in `firestore.rules`):
+    *   **Deploy the Firestore rules** (found in `firestore.rules`):
         ```bash
         firebase deploy --only firestore:rules
         ```
-    *   Deploy the Storage rules (found in `storage.rules`):
+    *   **Deploy the Storage rules** (found in `storage.rules`):
         ```bash
         firebase deploy --only storage
         ```
-    *   These rules allow any authenticated user to access their *own* data, which is suitable for development. **Review and tighten these rules before going to production.**
+    *   The provided rules in `firestore.rules` and `storage.rules` allow any *authenticated* user to access their *own* data (`users/{userId}`, `userProgress/{userId}`, `user_avatars/{userId}`, `user_uploads/{userId}`), which is suitable for development. **Failure to deploy these rules WILL result in `permission-denied` errors when trying to access Firestore or Storage.**
+    *   **Review and tighten these rules before going to production.**
 
 10. **Run the development server:**
     ```bash
@@ -126,12 +127,13 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 *   **Google Sign-In Errors (`auth/popup-closed-by-user`, `auth/account-exists-with-different-credential`):** Check the browser console for details. Ensure popups aren't blocked. If an account exists with the same email via a different method, try that method first. **Also ensure the Google provider is enabled and `localhost` is in the authorized domains list in the Firebase Authentication settings.**
 *   **Genkit Errors:** Make sure the `GOOGLE_GENAI_API_KEY` is set correctly in your `.env` file if using AI features.
 *   **Firestore/Storage Permission Errors (`permission-denied` or `Missing or insufficient permissions`):**
-    *   This usually means your Firestore or Firebase Storage security rules are blocking the action, OR they haven't been deployed correctly.
-    *   **For Development:**
+    *   This *almost always* means your Firestore or Firebase Storage security rules are either blocking the action because they are too restrictive, OR **they haven't been deployed correctly**.
+    *   **FIX FOR DEVELOPMENT:**
         1.  Ensure you have `firestore.rules` and `storage.rules` files in your project root (these should be included).
-        2.  **Deploy the rules:** Run `firebase deploy --only firestore:rules` and `firebase deploy --only storage` (after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`). The provided development rules allow any authenticated user access to their *own* data (`if request.auth != null && request.auth.uid == userId;`).
-        3.  If you started Firestore in **test mode** (`allow read, write: if true;`), it allows *anyone* access, which is highly insecure but might bypass permission errors during initial setup. However, it's better to deploy the provided development rules.
+        2.  **Deploy the rules using the Firebase CLI:** Run `firebase deploy --only firestore:rules` and `firebase deploy --only storage` (after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`).
+        3.  The provided development rules allow any authenticated user access to their *own* data (e.g., documents under `/users/{userId}` where `userId` matches their authenticated ID). **If you don't deploy these rules, the default production rules (secure by default, deny all access) will likely be active, causing permission errors.**
+        4.  If you started Firestore in **test mode** (`allow read, write: if true;`), it allows *anyone* access, which is highly insecure but might bypass permission errors during initial setup. It's strongly recommended to use production mode and deploy the provided development rules instead.
     *   **VERY IMPORTANT FOR PRODUCTION:** The development rules (`allow ... : if request.auth != null && request.auth.uid == userId;`) are a starting point. Before deploying to production, you **MUST** write more specific rules based on your application's needs. For example, you might want to allow users to read public data but only write to their own documents. Use the Firebase Console Rules Simulator to test your production rules thoroughly.
 
 
-
+```

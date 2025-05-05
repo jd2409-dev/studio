@@ -21,127 +21,169 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [userName, setUserName] = useState<string>('Student');
-  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
+  const [userName, setUserName] = useState<string>('Student');
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
 
-   // Default placeholder data
-   const defaultProgress: UserProgress = {
+   // Default placeholder data
+   const defaultProgress: UserProgress = {
         uid: user?.uid || 'default', // Assign a default UID or the user's UID
-       subjectMastery: [
-           { subjectId: 'math', subjectName: 'Mathematics', progress: 0, lastUpdated: new Date().toISOString() },
+        subjectMastery: [
+            { subjectId: 'math', subjectName: 'Mathematics', progress: 0, lastUpdated: new Date().toISOString() },
             { subjectId: 'physics', subjectName: 'Physics', progress: 0, lastUpdated: new Date().toISOString() },
             { subjectId: 'chemistry', subjectName: 'Chemistry', progress: 0, lastUpdated: new Date().toISOString() },
             { subjectId: 'biology', subjectName: 'Biology', progress: 0, lastUpdated: new Date().toISOString() },
-       ],
-       upcomingHomework: [],
-       upcomingExams: [],
-       studyRecommendations: [],
+        ],
+        upcomingHomework: [],
+        upcomingExams: [],
+        studyRecommendations: [],
         lastUpdated: new Date().toISOString(), // Add lastUpdated for the main progress object
-   };
+   };
 
-  // Fetch user progress data and name from Firestore
-  useEffect(() => {
-    if (user) {
-      setIsLoadingData(true);
-       ensureFirebaseInitialized(); // Ensure Firebase is ready
+  // Fetch user progress data and name from Firestore
+  useEffect(() => {
+    if (user) {
+      setIsLoadingData(true);
+       ensureFirebaseInitialized(); // Ensure Firebase is ready
 
-      const progressDocRef = doc(db!, 'userProgress', user.uid);
-      const userDocRef = doc(db!, 'users', user.uid); // For user name
+      const progressDocRef = doc(db!, 'userProgress', user.uid);
+      const userDocRef = doc(db!, 'users', user.uid); // For user name
 
-      const fetchData = async () => {
-        try {
-          // Fetch user name (can often come from cache first)
-          try {
-            const userSnap = await getDoc(userDocRef);
-            if (userSnap.exists() && userSnap.data().name) {
-                setUserName(userSnap.data().name);
-            } else if (user.displayName) {
-                setUserName(user.displayName); // Fallback to auth display name
-            }
-          } catch (userNameError) {
-             console.warn("Could not fetch user name:", userNameError);
-             // Use fallback even on error
-             if (user.displayName) setUserName(user.displayName);
-          }
+      const fetchData = async () => {
+        try {
+          // Fetch user name (can often come from cache first)
+          try {
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists() && userSnap.data().name) {
+                 setUserName(userSnap.data().name);
+            } else if (user.displayName) {
+                 setUserName(user.displayName); // Fallback to auth display name
+            }
+          } catch (userNameError) {
+             console.warn("Could not fetch user name:", userNameError);
+             // Use fallback even on error
+             if (user.displayName) setUserName(user.displayName);
+          }
 
 
-          // Fetch user progress - Firestore handles offline persistence automatically
-          // It first tries cache, then server. We can check metadata for source.
-          const progressSnap = await getDoc(progressDocRef);
+          // Fetch user progress - Firestore handles offline persistence automatically
+          // It first tries cache, then server. We can check metadata for source.
+          const progressSnap = await getDoc(progressDocRef);
 
-          if (progressSnap.exists()) {
+          if (progressSnap.exists()) {
             // Ensure the fetched data conforms to the UserProgress structure
             const fetchedData = progressSnap.data();
-            const validatedProgress: UserProgress = {
-                uid: user.uid,
-                subjectMastery: fetchedData.subjectMastery || defaultProgress.subjectMastery,
-                upcomingHomework: fetchedData.upcomingHomework || defaultProgress.upcomingHomework,
-                upcomingExams: fetchedData.upcomingExams || defaultProgress.upcomingExams,
-                studyRecommendations: fetchedData.studyRecommendations || defaultProgress.studyRecommendations,
-                lastUpdated: fetchedData.lastUpdated || defaultProgress.lastUpdated,
-            };
-             setUserProgress(validatedProgress);
-             // Check if data came from cache (offline) or server
-             setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
-             console.log(`Dashboard data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
-          } else {
-            // Initialize with default data if no progress exists
-             console.log("No progress data found. Initializing default progress in Firestore.");
+            // Basic validation: Check if core properties exist and have the correct types (example)
+             if (fetchedData && typeof fetchedData === 'object' && Array.isArray(fetchedData.subjectMastery)) {
+                const validatedProgress: UserProgress = {
+                    uid: user.uid,
+                    subjectMastery: (fetchedData.subjectMastery || []).map((sm: any): SubjectMastery => ({ // Add basic type checking/defaults inside map
+                        subjectId: sm?.subjectId || 'unknown',
+                        subjectName: sm?.subjectName || 'Unknown Subject',
+                        progress: typeof sm?.progress === 'number' ? sm.progress : 0,
+                        lastUpdated: sm?.lastUpdated || new Date().toISOString(),
+                    })),
+                     upcomingHomework: (fetchedData.upcomingHomework || []).map((hw: any): HomeworkAssignment => ({
+                        id: hw?.id || `hw-${Date.now()}-${Math.random()}`,
+                        subjectId: hw?.subjectId || 'unknown',
+                        subjectName: hw?.subjectName || 'Unknown Subject',
+                        title: hw?.title || 'Untitled Homework',
+                        dueDate: hw?.dueDate || new Date().toISOString(),
+                        completed: typeof hw?.completed === 'boolean' ? hw.completed : false,
+                    })),
+                    upcomingExams: (fetchedData.upcomingExams || []).map((ex: any): ExamSchedule => ({
+                        id: ex?.id || `ex-${Date.now()}-${Math.random()}`,
+                        subjectId: ex?.subjectId || 'unknown',
+                        subjectName: ex?.subjectName || 'Unknown Subject',
+                        title: ex?.title || 'Untitled Exam',
+                         date: ex?.date || new Date().toISOString(),
+                    })),
+                     studyRecommendations: (fetchedData.studyRecommendations || []).map((rec: any): StudyRecommendation => ({
+                        id: rec?.id || `rec-${Date.now()}-${Math.random()}`,
+                        type: rec?.type || 'topic_review',
+                        subjectId: rec?.subjectId || 'unknown',
+                        subjectName: rec?.subjectName || 'Unknown Subject',
+                        title: rec?.title || 'Recommendation',
+                        reason: rec?.reason || 'AI generated recommendation',
+                        priority: rec?.priority || 'medium',
+                        generatedDate: rec?.generatedDate || new Date().toISOString(),
+                    })),
+                    lastUpdated: fetchedData.lastUpdated || defaultProgress.lastUpdated,
+                };
+                setUserProgress(validatedProgress);
+                setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
+                console.log(`Dashboard data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
+             } else {
+                 console.warn("Fetched userProgress data has invalid structure. Using default.", fetchedData);
+                 // Initialize with default data if structure is wrong
+                 const initialProgress = { ...defaultProgress, uid: user.uid }; // Ensure UID is set
+                 await setDoc(progressDocRef, initialProgress);
+                 setUserProgress(initialProgress);
+                 setDataFetchSource('default');
+             }
+          } else {
+            // Initialize with default data if no progress exists
+             console.log("No progress data found. Initializing default progress in Firestore.");
              const initialProgress = { ...defaultProgress, uid: user.uid }; // Ensure UID is set
-            await setDoc(progressDocRef, initialProgress);
-            setUserProgress(initialProgress);
-             setDataFetchSource('default');
-          }
+            await setDoc(progressDocRef, initialProgress);
+            setUserProgress(initialProgress);
+             setDataFetchSource('default');
+          }
 
-        } catch (error: any) {
-          console.error("Error fetching dashboard data:", error);
-           // Differentiate between general errors and offline errors if needed
-           if (error.code === 'unavailable' || error.message.includes('offline')) {
-               // This might happen if persistence isn't working AND network is down
-               toast({ title: "Offline", description: "Could not reach server. Displaying cached or default data.", variant: "default" });
-               console.warn("Firestore data fetch failed: Network unavailable and persistence might not be active or data not cached.");
-             const fallbackProgress = { ...defaultProgress, uid: user.uid };
-               setUserProgress(fallbackProgress); // Fallback to default when truly unavailable
-               setDataFetchSource('error');
-           } else {
-                toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
+        } catch (error: any) {
+          console.error("Error fetching dashboard data:", error);
+           // Differentiate between general errors and offline errors if needed
+           if (error.code === 'unavailable') {
+               // This might happen if persistence isn't working AND network is down
+                toast({ title: "Offline", description: "Could not reach server. Displaying cached or default data.", variant: "default" });
+                console.warn("Firestore data fetch failed: Network unavailable and persistence might not be active or data not cached.");
               const fallbackProgress = { ...defaultProgress, uid: user.uid };
-                setUserProgress(fallbackProgress); // Fallback to default on other errors
-                setDataFetchSource('error');
-           }
-        } finally {
-          setIsLoadingData(false);
-        }
-      };
-      fetchData();
-    } else if (!authLoading) {
-        // Handle case where user is null after auth check (should be redirected)
-        setIsLoadingData(false);
-    }
-  }, [user, authLoading, toast]); // Add toast to dependency array
+                setUserProgress(fallbackProgress); // Fallback to default when truly unavailable
+                setDataFetchSource('error');
+            } else if (error.code === 'permission-denied') {
+                 toast({ title: "Permissions Error", description: "Could not load dashboard data due to insufficient permissions. Check Firestore rules.", variant: "destructive" });
+                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
+                 const fallbackProgress = { ...defaultProgress, uid: user.uid };
+                 setUserProgress(fallbackProgress); // Fallback to default on permission errors
+                 setDataFetchSource('error');
+           } else {
+                toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
+               const fallbackProgress = { ...defaultProgress, uid: user.uid };
+                setUserProgress(fallbackProgress); // Fallback to default on other errors
+                setDataFetchSource('error');
+           }
+        } finally {
+          setIsLoadingData(false);
+        }
+      };
+      fetchData();
+    } else if (!authLoading) {
+       // Handle case where user is null after auth check (should be redirected)
+       setIsLoadingData(false);
+    }
+  }, [user, authLoading, toast]); // Add toast to dependency array
 
-  const handlePlaceholderClick = (featureName: string) => {
-     toast({
-       title: "Feature Coming Soon",
-       description: `${featureName} functionality is not yet implemented.`,
-       variant: "default"
-     });
-   };
+  const handlePlaceholderClick = (featureName: string) => {
+     toast({
+       title: "Feature Coming Soon",
+       description: `${featureName} functionality is not yet implemented.`,
+       variant: "default"
+     });
+   };
 
-   const navigateTo = (path: string) => {
-       router.push(path);
-   };
+   const navigateTo = (path: string) => {
+     router.push(path);
+   };
 
-   // Loading state for the whole dashboard
-   if (isLoadingData || authLoading) {
-      return (
-          <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-              <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          </div>
-      );
-  }
+   // Loading state for the whole dashboard
+   if (isLoadingData || authLoading) {
+     return (
+       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+         <Loader2 className="h-16 w-16 animate-spin text-primary" />
+       </div>
+     );
+   }
 
-   // Ensure userProgress is not null before rendering components that depend on it
+   // Ensure userProgress is not null before rendering components that depend on it
    // Use optional chaining and provide default values to prevent runtime errors if userProgress is null
    const {
        subjectMastery = defaultProgress.subjectMastery,
@@ -151,61 +193,61 @@ export default function DashboardPage() {
    } = userProgress || {};
 
 
-  return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {/* Welcome Card */}
-      <Card className="lg:col-span-3">
-        <CardHeader>
-           <div className="flex justify-between items-center">
-              <div>
-                 <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
-                 <CardDescription>Here's your personalized study dashboard.</CardDescription>
-              </div>
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* Welcome Card */}
+      <Card className="lg:col-span-3">
+        <CardHeader>
+           <div className="flex justify-between items-center">
+             <div>
+               <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
+               <CardDescription>Here's your personalized study dashboard.</CardDescription>
+             </div>
                {/* Display data fetch status (optional) */}
                {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Data from Offline Cache)</span>}
                {dataFetchSource === 'error' && <span className="text-xs text-destructive">(Error Loading)</span>}
             </div>
         </CardHeader>
-        <CardContent>
-          <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
-        </CardContent>
-         <CardFooter className="flex flex-wrap gap-2">
-             <Button onClick={() => navigateTo('/upload-textbook')}>
-               <FileText className="mr-2 h-4 w-4" /> Upload Textbook
-             </Button>
-             <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
-               <Activity className="mr-2 h-4 w-4" /> Take a Quiz
-             </Button>
-            <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
-                <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
-             </Button>
-         </CardFooter>
-      </Card>
+        <CardContent>
+          <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
+        </CardContent>
+       <CardFooter className="flex flex-wrap gap-2">
+          <Button onClick={() => navigateTo('/upload-textbook')}>
+            <FileText className="mr-2 h-4 w-4" /> Upload Textbook
+          </Button>
+          <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
+            <Activity className="mr-2 h-4 w-4" /> Take a Quiz
+          </Button>
+         <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
+            <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
+          </Button>
+       </CardFooter>
+      </Card>
 
-      {/* Upcoming Homework */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText className="text-secondary" /> Upcoming Homework</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 min-h-[150px]">
-          {upcomingHomework && upcomingHomework.length > 0 ? (
-            upcomingHomework.map((hw) => (
-              <div key={hw.id} className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">{hw.title}</p>
-                  <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
-                </div>
+      {/* Upcoming Homework */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><FileText className="text-secondary" /> Upcoming Homework</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 min-h-[150px]">
+          {upcomingHomework && upcomingHomework.length > 0 ? (
+            upcomingHomework.map((hw) => (
+              <div key={hw.id} className="flex justify-between items-center">
+                <div>
+                  <p className="font-medium">{hw.title}</p>
+                  <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
+                </div>
                 {/* Format dueDate before displaying */}
                 <span className="text-sm font-semibold text-accent">
                   {hw.dueDate ? new Date(hw.dueDate as string).toLocaleDateString() : 'No due date'}
                 </span>
-              </div>
-            ))
-          ) : (
+              </div>
+            ))
+          ) : (
             <p className="text-muted-foreground text-center pt-8">No upcoming homework!</p>
-          )}
-        </CardContent>
-      </Card>
+          )}
+        </CardContent>
+      </Card>
 
        {/* Upcoming Exams */}
       <Card>
@@ -280,6 +322,6 @@ export default function DashboardPage() {
       </Card>
 
 
-    </div>
-  );
+    </div>
+  );
 }

@@ -1,20 +1,22 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow authenticated users to upload/read/delete files in their own directory
-    // user_avatars/{userId}/{fileName}
-    // user_uploads/{userId}/textbooks/{fileName}
-    match /{folder}/{userId}/{allPaths=**} {
+
+    // Allow users to read/write their own avatars in their specific folder
+    match /user_avatars/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Add rules for other storage paths as needed.
-    // Example: Public read access for general assets (if any)
-    // match /public/{allPaths=**} {
-    //   allow read;
-    //   allow write: if false;
+    // Allow users to read/write their own uploads (e.g., textbooks) in their specific folder
+    match /user_uploads/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Add rules for other storage paths if needed
+    // Example: Allow public read access to a 'public_files' folder
+    // match /public_files/{allPaths=**} {
+    //   allow read: if true;
     // }
   }
 }

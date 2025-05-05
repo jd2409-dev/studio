@@ -1,24 +1,41 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow authenticated users to read/write their own user profile
+    // Users can read and update their own profile information.
+    // Only authenticated users can create their profile document.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Optional: Add validation for user profile fields
+      // allow write: if request.auth != null && request.auth.uid == userId
+      //                && request.resource.data.name is string
+      //                && request.resource.data.email == request.auth.token.email // Ensure email matches auth
+      //                && (!('avatarUrl' in request.resource.data) || request.resource.data.avatarUrl is string)
+      //                && (!('schoolBoard' in request.resource.data) || request.resource.data.schoolBoard is string)
+      //                && (!('grade' in request.resource.data) || request.resource.data.grade is string)
+      //                && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'avatarUrl', 'schoolBoard', 'grade', 'joinDate', 'lastLogin']); // Prevent extra fields
     }
 
-    // Allow authenticated users to read/write their own progress data
+    // Users can read and write their own progress data.
+    // Only authenticated users can create their progress document.
     match /userProgress/{userId} {
-       allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Optional: Add validation for progress data structure (basic example)
+      // allow write: if request.auth != null && request.auth.uid == userId
+      //                && request.resource.data.uid == userId
+      //                && request.resource.data.subjectMastery is list
+      //                && request.resource.data.upcomingHomework is list
+      //                && request.resource.data.upcomingExams is list
+      //                && request.resource.data.studyRecommendations is list
+      //                && request.resource.data.lastUpdated is timestamp;
     }
 
-    // Add rules for other collections as needed, restricting access appropriately.
-    // Example: A shared 'textbooks' collection might have different rules.
-    // match /textbooks/{textbookId} {
-    //   allow read: if request.auth != null; // Allow any authenticated user to read
-    //   allow write: if false; // Disallow direct client writes (managed by backend/functions)
+    // Add rules for other collections if needed
+    // Example: Allow read access to public data like school boards if stored in Firestore
+    // match /schoolBoards/{boardId} {
+    //   allow read: if true; // Anyone can read school boards
     // }
   }
 }
