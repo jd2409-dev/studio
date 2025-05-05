@@ -16,11 +16,11 @@ import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, St
 
 
 export default function DashboardPage() {
-  const { toast } = useToast();
-  const router = useRouter(); // Initialize useRouter
-  const { user, loading: authLoading } = useAuth();
-  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const { toast } = useToast();
+  const router = useRouter(); // Initialize useRouter
+  const { user, loading: authLoading } = useAuth();
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [userName, setUserName] = useState<string>('Student');
   const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
 

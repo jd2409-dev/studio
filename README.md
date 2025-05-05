@@ -1,3 +1,4 @@
+
 # NexusLearn AI (Powered by Firebase Studio)
 
 This is a Next.js starter application featuring AI-powered learning tools, built within Firebase Studio.
@@ -108,6 +109,10 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 *   **Other Authentication Errors:** Check the browser console for specific Firebase error codes (e.g., `auth/invalid-credential`, `auth/user-disabled`).
 *   **Google Sign-In Errors (`auth/popup-closed-by-user`, `auth/account-exists-with-different-credential`):** Check the browser console for details. Ensure popups aren't blocked. If an account exists with the same email via a different method, try that method first. **Also ensure the Google provider is enabled and `localhost` is in the authorized domains list in the Firebase Authentication settings.**
 *   **Genkit Errors:** Make sure the `GOOGLE_GENAI_API_KEY` is set correctly in your `.env` file if using AI features.
-*   **Firestore/Storage Permission Errors:** Review your Firestore and Storage security rules in the Firebase console. The default rules for development are permissive but might need adjustment or may have been changed. For production, **always** configure secure rules.
+*   **Firestore/Storage Permission Errors (`permission-denied` or `Missing or insufficient permissions`):**
+    *   This means your Firestore or Firebase Storage security rules are blocking the action.
+    *   **For Development:** Check `firestore.rules` and `storage.rules`. The provided development rules allow any authenticated user (`if request.auth != null;`). Ensure these are deployed (`firebase deploy --only firestore:rules` and `firebase deploy --only storage`).
+    *   **VERY IMPORTANT FOR PRODUCTION:** The default development rules (`allow read, write: if request.auth != null;` or `if true;`) are **INSECURE**. Before deploying, you **MUST** write specific rules that only grant users access to their own data (e.g., `allow read, write: if request.auth != null && request.auth.uid == userId;`). Use the Firebase Console Rules Simulator to test your production rules.
+
 
 
