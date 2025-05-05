@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -122,7 +121,7 @@ export default function DashboardPage() {
              }
           } else {
             // Initialize with default data if no progress exists
-             console.log("No progress data found. Initializing default progress in Firestore.");
+             console.log("No progress data found for user:", user.uid, ". Initializing default progress in Firestore.");
              const initialProgress = { ...defaultProgress, uid: user.uid }; // Ensure UID is set
             await setDoc(progressDocRef, initialProgress);
             setUserProgress(initialProgress);
@@ -131,26 +130,30 @@ export default function DashboardPage() {
 
         } catch (error: any) {
           console.error("Error fetching dashboard data:", error);
-           // Differentiate between general errors and offline errors if needed
+           // Differentiate between error types for better feedback
+           let errorTitle = "Error Loading Data";
+           let errorDesc = "Could not load dashboard data. Please try again later.";
+
            if (error.code === 'unavailable') {
-               // This might happen if persistence isn't working AND network is down
-                toast({ title: "Offline", description: "Could not reach server. Displaying cached or default data.", variant: "default" });
-                console.warn("Firestore data fetch failed: Network unavailable and persistence might not be active or data not cached.");
-              const fallbackProgress = { ...defaultProgress, uid: user.uid };
-                setUserProgress(fallbackProgress); // Fallback to default when truly unavailable
-                setDataFetchSource('error');
+               errorTitle = "Offline";
+               errorDesc = "Could not reach server. Displaying cached or default data if available.";
+               console.warn("Firestore data fetch failed: Network unavailable. Persistence might be inactive or data not cached.");
+               setDataFetchSource('error'); // Mark as error, but might show cached data
             } else if (error.code === 'permission-denied') {
-                 toast({ title: "Permissions Error", description: "Could not load dashboard data due to insufficient permissions. Check Firestore rules.", variant: "destructive" });
-                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
-                 const fallbackProgress = { ...defaultProgress, uid: user.uid };
-                 setUserProgress(fallbackProgress); // Fallback to default on permission errors
-                 setDataFetchSource('error');
+                errorTitle = "Permissions Error";
+                errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
+                console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed using `firebase deploy --only firestore:rules`.");
+                setDataFetchSource('error');
            } else {
-                toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
-               const fallbackProgress = { ...defaultProgress, uid: user.uid };
-                setUserProgress(fallbackProgress); // Fallback to default on other errors
+                // Generic error
                 setDataFetchSource('error');
            }
+
+            toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
+            // Always attempt to set fallback data on error to prevent crashes
+            const fallbackProgress = { ...defaultProgress, uid: user.uid };
+            setUserProgress(fallbackProgress);
+
         } finally {
           setIsLoadingData(false);
         }
@@ -216,7 +219,7 @@ export default function DashboardPage() {
             <FileText className="mr-2 h-4 w-4" /> Upload Textbook
           </Button>
           <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
-            <Activity className="mr-2 h-4 w-4" /> Take a Quiz
+            <Activity className="mr-2 h-4 w-4" /> Generate Quiz
           </Button>
          <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
