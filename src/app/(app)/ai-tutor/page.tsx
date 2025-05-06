@@ -16,6 +16,9 @@ interface ChatMessage {
   content: string;
 }
 
+// Ensure the page is dynamically rendered
+export const dynamic = 'force-dynamic';
+
 export default function AiTutorPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -152,3 +155,4 @@ export default function AiTutorPage() {
     </div>
   );
 }
+
