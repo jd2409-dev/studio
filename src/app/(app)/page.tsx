@@ -166,14 +166,6 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, toast]); // Add toast to dependency array
 
-  const handlePlaceholderClick = (featureName: string) => {
-     toast({
-       title: "Feature Coming Soon",
-       description: `${featureName} functionality is not yet implemented.`,
-       variant: "default"
-     });
-   };
-
    const navigateTo = (path: string) => {
      router.push(path);
    };
@@ -222,7 +214,6 @@ export default function DashboardPage() {
           <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
             <Activity className="mr-2 h-4 w-4" /> Generate Quiz
           </Button>
-         {/* Changed from handlePlaceholderClick to navigateTo */}
          <Button variant="outline" onClick={() => navigateTo('/ai-tutor')}>
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
           </Button>
@@ -320,7 +311,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
          <CardFooter>
-            <Button variant="outline" size="sm" onClick={() => handlePlaceholderClick('View All Recommendations')}>
+            <Button variant="outline" size="sm" onClick={() => navigateTo('/performance')}>
                 View All Recommendations
             </Button>
         </CardFooter>
@@ -330,3 +321,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
