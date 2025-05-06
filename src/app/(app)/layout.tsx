@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, FileText, MessageSquareQuestion } from 'lucide-react'; // Added ListChecks, FileText, MessageSquareQuestion
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, FileText, MessageSquareQuote } from 'lucide-react'; // Changed MessageSquareQuestion to MessageSquareQuote
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -98,7 +98,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                  {/* New Textbook Explainer Link */}
                  <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
                      <Link href="/textbook-explainer">
-                        <MessageSquareQuestion />
+                        <MessageSquareQuote /> {/* Changed icon */}
                         Textbook Explainer
                      </Link>
                  </SidebarMenuButton>
