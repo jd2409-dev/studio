@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -9,8 +10,8 @@
  */
 
 import { ai } from '@/ai/ai-instance';
-import { z } from 'genkit'; 
-import { gemini15Flash } from '@genkit-ai/googleai'; 
+import { z } from 'genkit';
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const aiTutorInputSchema = z.object({
   history: z.array(z.object({
@@ -34,7 +35,7 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
 
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorChatPrompt',
-  model: gemini15Flash, 
+  model: gemini15Flash,
   input: { schema: aiTutorInputSchema },
   output: { schema: aiTutorOutputSchema },
   prompt: `You are an AI tutor for NexusLearn AI, designed to help students learn effectively.
@@ -74,7 +75,7 @@ Tutor, provide your response:
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
-  config: { 
+  config: {
     temperature: 0.7,
   }
 });
@@ -87,7 +88,7 @@ const aiTutorFlow = ai.defineFlow(
   },
   async (input) => {
     // Call the prompt object directly
-    const { output } = await tutorPrompt(input); 
+    const { output } = await tutorPrompt(input);
 
     // Ensure output is not null or undefined before returning
     if (!output) {
@@ -96,3 +97,4 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
+
