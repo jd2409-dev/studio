@@ -3,25 +3,20 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, BrainCircuit, Sparkles, GraduationCap } from 'lucide-react'; // Added BrainCircuit, Sparkles, GraduationCap
+import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, Sparkles, GraduationCap } from 'lucide-react'; // Removed BrainCircuit
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // Import Button
+import { Button } from "@/components/ui/button"; // Keep Button for potential future use, but remove specific feedback button usage
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { UserProgress, QuizResult, QuizQuestion } from '@/types/user';
-import { generateQuizReflection, type QuizReflectionInput, type QuizReflectionOutput } from '@/ai/flows/quiz-reflection-flow'; // Import the new flow
+// Removed import for generateQuizReflection flow
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-// Interface for storing reflection state per quiz
-interface ReflectionState {
-    isLoading: boolean;
-    feedback: string | null;
-    error: string | null;
-}
+// Removed ReflectionState interface and related state
 
 export default function ReflectionPage() {
   const { toast } = useToast();
@@ -29,7 +24,7 @@ export default function ReflectionPage() {
 
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [reflectionStates, setReflectionStates] = useState<{ [quizId: string]: ReflectionState }>({});
+  // Removed reflectionStates state
 
   // Fetch user progress data (specifically quiz history)
   useEffect(() => {
@@ -43,22 +38,18 @@ export default function ReflectionPage() {
           if (progressSnap.exists()) {
             const data = progressSnap.data() as UserProgress;
             const sortedHistory = (data.quizHistory || []).sort((a, b) => {
-                const dateA = typeof a.generatedDate === 'string' ? new Date(a.generatedDate) : (a.generatedDate as any)?.toDate();
-                const dateB = typeof b.generatedDate === 'string' ? new Date(b.generatedDate) : (b.generatedDate as any)?.toDate();
-                return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+                // Handle potential Date/Timestamp/string variations
+                const dateA = a.generatedDate ? (typeof a.generatedDate === 'string' ? new Date(a.generatedDate) : (a.generatedDate as any)?.toDate ? (a.generatedDate as any).toDate() : a.generatedDate) : new Date(0);
+                const dateB = b.generatedDate ? (typeof b.generatedDate === 'string' ? new Date(b.generatedDate) : (b.generatedDate as any)?.toDate ? (b.generatedDate as any).toDate() : b.generatedDate) : new Date(0);
+                // Ensure we have valid Date objects for comparison
+                const timeA = dateA instanceof Date ? dateA.getTime() : 0;
+                const timeB = dateB instanceof Date ? dateB.getTime() : 0;
+                return timeB - timeA; // Sort descending (newest first)
             });
             setQuizHistory(sortedHistory);
-            // Initialize reflection states
-            const initialStates: { [quizId: string]: ReflectionState } = {};
-            sortedHistory.forEach(quiz => {
-                if (quiz.quizId) { // Ensure quizId exists
-                    initialStates[quiz.quizId] = { isLoading: false, feedback: null, error: null };
-                }
-            });
-            setReflectionStates(initialStates);
+            // Removed initialization of reflection states
           } else {
             setQuizHistory([]);
-            setReflectionStates({});
           }
         } catch (error: any) {
           console.error("Error fetching reflection data:", error);
@@ -85,7 +76,7 @@ export default function ReflectionPage() {
                 date = new Date(dateInput);
             } else if (dateInput instanceof Date) {
                 date = dateInput;
-            } else if (typeof dateInput === 'object' && 'seconds' in dateInput) {
+            } else if (typeof dateInput === 'object' && dateInput !== null && 'seconds' in dateInput) {
                 date = new Date(dateInput.seconds * 1000);
             } else {
                 return 'Invalid Date';
@@ -98,57 +89,20 @@ export default function ReflectionPage() {
     };
 
     const getQuestionStatusIcon = (question: QuizQuestion, userAnswer: string | undefined) => {
-        const isCorrect = typeof userAnswer === 'string' && typeof question.correctAnswer === 'string'
+        // Case-insensitive comparison for strings, direct comparison otherwise
+         const isCorrect = typeof userAnswer === 'string' && typeof question.correctAnswer === 'string'
             ? userAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
-            : userAnswer === question.correctAnswer;
-        return isCorrect ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-destructive" />;
+            : userAnswer === question.correctAnswer; // Fallback for non-string or undefined
+
+        // More robust check for correctness if types might be inconsistent
+        // const correctAnswerStr = String(question.correctAnswer ?? '').trim().toLowerCase();
+        // const userAnswerStr = String(userAnswer ?? '').trim().toLowerCase();
+        // const isCorrect = correctAnswerStr === userAnswerStr;
+
+        return isCorrect ? <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" /> : <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />;
     };
 
-    // Function to handle generating reflection for a specific quiz
-    const handleGenerateReflection = async (quiz: QuizResult) => {
-        if (!quiz.quizId) {
-            toast({ title: "Error", description: "Quiz ID missing, cannot generate reflection.", variant: "destructive"});
-            return;
-        }
-
-        // Set loading state for this specific quiz
-        setReflectionStates(prev => ({
-            ...prev,
-            [quiz.quizId!]: { isLoading: true, feedback: null, error: null }
-        }));
-
-        try {
-            // Prepare input for the flow
-            const input: QuizReflectionInput = {
-                questions: quiz.questions,
-                userAnswers: quiz.userAnswers,
-                score: quiz.score,
-                totalQuestions: quiz.totalQuestions,
-                difficulty: quiz.difficulty,
-                grade: quiz.grade, // Pass grade to the flow
-            };
-
-            // Call the Genkit flow
-            const result: QuizReflectionOutput = await generateQuizReflection(input);
-
-            // Update state with the feedback
-            setReflectionStates(prev => ({
-                ...prev,
-                [quiz.quizId!]: { isLoading: false, feedback: result.feedback, error: null }
-            }));
-
-        } catch (error: any) {
-            console.error("Error generating quiz reflection:", error);
-            const errorMsg = error instanceof Error ? error.message : "Failed to generate reflection.";
-            // Update state with the error
-            setReflectionStates(prev => ({
-                ...prev,
-                [quiz.quizId!]: { isLoading: false, feedback: null, error: errorMsg }
-            }));
-            toast({ title: "Reflection Error", description: errorMsg, variant: "destructive"});
-        }
-    };
-
+    // Removed handleGenerateReflection function
 
   if (authLoading || isLoading) {
     return (
@@ -162,104 +116,96 @@ export default function ReflectionPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Reflection: Quiz History</h1>
       <p className="text-muted-foreground mb-8">
-        Review your past quiz attempts, scores, answers, and get AI-powered feedback.
+        Review your past quiz attempts, scores, and answers. {/* Removed mention of feedback */}
       </p>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ListChecks className="text-secondary" /> Your Quiz Attempts</CardTitle>
-          <CardDescription>Expand each entry to see detailed results and generate feedback.</CardDescription>
+          <CardDescription>Expand each entry to see detailed results.</CardDescription> {/* Adjusted description */}
         </CardHeader>
         <CardContent>
           {quizHistory.length > 0 ? (
             <Accordion type="single" collapsible className="w-full space-y-4">
               {quizHistory.map((quiz) => (
-                <AccordionItem value={`quiz-${quiz.quizId}`} key={quiz.quizId} className="border rounded-md px-4 bg-background hover:bg-muted/30 transition-colors">
-                  <AccordionTrigger className="py-4 text-left hover:no-underline">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-1">
-                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{formatQuizDate(quiz.generatedDate)}</span>
-                        </div>
-                         {quiz.sourceContent && (
-                            <Badge variant="outline" className="hidden md:inline-flex text-xs">
-                                Based on: "{quiz.sourceContent.substring(0, 30)}..."
-                            </Badge>
-                        )}
-                         {quiz.grade && (
-                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                                <GraduationCap className="h-3 w-3"/> Grade {quiz.grade}
-                            </Badge>
-                         )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                         {quiz.difficulty && <Badge variant="secondary" className="capitalize">{quiz.difficulty}</Badge>}
-                         <Badge variant={quiz.score / quiz.totalQuestions >= 0.7 ? "default" : "destructive"} className="w-fit">
-                            Score: {quiz.score} / {quiz.totalQuestions} ({Math.round((quiz.score / quiz.totalQuestions) * 100)}%)
-                        </Badge>
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-2 pb-4 space-y-4">
-                    {/* Quiz Questions Details */}
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                       <h4 className="font-semibold text-sm mb-2">Questions & Answers:</h4>
-                      {quiz.questions.map((q, qIndex) => (
-                        <div key={qIndex} className="p-3 border rounded bg-muted/50 text-xs">
-                          <div className="flex justify-between items-start gap-2">
-                             <p className="font-medium">{qIndex + 1}. {q.question}</p>
-                             {getQuestionStatusIcon(q, quiz.userAnswers[qIndex])}
-                          </div>
-                          <p className="mt-1">
-                            <span className="text-muted-foreground">Your Answer:</span> {quiz.userAnswers[qIndex] || <span className="italic">Not Answered</span>}
-                          </p>
-                          {!(typeof quiz.userAnswers[qIndex] === 'string' && typeof q.correctAnswer === 'string'
-                             ? quiz.userAnswers[qIndex]?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()
-                             : quiz.userAnswers[qIndex] === q.correctAnswer) && (
-                               <p className="mt-1 text-green-600 dark:text-green-400">
-                                   Correct Answer: {q.correctAnswer}
-                               </p>
-                           )}
-                           {q.type === 'multiple-choice' && q.answers && (
-                               <div className="flex flex-wrap gap-1 mt-1">
-                                {q.answers.map((ans, ansIdx) => (
-                                    <Badge key={ansIdx} variant={ans === q.correctAnswer ? 'secondary' : 'outline'} className={cn("text-[10px] px-1.5 py-0", quiz.userAnswers[qIndex] === ans && ans !== q.correctAnswer && "bg-destructive/20 border-destructive text-destructive")}>
-                                        {ans}
-                                    </Badge>
-                                ))}
-                               </div>
-                           )}
-                        </div>
-                      ))}
-                    </div>
-
-                     {/* AI Reflection Section */}
-                     <div className="border-t pt-4 mt-4">
-                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-1"><Sparkles className="h-4 w-4 text-primary" /> AI Feedback</h4>
-                        {reflectionStates[quiz.quizId!]?.isLoading ? (
-                            <div className="flex items-center text-muted-foreground text-sm">
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating feedback...
+                 // Ensure quiz.quizId exists before rendering the item
+                 quiz.quizId ? (
+                    <AccordionItem value={`quiz-${quiz.quizId}`} key={quiz.quizId} className="border rounded-md px-4 bg-background hover:bg-muted/30 transition-colors">
+                    <AccordionTrigger className="py-4 text-left hover:no-underline">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{formatQuizDate(quiz.generatedDate)}</span>
                             </div>
-                        ) : reflectionStates[quiz.quizId!]?.error ? (
-                            <p className="text-sm text-destructive">Error: {reflectionStates[quiz.quizId!]?.error}</p>
-                        ) : reflectionStates[quiz.quizId!]?.feedback ? (
-                            <p className="text-sm whitespace-pre-wrap bg-primary/5 p-3 rounded-md border border-primary/20">{reflectionStates[quiz.quizId!]?.feedback}</p>
-                        ) : (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleGenerateReflection(quiz)}
-                                disabled={reflectionStates[quiz.quizId!]?.isLoading}
-                            >
-                                <BrainCircuit className="mr-2 h-4 w-4" />
-                                Generate Feedback
-                            </Button>
-                        )}
-                     </div>
+                            {quiz.sourceContent && (
+                                <Badge variant="outline" className="hidden md:inline-flex text-xs">
+                                    Based on: "{quiz.sourceContent.substring(0, 30)}..."
+                                </Badge>
+                            )}
+                            {quiz.grade && (
+                                <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                    <GraduationCap className="h-3 w-3"/> Grade {quiz.grade}
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            {quiz.difficulty && <Badge variant="secondary" className="capitalize">{quiz.difficulty}</Badge>}
+                            <Badge variant={quiz.score / quiz.totalQuestions >= 0.7 ? "default" : "destructive"} className="w-fit">
+                                Score: {quiz.score} / {quiz.totalQuestions} ({quiz.totalQuestions > 0 ? Math.round((quiz.score / quiz.totalQuestions) * 100) : 0}%)
+                            </Badge>
+                        </div>
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-2 pb-4 space-y-4">
+                        {/* Quiz Questions Details */}
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        <h4 className="font-semibold text-sm mb-2">Questions & Answers:</h4>
+                        {quiz.questions.map((q, qIndex) => (
+                            <div key={qIndex} className="p-3 border rounded bg-muted/50 text-xs">
+                            <div className="flex justify-between items-start gap-2">
+                                <p className="font-medium flex-1">{qIndex + 1}. {q.question}</p>
+                                {getQuestionStatusIcon(q, quiz.userAnswers[qIndex])}
+                            </div>
+                            <p className="mt-1">
+                                <span className="text-muted-foreground">Your Answer:</span> {quiz.userAnswers[qIndex] !== undefined && quiz.userAnswers[qIndex] !== null && quiz.userAnswers[qIndex] !== '' ? quiz.userAnswers[qIndex] : <span className="italic">Not Answered</span>}
+                            </p>
+                            {/* Check if the answer was incorrect before showing the correct one */}
+                            {!(typeof quiz.userAnswers[qIndex] === 'string' && typeof q.correctAnswer === 'string'
+                                ? quiz.userAnswers[qIndex]?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()
+                                : quiz.userAnswers[qIndex] === q.correctAnswer
+                            ) && (
+                                <p className="mt-1 text-green-600 dark:text-green-400">
+                                    Correct Answer: {q.correctAnswer}
+                                </p>
+                            )}
+                            {/* Display options for multiple choice */}
+                            {q.type === 'multiple-choice' && q.answers && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {q.answers.map((ans, ansIdx) => (
+                                        <Badge
+                                            key={ansIdx}
+                                            variant={ans === q.correctAnswer ? 'secondary' : 'outline'}
+                                            className={cn(
+                                                "text-[10px] px-1.5 py-0",
+                                                // Highlight the user's incorrect selection red
+                                                quiz.userAnswers[qIndex] === ans && ans !== q.correctAnswer && "bg-destructive/20 border-destructive text-destructive"
+                                            )}
+                                        >
+                                            {ans}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                            </div>
+                        ))}
+                        </div>
 
-                  </AccordionContent>
-                </AccordionItem>
+                        {/* Removed AI Reflection Section */}
+
+                    </AccordionContent>
+                    </AccordionItem>
+                ) : null // Skip rendering if quizId is missing
               ))}
             </Accordion>
           ) : (

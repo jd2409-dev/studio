@@ -82,7 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                    <Link href="/">
                      <Home />
-                     Dashboard
+                     <span>Dashboard</span>
                    </Link>
                  </SidebarMenuButton>
              </SidebarMenuItem>
@@ -90,7 +90,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'} tooltip="Textbook Summary">
                  <Link href="/textbook-summary">
                    <BookOpen />
-                   Textbook Summary
+                   <span>Textbook Summary</span>
                  </Link>
                </SidebarMenuButton>
              </SidebarMenuItem>
@@ -99,7 +99,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                  <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
                      <Link href="/textbook-explainer">
                         <MessageSquareQuote /> {/* Changed icon */}
-                        Textbook Explainer
+                        <span>Textbook Explainer</span>
                      </Link>
                  </SidebarMenuButton>
               </SidebarMenuItem>
@@ -107,7 +107,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                <SidebarMenuButton asChild isActive={pathname === '/quiz'} tooltip="Quiz Generation">
                  <Link href="/quiz">
                    <HelpCircle />
-                   Quiz Generation
+                    <span>Quiz Generation</span>
                  </Link>
                </SidebarMenuButton>
              </SidebarMenuItem>
@@ -115,7 +115,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'} tooltip="Upload Textbook">
                 <Link href="/upload-textbook">
                   <Upload />
-                  Upload Textbook
+                   <span>Upload Textbook</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -124,7 +124,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
                   <Link href="/study-planner">
                     <CalendarDays />
-                    Study Planner
+                     <span>Study Planner</span>
                   </Link>
                 </SidebarMenuButton>
              </SidebarMenuItem>
@@ -132,7 +132,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenuButton asChild isActive={pathname === '/performance'} tooltip="Performance Analytics">
                   <Link href="/performance">
                     <Activity />
-                    Performance
+                     <span>Performance</span>
                   </Link>
                 </SidebarMenuButton>
              </SidebarMenuItem>
@@ -140,19 +140,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'} tooltip="AI Tutor">
                   <Link href="/ai-tutor">
                     <BrainCircuit />
-                    AI Tutor
+                     <span>AI Tutor</span>
                   </Link>
                 </SidebarMenuButton>
              </SidebarMenuItem>
+             {/* Removed Reflection Link */}
+             {/*
              <SidebarMenuItem>
-                 {/* New Reflection Link */}
                  <SidebarMenuButton asChild isActive={pathname === '/reflection'} tooltip="Reflection">
                     <Link href="/reflection">
                         <ListChecks />
-                        Reflection
+                        <span>Reflection</span>
                     </Link>
                  </SidebarMenuButton>
              </SidebarMenuItem>
+             */}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -161,7 +163,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
                 <Link href="/settings">
                   <Settings />
-                  Settings
+                   <span>Settings</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -169,14 +171,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuButton asChild isActive={pathname === '/profile'} tooltip="Profile">
                 <Link href="/profile">
                   <User />
-                  Profile
+                   <span>Profile</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
                 <LogOut />
-                Log Out
+                 <span>Log Out</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
