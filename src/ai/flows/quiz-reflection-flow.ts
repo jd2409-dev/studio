@@ -77,11 +77,11 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
   // Define custom Handlebars helper for correctness check (case-insensitive for strings)
-  customize: (model) => {
-      model.handlebarsOptions = {
+  customize: (promptObject) => { // Use a different name for clarity
+      promptObject.handlebarsOptions = {
           helpers: {
                 add: (a: number, b: number) => a + b,
-                join: (arr: string[], sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
+                join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
                 isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
                     if (userAnswer === undefined || userAnswer === null) return false;
                     // Simple case-insensitive comparison for strings
@@ -89,8 +89,9 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
                 },
                 lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered' // Handle potential undefined array
           },
-          knownHelpersOnly: false, // Allow custom helpers (like 'add', 'join', 'isCorrect', 'lookup')
+          knownHelpersOnly: false, // Explicitly set to false to allow custom helpers
       };
+      return promptObject; // Explicitly return the modified object
   },
 });
 
