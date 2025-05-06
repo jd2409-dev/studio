@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI Tutor Flow for NexusLearn AI.
@@ -74,7 +73,7 @@ Tutor, provide your response:
       },
     };
     // Explicitly set knownHelpersOnly to false to allow custom helpers like 'eq'
-    promptObject.handlebarsOptions.knownHelpersOnly = false; // <<<< THIS IS THE CRITICAL FIX
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
   config: {
@@ -115,3 +114,4 @@ const aiTutorFlow = ai.defineFlow(
     }
   }
 );
+
