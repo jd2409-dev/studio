@@ -1,27 +1,47 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // Users collection:
-    // - Authenticated users can read and write their *own* profile document.
+    // - Authenticated users can read their own profile.
+    // - Authenticated users can create their own profile document if it doesn't exist.
+    // - Authenticated users can update their own profile document.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      // Deny delete for user profiles by default unless specifically needed
+      allow delete: if false;
+
+      // TutorMessages subcollection:
+      // - Authenticated users can read and write their own tutor messages.
+      match /tutorMessages/{messageId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
-    // User Progress collection:
-    // - Authenticated users can read and write their *own* progress document.
+    // UserProgress collection:
+    // - Authenticated users can read their own progress.
+    // - Authenticated users can create their own progress document if it doesn't exist.
+    // - Authenticated users can update their own progress document.
     match /userProgress/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      // Deny delete for user progress by default unless specifically needed
+      allow delete: if false;
+    }
+    
+    // SchoolBoards collection (assuming it's public or managed by admin)
+    // This is a placeholder - adjust based on how school boards are managed.
+    // If public, allow read for all. If admin-managed, restrict write.
+    match /schoolBoards/{boardId} {
+      allow read: if true; // Example: Allow anyone to read school boards
+      allow write: if false; // Example: Disallow client-side writes
     }
 
-    // --- Potentially add rules for other collections as needed ---
-    // Example: Allow read access to a 'publicContent' collection
-    // match /publicContent/{docId} {
-    //   allow read: if true;
-    // }
-
-    // Default rule: Deny all reads and writes to any other path
+    // Default deny all other access
     match /{document=**} {
       allow read, write: if false;
     }
