@@ -12,13 +12,6 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
-import Handlebars from 'handlebars'; // Import Handlebars
-
-// Register helper globally (if not already) - Seems less reliable in Genkit, defining locally instead
-// Handlebars.registerHelper('eq', function (a, b) {
-//   return a === b;
-// });
-
 
 // Define the structure for a single chat message
 const ChatMessageSchema = z.object({
@@ -105,6 +98,4 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
-
-
 
