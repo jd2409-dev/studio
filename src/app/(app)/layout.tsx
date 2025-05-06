@@ -1,9 +1,10 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks } from 'lucide-react'; // Added ListChecks for Reflection
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, FileText, MessageSquareQuestion } from 'lucide-react'; // Added ListChecks, FileText, MessageSquareQuestion
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -77,48 +78,56 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                  <Link href="/">
-                    <Home />
-                    Dashboard
-                  </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
+             <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                   <Link href="/">
+                     <Home />
+                     Dashboard
+                   </Link>
+                 </SidebarMenuButton>
+             </SidebarMenuItem>
+             <SidebarMenuItem>
                <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'} tooltip="Textbook Summary">
-                  <Link href="/textbook-summary">
-                    <BookOpen />
-                    Textbook Summary
-                  </Link>
-               </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/quiz'} tooltip="Quiz Generation">
-                 <Link href="/quiz">
-                    <HelpCircle />
-                    Quiz Generation
+                 <Link href="/textbook-summary">
+                   <BookOpen />
+                   Textbook Summary
                  </Link>
                </SidebarMenuButton>
-            </SidebarMenuItem>
-            {/* Removed Upload Textbook Link - Feature not implemented */}
-            {/* <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'} tooltip="Upload Textbook">
-                  <Link href="/upload-textbook">
-                    <Upload />
-                    Upload Textbook
-                  </Link>
+             </SidebarMenuItem>
+              <SidebarMenuItem>
+                 {/* New Textbook Explainer Link */}
+                 <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
+                     <Link href="/textbook-explainer">
+                        <MessageSquareQuestion />
+                        Textbook Explainer
+                     </Link>
+                 </SidebarMenuButton>
+              </SidebarMenuItem>
+             <SidebarMenuItem>
+               <SidebarMenuButton asChild isActive={pathname === '/quiz'} tooltip="Quiz Generation">
+                 <Link href="/quiz">
+                   <HelpCircle />
+                   Quiz Generation
+                 </Link>
                </SidebarMenuButton>
-            </SidebarMenuItem> */}
-            {/* Links for new features */}
+             </SidebarMenuItem>
             <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
-                   <Link href="/study-planner">
-                        <CalendarDays />
-                        Study Planner
-                   </Link>
-                </SidebarMenuButton>
+              <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'} tooltip="Upload Textbook">
+                <Link href="/upload-textbook">
+                  <Upload />
+                  Upload Textbook
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
+             {/* Links for new features */}
+             <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
+                  <Link href="/study-planner">
+                    <CalendarDays />
+                    Study Planner
+                  </Link>
+                </SidebarMenuButton>
+             </SidebarMenuItem>
              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/performance'} tooltip="Performance Analytics">
                   <Link href="/performance">
@@ -126,22 +135,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     Performance
                   </Link>
                 </SidebarMenuButton>
-            </SidebarMenuItem>
+             </SidebarMenuItem>
              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'} tooltip="AI Tutor">
-                   <Link href="/ai-tutor">
-                        <BrainCircuit />
-                        AI Tutor
-                   </Link>
+                  <Link href="/ai-tutor">
+                    <BrainCircuit />
+                    AI Tutor
+                  </Link>
                 </SidebarMenuButton>
-            </SidebarMenuItem>
+             </SidebarMenuItem>
              <SidebarMenuItem>
                  {/* New Reflection Link */}
                  <SidebarMenuButton asChild isActive={pathname === '/reflection'} tooltip="Reflection">
-                     <Link href="/reflection">
+                    <Link href="/reflection">
                         <ListChecks />
                         Reflection
-                     </Link>
+                    </Link>
                  </SidebarMenuButton>
              </SidebarMenuItem>
           </SidebarMenu>
@@ -149,20 +158,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
-                  <Link href="/settings">
-                    <Settings />
-                    Settings
-                  </Link>
-               </SidebarMenuButton>
+              <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
+                <Link href="/settings">
+                  <Settings />
+                  Settings
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/profile'} tooltip="Profile">
-                 <Link href="/profile">
-                    <User />
-                    Profile
-                  </Link>
-                </SidebarMenuButton>
+              <SidebarMenuButton asChild isActive={pathname === '/profile'} tooltip="Profile">
+                <Link href="/profile">
+                  <User />
+                  Profile
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
