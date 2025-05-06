@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BarChart, BrainCircuit, CalendarDays } from 'lucide-react'; // Added CalendarDays
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays } from 'lucide-react'; // Removed BarChart, Added CalendarDays
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -79,7 +79,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              {/* Remove legacyBehavior and pass Link directly */}
+              {/* Use asChild with Link */}
               <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                   <Link href="/">
                     <Home />
@@ -88,6 +88,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+               {/* Use asChild with Link */}
                <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'} tooltip="Textbook Summary">
                   <Link href="/textbook-summary">
                     <BookOpen />
@@ -96,6 +97,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+               {/* Use asChild with Link */}
                <SidebarMenuButton asChild isActive={pathname === '/quiz'} tooltip="Quiz Generation">
                  <Link href="/quiz">
                     <HelpCircle />
@@ -104,6 +106,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+               {/* Use asChild with Link */}
                <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'} tooltip="Upload Textbook">
                   <Link href="/upload-textbook">
                     <Upload />
@@ -113,6 +116,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </SidebarMenuItem>
             {/* Links for new features */}
             <SidebarMenuItem>
+                {/* Use asChild with Link */}
                 <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
                    <Link href="/study-planner">
                         <CalendarDays />
@@ -121,6 +125,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
+                {/* Use asChild with Link */}
                 <SidebarMenuButton asChild isActive={pathname === '/performance'} tooltip="Performance Analytics">
                   <Link href="/performance">
                     <Activity />
@@ -129,6 +134,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
+                {/* Use asChild with Link */}
                 <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'} tooltip="AI Tutor">
                    <Link href="/ai-tutor">
                         <BrainCircuit />
@@ -141,6 +147,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
+               {/* Use asChild with Link */}
                <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
                   <Link href="/settings">
                     <Settings />
@@ -149,6 +156,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+               {/* Use asChild with Link */}
                <SidebarMenuButton asChild isActive={pathname === '/profile'} tooltip="Profile">
                  <Link href="/profile">
                     <User />

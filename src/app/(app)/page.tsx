@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -221,7 +222,8 @@ export default function DashboardPage() {
           <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
             <Activity className="mr-2 h-4 w-4" /> Generate Quiz
           </Button>
-         <Button variant="outline" onClick={() => handlePlaceholderClick('AI Tutor Session')}>
+         {/* Changed from handlePlaceholderClick to navigateTo */}
+         <Button variant="outline" onClick={() => navigateTo('/ai-tutor')}>
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
           </Button>
        </CardFooter>
