@@ -65,7 +65,7 @@ Be encouraging and constructive.
 Here are the quiz details:
 
 {{#each questions}}
-Question {{add @index 1}}: {{this.question}}
+Question {{sum @index 1}}: {{this.question}}
 Type: {{this.type}}
 {{#if this.answers}}Options: {{join this.answers ", "}}{{/if}}
 Correct Answer: {{this.correctAnswer}}
@@ -84,7 +84,7 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
       }
       promptObject.handlebarsOptions.helpers = {
           ...(promptObject.handlebarsOptions.helpers || {}), // Merge with existing helpers if any
-          add: (a: number, b: number) => a + b,
+          sum: (a: number, b: number) => a + b, // Renamed helper from 'add' to 'sum'
           join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
           isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
               if (userAnswer === undefined || userAnswer === null) return false;
