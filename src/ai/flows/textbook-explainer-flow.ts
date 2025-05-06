@@ -52,6 +52,13 @@ PDF Content:
 {{media url=fileDataUri}}
 
 Generate the outputs based solely on the information present in the PDF. If the PDF content is too short, unclear, or seems to be non-academic (e.g., random images, unrelated text), state that you cannot provide a meaningful explanation for the given document.`,
+  customize: (promptObject) => {
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
    config: {
     temperature: 0.6, // Slightly lower temperature for more factual explanation
   }
@@ -90,3 +97,4 @@ const explainTextbookPdfFlow = ai.defineFlow(
     }
   }
 );
+

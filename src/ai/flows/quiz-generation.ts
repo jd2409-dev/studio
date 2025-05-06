@@ -78,6 +78,13 @@ const prompt = ai.definePrompt({
 
   Textbook Content: {{{textbookContent}}}
   `,
+  customize: (promptObject) => {
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
    config: {
     temperature: 0.6, // Slightly lower temperature for more factual quiz generation
   }
@@ -131,3 +138,4 @@ const generateQuizFlow = ai.defineFlow(
     }
   }
 );
+

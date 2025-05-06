@@ -58,6 +58,13 @@ Analyze the provided textbook page image and generate the following outputs:
 Textbook Page Image: {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the content visible in the image.`,
+  customize: (promptObject) => {
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
   config: {
     temperature: 0.5,
   }
@@ -79,6 +86,13 @@ File Content:
 {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the provided content.`,
+  customize: (promptObject) => {
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
    config: {
     temperature: 0.5,
   }
@@ -130,3 +144,4 @@ const generateTextbookSummaryFlow = ai.defineFlow(
     }
   }
 );
+
