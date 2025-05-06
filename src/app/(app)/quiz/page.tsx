@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { Loader2, Wand2, Check, X } from 'lucide-react';
 import { generateQuiz, type GenerateQuizInput, type GenerateQuizOutput } from '@/ai/flows/quiz-generation';
 import { useToast } from "@/hooks/use-toast";
@@ -25,9 +26,12 @@ type QuizState = {
     startTime: number; // Timestamp when quiz started
 };
 
+type DifficultyLevel = 'easy' | 'medium' | 'hard'; // Define difficulty type
+
 export default function QuizGenerationPage() {
   const [textbookContent, setTextbookContent] = useState('');
   const [questionCount, setQuestionCount] = useState(5);
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium'); // State for difficulty
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +55,12 @@ export default function QuizGenerationPage() {
     setQuizState(null);
 
     try {
-      const input: GenerateQuizInput = { textbookContent, questionCount };
+      // Include difficulty in the input
+      const input: GenerateQuizInput = {
+          textbookContent,
+          questionCount,
+          difficulty // Add selected difficulty
+      };
       const result = await generateQuiz(input);
 
       // Add subjectId to each question if possible (needs flow update)
@@ -72,7 +81,7 @@ export default function QuizGenerationPage() {
       });
       toast({
         title: "Success",
-        description: "Quiz generated successfully!",
+        description: `Quiz generated successfully (Difficulty: ${difficulty})!`,
       });
     } catch (error) {
       console.error("Error generating quiz:", error);
@@ -137,6 +146,7 @@ export default function QuizGenerationPage() {
           userAnswers: quizState.selectedAnswers,
           score: finalScore,
           totalQuestions: quizData.quiz.length,
+          difficulty: difficulty, // Store the difficulty level with the result
       };
 
       try {
@@ -184,7 +194,7 @@ export default function QuizGenerationPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">AI Quiz Generation</h1>
       <p className="text-muted-foreground mb-8">
-        Paste content from your textbook, choose the number of questions, and generate an interactive quiz. Results are saved to your profile.
+        Paste content from your textbook, choose settings, and generate an interactive quiz. Results are saved to your profile.
       </p>
 
       <div className="grid md:grid-cols-2 gap-8">
@@ -209,19 +219,38 @@ export default function QuizGenerationPage() {
                   className="mt-1"
                 />
               </div>
-              <div>
-                <Label htmlFor="question-count">Number of Questions (1-20)</Label>
-                <Input
-                  id="question-count"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
-                  disabled={isLoading || !!quizState} // Disable if loading or quiz is active
-                  required
-                  className="mt-1 w-24"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <Label htmlFor="question-count">Number of Questions (1-20)</Label>
+                   <Input
+                     id="question-count"
+                     type="number"
+                     min="1"
+                     max="20"
+                     value={questionCount}
+                     onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
+                     disabled={isLoading || !!quizState} // Disable if loading or quiz is active
+                     required
+                     className="mt-1 w-full"
+                   />
+                 </div>
+                 <div>
+                   <Label htmlFor="difficulty">Difficulty</Label>
+                    <Select
+                        value={difficulty}
+                        onValueChange={(value) => setDifficulty(value as DifficultyLevel)}
+                        disabled={isLoading || !!quizState}
+                    >
+                        <SelectTrigger id="difficulty" className="mt-1 w-full">
+                            <SelectValue placeholder="Select difficulty..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="easy">Easy</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="hard">Hard</SelectItem>
+                        </SelectContent>
+                    </Select>
+                 </div>
               </div>
             </CardContent>
             <CardFooter>
@@ -367,7 +396,7 @@ export default function QuizGenerationPage() {
           </CardContent>
            <CardFooter>
                {quizData && (
-                  <Button variant="outline" size="sm" onClick={() => {setQuizData(null); setQuizState(null); setTextbookContent(''); setQuestionCount(5);}} disabled={isLoading}>
+                  <Button variant="outline" size="sm" onClick={() => {setQuizData(null); setQuizState(null); setTextbookContent(''); setQuestionCount(5); setDifficulty('medium');}} disabled={isLoading}>
                       Start New Quiz
                   </Button>
                )}
@@ -377,3 +406,5 @@ export default function QuizGenerationPage() {
     </div>
   );
 }
+
+    
