@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -84,7 +85,7 @@ const aiTutorFlow = ai.defineFlow(
   },
   async (input) => {
     // Call the prompt object directly
-    const { output } = await prompt(input);
+    const { output } = await tutorPrompt(input); // Changed from prompt to tutorPrompt
 
     // Ensure output is not null or undefined before returning
     if (!output) {
