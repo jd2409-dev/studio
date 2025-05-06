@@ -54,6 +54,7 @@ Conversation History:
 AI Tutor Response:`,
 });
 
+
 // Define the Genkit flow
 const aiTutorFlow = ai.defineFlow(
   {
@@ -67,7 +68,30 @@ const aiTutorFlow = ai.defineFlow(
         return { response: "Hello! I'm NexusLearn AI, your study partner. How can I help you today?" };
     }
 
-    const { output } = await prompt(input);
+    // Construct the prompt string with history
+    let historyString = '';
+    input.history.forEach(message => {
+        const prefix = message.role === 'user' ? 'User:' : 'AI Tutor:';
+        historyString += `${prefix} ${message.content}\n`;
+    });
+
+    const promptText = `You are NexusLearn AI, a helpful and knowledgeable AI tutor designed to assist students. Your goal is to provide clear explanations, answer questions accurately, and help students understand complex concepts across various subjects. Engage in a supportive and encouraging conversation.
+
+Analyze the following conversation history and provide a relevant and helpful response to the last user message.
+
+Conversation History:
+${historyString}
+AI Tutor Response:`;
+
+
+    // Call the AI model directly with the constructed prompt text
+     const { output } = await ai.generate({
+            model: gemini15Flash,
+            prompt: promptText,
+            output: { schema: AiTutorOutputSchema },
+     });
+
+
     // Ensure output is not null or undefined before returning
     if (!output) {
       throw new Error("AI Tutor generation failed: No output received from the AI model.");
@@ -75,3 +99,4 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
+
