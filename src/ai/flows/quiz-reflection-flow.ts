@@ -77,23 +77,28 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
   // Define custom Handlebars helper for correctness check (case-insensitive for strings)
-  customize: (promptObject) => { // Use a different name for clarity
-      promptObject.handlebarsOptions = {
-          helpers: {
-                add: (a: number, b: number) => a + b,
-                join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
-                isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
-                    if (userAnswer === undefined || userAnswer === null) return false;
-                    // Simple case-insensitive comparison for strings
-                    return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
-                },
-                lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered' // Handle potential undefined array
+  customize: (promptObject) => {
+      // Ensure handlebarsOptions exists before modifying
+      if (!promptObject.handlebarsOptions) {
+          promptObject.handlebarsOptions = {};
+      }
+      promptObject.handlebarsOptions.helpers = {
+          ...(promptObject.handlebarsOptions.helpers || {}), // Merge with existing helpers if any
+          add: (a: number, b: number) => a + b,
+          join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
+          isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
+              if (userAnswer === undefined || userAnswer === null) return false;
+              // Simple case-insensitive comparison for strings
+              return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
           },
-          knownHelpersOnly: false, // Explicitly set to false to allow custom helpers
+          lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered' // Handle potential undefined array
       };
+      // Explicitly set knownHelpersOnly to false to allow custom helpers
+      promptObject.handlebarsOptions.knownHelpersOnly = false;
       return promptObject; // Explicitly return the modified object
   },
 });
+
 
 // Define the Genkit flow
 const quizReflectionFlow = ai.defineFlow(
