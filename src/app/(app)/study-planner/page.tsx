@@ -34,7 +34,7 @@ export default function StudyPlannerPage() {
   // Form state for adding/editing entries
   const [editingEntry, setEditingEntry] = useState<StudyPlannerEntry | null>(null);
   const [task, setTask] = useState('');
-  const [subjectId, setSubjectId] = useState('');
+  const [subjectId, setSubjectId] = useState(''); // Use '' or 'none' for no subject
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
@@ -90,11 +90,12 @@ export default function StudyPlannerPage() {
     if (!user || !task.trim()) return;
 
     setIsUpdating(true);
+    const selectedSubject = subjects.find(s => s.subjectId === subjectId);
     const entryData: Omit<StudyPlannerEntry, 'id' | 'completed'> = {
       date: format(formDate, 'yyyy-MM-dd'),
       task: task.trim(),
-      subjectId: subjectId || undefined, // Store empty string as undefined
-      subjectName: subjects.find(s => s.subjectId === subjectId)?.subjectName || undefined,
+      subjectId: subjectId && subjectId !== 'none' ? subjectId : undefined, // Store 'none' as undefined
+      subjectName: selectedSubject?.subjectName,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
       notes: notes.trim() || undefined,
@@ -106,12 +107,16 @@ export default function StudyPlannerPage() {
       ensureFirebaseInitialized();
       if (editingEntry) {
         // Update existing entry: remove old, add new
-        const oldEntry = { ...editingEntry, date: format(parse(editingEntry.date, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd') }; // Ensure date format consistency if needed
-        const newEntry = { ...editingEntry, ...entryData, date: format(formDate, 'yyyy-MM-dd') }; // Ensure date is updated if changed in form
+        // Ensure the old entry being removed matches exactly what's in Firestore
+        const entryToRemove = plannerEntries.find(e => e.id === editingEntry.id);
+        if (!entryToRemove) {
+            throw new Error("Original entry not found for update.");
+        }
+        const newEntry = { ...entryToRemove, ...entryData, date: format(formDate, 'yyyy-MM-dd') }; // Create the updated version
 
         // Perform remove and add within a transaction for atomicity if needed, or just sequential updates
         await updateDoc(progressDocRef, {
-          studyPlanner: arrayRemove(oldEntry) // Remove based on the original editingEntry's ID and data
+          studyPlanner: arrayRemove(entryToRemove) // Remove the original entry
         });
         await updateDoc(progressDocRef, {
            studyPlanner: arrayUnion(newEntry) // Add the updated entry
@@ -141,6 +146,8 @@ export default function StudyPlannerPage() {
        let errorDesc = "Could not save study task.";
        if (error.code === 'permission-denied') {
            errorDesc = "Permission denied. Check Firestore rules.";
+       } else if (error instanceof Error) {
+           errorDesc = error.message;
        }
       toast({ title: "Error", description: errorDesc, variant: "destructive" });
     } finally {
@@ -153,14 +160,21 @@ export default function StudyPlannerPage() {
 
     setIsUpdating(true);
     const progressDocRef = doc(db!, 'userProgress', user.uid);
+    // Ensure the entry being removed matches exactly what's in Firestore
+    const entryToRemove = plannerEntries.find(e => e.id === entryToDelete.id);
+     if (!entryToRemove) {
+         toast({ title: "Error", description: "Task not found for deletion.", variant: "destructive" });
+         setIsUpdating(false);
+         return;
+     }
 
     try {
       ensureFirebaseInitialized();
       await updateDoc(progressDocRef, {
-        studyPlanner: arrayRemove(entryToDelete)
+        studyPlanner: arrayRemove(entryToRemove)
       });
-      setPlannerEntries(prev => prev.filter(e => e.id !== entryToDelete.id));
-       if (editingEntry?.id === entryToDelete.id) {
+      setPlannerEntries(prev => prev.filter(e => e.id !== entryToRemove.id));
+       if (editingEntry?.id === entryToRemove.id) {
            resetForm();
            setEditingEntry(null);
        }
@@ -170,6 +184,8 @@ export default function StudyPlannerPage() {
         let errorDesc = "Could not delete study task.";
        if (error.code === 'permission-denied') {
            errorDesc = "Permission denied. Check Firestore rules.";
+       } else if (error instanceof Error) {
+           errorDesc = error.message;
        }
         toast({ title: "Error", description: errorDesc, variant: "destructive" });
     } finally {
@@ -180,13 +196,21 @@ export default function StudyPlannerPage() {
  const handleToggleComplete = async (entryToToggle: StudyPlannerEntry) => {
     if (!user) return;
 
+    // Find the exact entry from the current state to ensure consistency
+     const originalEntry = plannerEntries.find(e => e.id === entryToToggle.id);
+    if (!originalEntry) {
+        console.error("Could not find original entry for toggling completion.");
+        toast({ title: "Error", description: "Could not update task status.", variant: "destructive"});
+        return;
+    }
+
+    const updatedEntry = { ...originalEntry, completed: !originalEntry.completed };
+
     // Optimistically update UI first for better responsiveness
-    const updatedEntry = { ...entryToToggle, completed: !entryToToggle.completed };
     setPlannerEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
      if (editingEntry?.id === updatedEntry.id) {
         setEditingEntry(updatedEntry); // Update editing state if applicable
      }
-
 
     // Then update Firestore
     const progressDocRef = doc(db!, 'userProgress', user.uid);
@@ -194,30 +218,32 @@ export default function StudyPlannerPage() {
        ensureFirebaseInitialized();
         // Firestore update needs the original entry to remove and the new one to add
         await updateDoc(progressDocRef, {
-           studyPlanner: arrayRemove(entryToToggle)
+           studyPlanner: arrayRemove(originalEntry) // Remove the original entry
        });
        await updateDoc(progressDocRef, {
-           studyPlanner: arrayUnion(updatedEntry)
+           studyPlanner: arrayUnion(updatedEntry) // Add the updated entry
        });
         console.log("Task completion status updated in Firestore.");
     } catch (error: any) {
        console.error("Error toggling task completion:", error);
        // Revert optimistic UI update on error
-       setPlannerEntries(prev => prev.map(e => e.id === entryToToggle.id ? entryToToggle : e));
-        if (editingEntry?.id === entryToToggle.id) {
-           setEditingEntry(entryToToggle);
+       setPlannerEntries(prev => prev.map(e => e.id === originalEntry.id ? originalEntry : e));
+        if (editingEntry?.id === originalEntry.id) {
+           setEditingEntry(originalEntry);
        }
         let errorDesc = "Could not update task status.";
        if (error.code === 'permission-denied') {
            errorDesc = "Permission denied. Check Firestore rules.";
-       }
+        } else if (error instanceof Error) {
+            errorDesc = error.message;
+        }
        toast({ title: "Update Failed", description: errorDesc, variant: "destructive" });
     }
 };
 
   const resetForm = () => {
     setTask('');
-    setSubjectId('');
+    setSubjectId(''); // Reset to empty string, which will select the placeholder or 'None'
     setStartTime('');
     setEndTime('');
     setNotes('');
@@ -228,7 +254,7 @@ export default function StudyPlannerPage() {
    const startEditing = (entry: StudyPlannerEntry) => {
        setEditingEntry(entry);
        setTask(entry.task);
-       setSubjectId(entry.subjectId || '');
+       setSubjectId(entry.subjectId || 'none'); // Use 'none' if subjectId is undefined/empty
        setStartTime(entry.startTime || '');
        setEndTime(entry.endTime || '');
        setNotes(entry.notes || '');
@@ -342,7 +368,8 @@ export default function StudyPlannerPage() {
                            <SelectValue placeholder="Select subject..." />
                            </SelectTrigger>
                            <SelectContent>
-                           <SelectItem value="">None</SelectItem>
+                           {/* Change value from "" to "none" */}
+                           <SelectItem value="none">None</SelectItem>
                            {subjects.map(s => (
                               <SelectItem key={s.subjectId} value={s.subjectId}>{s.subjectName}</SelectItem>
                            ))}
@@ -421,7 +448,7 @@ export default function StudyPlannerPage() {
                      <div className="flex-1">
                         <Label
                            htmlFor={`task-${entry.id}`}
-                           className={cn("font-medium", entry.completed && "line-through text-muted-foreground")}
+                           className={cn("font-medium cursor-pointer", entry.completed && "line-through text-muted-foreground")}
                         >
                             {entry.task}
                         </Label>
@@ -451,3 +478,4 @@ export default function StudyPlannerPage() {
     </div>
   );
 }
+

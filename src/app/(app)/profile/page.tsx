@@ -82,8 +82,8 @@ export default function ProfilePage() {
                 const currentAvatar = validProfile.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
                 setAvatarUrl(currentAvatar);
                 setAvatarPreview(currentAvatar); // Set initial preview
-                setSchoolBoard(validProfile.schoolBoard || '');
-                setGrade(validProfile.grade || '');
+                setSchoolBoard(validProfile.schoolBoard || 'none'); // Default to 'none' if empty
+                setGrade(validProfile.grade || 'none'); // Default to 'none' if empty
              } else {
                   console.warn("Fetched profile data has invalid structure:", data);
                   // Handle invalid structure by creating/overwriting with default
@@ -115,6 +115,8 @@ export default function ProfilePage() {
            const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
            setAvatarUrl(fallbackAvatar);
            setAvatarPreview(fallbackAvatar);
+           setSchoolBoard('none'); // Default on error
+           setGrade('none'); // Default on error
         } finally {
           setIsLoading(false);
         }
@@ -133,9 +135,9 @@ export default function ProfilePage() {
             name: currentUser.displayName || currentUser.email?.split('@')[0] || "New User",
             email: currentUser.email!,
             avatarUrl: currentUser.photoURL || `https://avatar.vercel.sh/${currentUser.email}.png`,
-            schoolBoard: '',
-            grade: '',
-             joinDate: currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toISOString() : new Date().toISOString(),
+            schoolBoard: '', // Store empty in DB initially
+            grade: '', // Store empty in DB initially
+            joinDate: currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toISOString() : new Date().toISOString(),
         };
          try {
              await setDoc(docRef, defaultProfile); // This write will be queued if offline
@@ -144,6 +146,8 @@ export default function ProfilePage() {
              const currentAvatar = defaultProfile.avatarUrl;
              setAvatarUrl(currentAvatar);
              setAvatarPreview(currentAvatar);
+             setSchoolBoard('none'); // Set state to 'none'
+             setGrade('none'); // Set state to 'none'
              console.log("Created/set default profile in Firestore (queued if offline).");
          } catch (creationError) {
              console.error("Error creating/setting default profile:", creationError);
@@ -154,6 +158,8 @@ export default function ProfilePage() {
              const currentAvatar = defaultProfile.avatarUrl;
              setAvatarUrl(currentAvatar);
              setAvatarPreview(currentAvatar);
+             setSchoolBoard('none');
+             setGrade('none');
          }
    }
 
@@ -194,9 +200,24 @@ export default function ProfilePage() {
 
           try {
               ensureFirebaseInitialized();
-              const storageRef = ref(storage!, `user_avatars/${user.uid}/${Date.now()}_${avatarFile.name}`);
-              const uploadTask = uploadBytesResumable(storageRef, avatarFile);
+              // Changed path to use folders instead of Firebase Storage
+              // This section is no longer applicable if not using Firebase Storage
+              // const storageRef = ref(storage!, `user_avatars/${user.uid}/${Date.now()}_${avatarFile.name}`);
+              // const uploadTask = uploadBytesResumable(storageRef, avatarFile);
 
+              // Placeholder for local file handling (if implemented)
+              // For now, we just resolve with the preview URL if not using Storage
+              console.warn("Firebase Storage not used. Avatar 'upload' resolves with local preview URL.");
+              if (avatarPreview) {
+                  setIsUploadingAvatar(false);
+                  setAvatarUploadProgress(100);
+                  resolve(avatarPreview); // Use the Data URL as the "URL"
+              } else {
+                   reject(new Error("Avatar preview is missing."));
+              }
+
+              // Firebase Storage logic (commented out)
+              /*
               uploadTask.on('state_changed',
                   (snapshot: UploadTaskSnapshot) => {
                       const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -233,9 +254,10 @@ export default function ProfilePage() {
                       }
                   }
               );
+              */
           } catch (initError) {
-              console.error("Firebase Storage init error:", initError);
-              toast({ title: "Error", description: "Could not initialize avatar upload.", variant: "destructive" });
+              console.error("File handling initialization error:", initError);
+              toast({ title: "Error", description: "Could not initialize avatar handling.", variant: "destructive" });
               setIsUploadingAvatar(false);
                setAvatarUploadProgress(null);
               reject(initError);
@@ -262,33 +284,22 @@ export default function ProfilePage() {
       let updatedProfileData: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {}; // Keep track of changes for optimistic update
 
       try {
-           // 1. Upload new avatar if selected (Requires network)
-           if (avatarFile) {
-                if (!navigator.onLine) {
-                    toast({ title: "Offline", description: "Cannot upload avatar while offline. Other changes will be saved locally.", variant: "default" });
-                    // Continue with other updates, but don't try to upload or change finalAvatarUrl
-                } else {
-                    try {
-                       finalAvatarUrl = await uploadAvatar(); // This updates avatarUrl state on success
-                       updatedProfileData.avatarUrl = finalAvatarUrl; // Add to changes
-                       setAvatarFile(null); // Clear file state on successful upload attempt
-                       setAvatarUploadProgress(null);
-                    } catch (uploadError) {
-                        // Error already toasted in uploadAvatar, just stop processing avatar part
-                        console.error("Avatar upload failed, continuing with other profile updates.");
-                        // Do not clear avatarFile here, user might want to retry
-                        // Do not update finalAvatarUrl or updatedProfileData.avatarUrl
-                    }
-                }
+           // 1. "Upload" new avatar if selected (handle locally)
+           if (avatarFile && avatarPreview) {
+                // Since we're not using Firebase Storage, the 'upload' is just setting the Data URL
+                finalAvatarUrl = avatarPreview;
+                updatedProfileData.avatarUrl = finalAvatarUrl; // Add to changes
+                setAvatarFile(null); // Clear file state
+                setAvatarUploadProgress(null);
            }
 
            // 2. Prepare other data to update in Firestore
            const userDocRef = doc(db!, 'users', user.uid);
            const changesToSave: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {
                name: name,
-               avatarUrl: finalAvatarUrl, // Use the potentially updated URL
-               schoolBoard: schoolBoard,
-               grade: grade,
+               avatarUrl: finalAvatarUrl, // Use the potentially updated URL (Data URL or original)
+               schoolBoard: schoolBoard === 'none' ? '' : schoolBoard, // Save empty string if 'none'
+               grade: grade === 'none' ? '' : grade, // Save empty string if 'none'
                // lastUpdated: serverTimestamp() // Optional: Track update time server-side
            };
            // Merge changes for optimistic update
@@ -462,6 +473,10 @@ export default function ProfilePage() {
        }
    }
 
+   // Use 'none' as the value for the unselected state in Select components
+   const schoolBoardValue = schoolBoard || 'none';
+   const gradeValue = grade || 'none';
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">My Profile</h1>
@@ -493,8 +508,8 @@ export default function ProfilePage() {
           <CardTitle className="text-2xl mt-2">{name}</CardTitle>
           <CardDescription>{user.email}</CardDescription>
           <div className="flex gap-2 mt-2">
-            {schoolBoard && <Badge variant="secondary">{schoolBoards.find(b => b.id === schoolBoard)?.name || schoolBoard}</Badge>}
-            {grade && <Badge variant="outline">Grade {grade}</Badge>}
+             {schoolBoardValue !== 'none' && <Badge variant="secondary">{schoolBoards.find(b => b.id === schoolBoardValue)?.name || schoolBoardValue}</Badge>}
+             {gradeValue !== 'none' && <Badge variant="outline">Grade {gradeValue}</Badge>}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -512,7 +527,7 @@ export default function ProfilePage() {
           <div className="space-y-2">
               <Label htmlFor="school-board">School Board</Label>
               <Select
-                  value={schoolBoard}
+                  value={schoolBoardValue} // Use state value here
                   onValueChange={setSchoolBoard}
                   disabled={isLoadingBoards || isUpdating}
               >
@@ -520,17 +535,18 @@ export default function ProfilePage() {
                       <SelectValue placeholder={isLoadingBoards ? "Loading boards..." : "Select board..."} />
                   </SelectTrigger>
                   <SelectContent>
+                      {/* Change value from "" to "none" */}
+                      <SelectItem value="none">None / Not Specified</SelectItem>
                       {schoolBoards.map(board => (
                           <SelectItem key={board.id} value={board.id}>{board.name}</SelectItem>
                       ))}
-                      <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
           </div>
           <div className="space-y-2">
               <Label htmlFor="grade-level">Grade Level</Label>
               <Select
-                  value={grade}
+                  value={gradeValue} // Use state value here
                   onValueChange={setGrade}
                   disabled={isUpdating}
               >
@@ -538,10 +554,11 @@ export default function ProfilePage() {
                       <SelectValue placeholder="Select grade..." />
                   </SelectTrigger>
                   <SelectContent>
+                       {/* Change value from "" to "none" */}
+                       <SelectItem value="none">None / Not Specified</SelectItem>
                       {[...Array(12)].map((_, i) => (
                           <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
                       ))}
-                      <SelectItem value="">None / Not Specified</SelectItem>
                   </SelectContent>
               </Select>
           </div>
@@ -596,3 +613,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+
