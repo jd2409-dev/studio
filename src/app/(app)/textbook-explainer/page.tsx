@@ -88,11 +88,12 @@ export default function TextbookExplainerPage() {
         } catch (error: any) {
             console.error("Error generating explanation:", error);
             let errorDesc = "Failed to generate explanation. Please try again.";
-            if (error instanceof Error) {
-                errorDesc = error.message || errorDesc;
+            // Use the potentially more specific error message from the flow
+            if (error instanceof Error && error.message) {
+                errorDesc = error.message;
             }
             toast({
-                title: "Error",
+                title: "Error Generating Explanation",
                 description: errorDesc,
                 variant: "destructive",
             });

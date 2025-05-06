@@ -73,8 +73,16 @@ const explainTextbookPdfFlow = ai.defineFlow(
 
     } catch (error: any) {
         console.error(`Error in explainTextbookPdfFlow:`, error);
-        // Re-throw the error to be caught by the caller
+
+        // Check for specific Genkit/Gemini error related to safety blocking
+        if (error.message && error.message.includes('Generation blocked')) {
+             console.error("Explanation generation blocked due to safety settings or potentially harmful content.");
+             throw new Error("Explanation generation was blocked, possibly due to safety filters or the content of the PDF. Please try a different document or section.");
+        }
+
+        // Re-throw other errors
         throw error;
     }
   }
 );
+
