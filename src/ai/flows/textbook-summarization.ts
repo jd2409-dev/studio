@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
+import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
 
 const GenerateTextbookSummaryInputSchema = z.object({
   textbookDataUri: z
@@ -22,8 +23,8 @@ export type GenerateTextbookSummaryInput = z.infer<typeof GenerateTextbookSummar
 
 const GenerateTextbookSummaryOutputSchema = z.object({
   textSummary: z.string().describe('A text summary of the textbook content.'),
-  audioSummary: z.string().describe('An audio summary of the textbook content.'),
-  mindMap: z.string().describe('A mind map representation of the textbook content.'),
+  audioSummary: z.string().describe('An audio summary of the textbook content (e.g., text-to-speech output or URL).'), // Clarified description
+  mindMap: z.string().describe('A mind map representation of the textbook content (e.g., in Markdown format or a structured format).'), // Clarified description
 });
 export type GenerateTextbookSummaryOutput = z.infer<typeof GenerateTextbookSummaryOutputSchema>;
 
@@ -33,6 +34,7 @@ export async function generateTextbookSummary(input: GenerateTextbookSummaryInpu
 
 const prompt = ai.definePrompt({
   name: 'generateTextbookSummaryPrompt',
+  model: gemini15Flash, // Specify the model to use
   input: {
     schema: z.object({
       textbookDataUri: z
@@ -44,27 +46,34 @@ const prompt = ai.definePrompt({
   },
   output: {
     schema: z.object({
-      textSummary: z.string().describe('A text summary of the textbook content.'),
-      audioSummary: z.string().describe('An audio summary of the textbook content.'),
-      mindMap: z.string().describe('A mind map representation of the textbook content.'),
+      textSummary: z.string().describe('A concise text summary of the key points in the textbook content.'),
+      audioSummary: z.string().describe('A script suitable for text-to-speech, summarizing the textbook content.'), // Changed description
+      mindMap: z.string().describe('A hierarchical mind map of the textbook content, represented in Markdown list format (using indentation for levels).'), // Changed description
     }),
   },
-  prompt: `You are an AI assistant that helps students understand textbooks better. You will generate a text summary, an audio summary, and a mind map of the textbook content provided. The textbook page is provided as a data URI.
+  prompt: `You are an AI assistant that helps students understand textbooks better. Analyze the provided textbook page image and generate the following outputs:
 
-Textbook Page: {{media url=textbookDataUri}}
+1.  **textSummary:** A concise text summary highlighting the main concepts, definitions, and key takeaways from the page.
+2.  **audioSummary:** A script summarizing the content, suitable for text-to-speech generation. Keep it clear and easy to follow.
+3.  **mindMap:** A hierarchical mind map representing the structure and key topics of the content. Use Markdown list format, with indentation to represent parent-child relationships (e.g., - Topic 1\n  - Subtopic 1.1\n  - Subtopic 1.2\n- Topic 2).
 
-textSummary:`,
+Textbook Page Image: {{media url=textbookDataUri}}
+
+Generate the outputs based *only* on the content visible in the image.
+`,
 });
 
-const generateTextbookSummaryFlow = ai.defineFlow<
-  typeof GenerateTextbookSummaryInputSchema,
-  typeof GenerateTextbookSummaryOutputSchema
->({
+const generateTextbookSummaryFlow = ai.defineFlow(
+{
   name: 'generateTextbookSummaryFlow',
   inputSchema: GenerateTextbookSummaryInputSchema,
   outputSchema: GenerateTextbookSummaryOutputSchema,
 },
 async input => {
   const {output} = await prompt(input);
-  return output!;
+    // Ensure output is not null or undefined before returning
+    if (!output) {
+        throw new Error("Summary generation failed: No output received from the AI model.");
+    }
+  return output;
 });

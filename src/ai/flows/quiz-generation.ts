@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
+import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
 
 const GenerateQuizInputSchema = z.object({
   textbookContent: z
@@ -44,6 +45,7 @@ export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQu
 
 const prompt = ai.definePrompt({
   name: 'generateQuizPrompt',
+  model: gemini15Flash, // Specify the model to use
   input: {
     schema: z.object({
       textbookContent: z
@@ -79,10 +81,7 @@ const prompt = ai.definePrompt({
   `,
 });
 
-const generateQuizFlow = ai.defineFlow<
-  typeof GenerateQuizInputSchema,
-  typeof GenerateQuizOutputSchema
->(
+const generateQuizFlow = ai.defineFlow(
   {
     name: 'generateQuizFlow',
     inputSchema: GenerateQuizInputSchema,
@@ -90,6 +89,10 @@ const generateQuizFlow = ai.defineFlow<
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    // Ensure output is not null or undefined before returning
+    if (!output) {
+        throw new Error("Quiz generation failed: No output received from the AI model.");
+    }
+    return output;
   }
 );
