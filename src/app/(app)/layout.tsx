@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, FileText, MessageSquareQuote } from 'lucide-react'; // Changed MessageSquareQuestion to MessageSquareQuote
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react'; // Removed FileText
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -79,7 +79,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                 <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                    {/* Ensure Link is the direct child when using asChild */}
                    <Link href="/">
                      <Home />
                      <span>Dashboard</span>
@@ -174,6 +175,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              {/* Ensure this doesn't use asChild as it's a direct button action */}
               <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
                 <LogOut />
                  <span>Log Out</span>
@@ -201,4 +203,3 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-
