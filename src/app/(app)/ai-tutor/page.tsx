@@ -8,20 +8,26 @@ import { Loader2, Send, Sparkles, User, Bot } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { getTutorResponse, type AiTutorInput, type AiTutorOutput } from '@/ai/flows/ai-tutor-flow';
+import Handlebars from "handlebars"; // Import Handlebars
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
+// ✅ Register the missing "eq" helper for Handlebars
+Handlebars.registerHelper("eq", function(a, b) {
+  return a === b;
+});
+
 export default function AiTutorPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast() || { toast: () => {} }; // Ensures `toast` is always defined
+  const { toast } = useToast() || { toast: () => {} }; // Ensures `toast` always exists
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Smooth scrolling on new messages
+  // ✅ Improve smooth scrolling using `requestAnimationFrame`
   useEffect(() => {
     if (scrollAreaRef.current) {
       requestAnimationFrame(() => {

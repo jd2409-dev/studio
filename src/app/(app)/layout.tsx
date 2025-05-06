@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react'; // Removed FileText
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react'; // Changed icon
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -79,8 +79,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
              <SidebarMenuItem>
+                 {/* Correct usage: Link is the direct child when using asChild */}
                  <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                    {/* Ensure Link is the direct child when using asChild */}
                    <Link href="/">
                      <Home />
                      <span>Dashboard</span>
@@ -96,10 +96,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                </SidebarMenuButton>
              </SidebarMenuItem>
               <SidebarMenuItem>
-                 {/* New Textbook Explainer Link */}
                  <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
                      <Link href="/textbook-explainer">
-                        <MessageSquareQuote /> {/* Changed icon */}
+                        <MessageSquareQuote />
                         <span>Textbook Explainer</span>
                      </Link>
                  </SidebarMenuButton>
@@ -120,7 +119,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-             {/* Links for new features */}
              <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
                   <Link href="/study-planner">
@@ -145,7 +143,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
              </SidebarMenuItem>
-             {/* Reflection Link */}
              <SidebarMenuItem>
                  <SidebarMenuButton asChild isActive={pathname === '/reflection'} tooltip="Reflection">
                     <Link href="/reflection">
@@ -175,7 +172,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              {/* Ensure this doesn't use asChild as it's a direct button action */}
+              {/* Correct usage: Direct button action, no asChild needed */}
               <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
                 <LogOut />
                  <span>Log Out</span>

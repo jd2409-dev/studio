@@ -535,7 +535,7 @@ const sidebarMenuButtonVariants = cva(
 )
 
 type SidebarMenuButtonProps =
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { // Changed from React.ComponentProps<"button">
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
     asChild?: boolean
     isActive?: boolean
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
@@ -553,7 +553,7 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
-      children, // Destructure children here
+      children,
       ...props
     },
     ref
@@ -562,7 +562,6 @@ const SidebarMenuButton = React.forwardRef<
     const { isMobile, state } = useSidebar();
 
     const buttonElement = (
-      // Pass children explicitly *inside* the Comp
       <Comp
         ref={ref}
         data-sidebar="menu-button"
@@ -585,9 +584,18 @@ const SidebarMenuButton = React.forwardRef<
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* When asChild is true, Slot ensures its child receives the props.
-              We pass the button element directly. */}
-          {buttonElement}
+          {/* If asChild is true, Slot takes over rendering its child with the trigger props.
+              If asChild is false, TooltipTrigger renders the button directly. */}
+          {asChild ? buttonElement : <Comp
+            ref={ref}
+            data-sidebar="menu-button"
+            data-size={size}
+            data-active={isActive}
+            className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+            {...props}
+          >
+            {children}
+          </Comp>}
         </TooltipTrigger>
         <TooltipContent
           side="right"
@@ -595,7 +603,8 @@ const SidebarMenuButton = React.forwardRef<
           hidden={state !== "collapsed" || isMobile}
           {...tooltipContentProps}
         >
-          {typeof tooltip === 'string' ? tooltip : undefined}
+          {/* Ensure content is passed if tooltip is an object */}
+          {typeof tooltip === 'string' ? tooltip : tooltip?.children}
         </TooltipContent>
       </Tooltip>
     );
