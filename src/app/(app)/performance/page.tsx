@@ -4,16 +4,33 @@
 import * as React from 'react'; // Import React
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BarChart, LineChart, PieChart, ListChecks, Target, BrainCircuit, Loader2 } from "lucide-react";
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Bar, CartesianGrid, Line, Pie, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, LineChart, PieChart, ListChecks, Target, BrainCircuit, Loader2 } from "lucide-react"; // Lucide icons
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart"; // Shadcn chart wrappers
+import {
+  BarChart as RechartsBarChart, // Renamed import
+  LineChart as RechartsLineChart, // Renamed import
+  PieChart as RechartsPieChart, // Renamed import
+  Bar,
+  CartesianGrid,
+  Line,
+  Pie,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+  Sector, // Import Sector for potential custom Pie rendering if needed
+  Cell // Import Cell for potential custom Pie rendering if needed
+} from "recharts"; // Actual Recharts components
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { UserProgress, SubjectMastery, QuizResult, HomeworkAssignment } from '@/types/user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChartLegendContent } from '@/components/ui/chart'; // Import ChartLegendContent
+import { parseISO, format } from 'date-fns';
+import { cn } from '@/lib/utils';
+
 
 export default function PerformancePage() {
   const { toast } = useToast();
@@ -53,39 +70,40 @@ export default function PerformancePage() {
 
   // Chart Data Processing (Memoize to avoid recalculations on every render)
   const subjectMasteryData = React.useMemo(() => {
-    return userProgress?.subjectMastery?.map(s => ({
+    return userProgress?.subjectMastery?.map((s, index) => ({ // Added index
       name: s.subjectName,
       mastery: s.progress,
-      fill: `hsl(var(--chart-${(s.subjectId.charCodeAt(0) % 5) + 1}))` // Assign color based on subject ID
+      fill: getSubjectColor(s.subjectId, index) // Use helper function
     })) || [];
   }, [userProgress?.subjectMastery]);
+
 
   const quizHistoryData = React.useMemo(() => {
       const history = userProgress?.quizHistory || [];
       const filteredHistory = selectedSubject === 'all'
           ? history
-          : history.filter(q => q.questions.some(qs => (qs as any).subjectId === selectedSubject)); // Needs subjectId on Question
+          : history.filter(q => q.questions.some(qs => (qs as any).subjectId === selectedSubject)); // Needs subjectId on Question (or derive from sourceContent/quiz name if possible)
 
-      // Simple aggregation: Average score per day
        const dailyScores: { [date: string]: { totalScore: number; count: number } } = {};
       filteredHistory.forEach(q => {
-           // Handle both Timestamp and string dates gracefully
             let dateStr = '';
             if (q.generatedDate) {
                 try {
                      const dateObj = typeof q.generatedDate === 'string'
                          ? parseISO(q.generatedDate)
-                         : (q.generatedDate as any).toDate ? (q.generatedDate as any).toDate() : new Date(); // Handle Timestamp or default
+                         : (q.generatedDate as any).toDate ? (q.generatedDate as any).toDate() : new Date();
                     dateStr = format(dateObj, 'yyyy-MM-dd');
                 } catch (e) {
                      console.error("Error parsing quiz date:", q.generatedDate, e);
-                     dateStr = format(new Date(), 'yyyy-MM-dd'); // Fallback to today
+                     dateStr = format(new Date(), 'yyyy-MM-dd');
                 }
             } else {
-                dateStr = format(new Date(), 'yyyy-MM-dd'); // Fallback if date is missing
+                dateStr = format(new Date(), 'yyyy-MM-dd');
             }
 
-          const scorePercent = (q.score / q.totalQuestions) * 100;
+          // Ensure totalQuestions is not zero to avoid NaN
+          const scorePercent = q.totalQuestions > 0 ? (q.score / q.totalQuestions) * 100 : 0;
+
           if (!dailyScores[dateStr]) {
               dailyScores[dateStr] = { totalScore: 0, count: 0 };
           }
@@ -93,12 +111,11 @@ export default function PerformancePage() {
           dailyScores[dateStr].count += 1;
        });
 
-        // Map and sort
         return Object.entries(dailyScores)
           .map(([date, data]) => {
               let formattedDate = 'Invalid Date';
               try {
-                 formattedDate = format(parseISO(date), 'MMM d'); // Format date for XAxis
+                 formattedDate = format(parseISO(date), 'MMM d');
               } catch (e) {
                   console.error("Error formatting date string for chart:", date, e);
               }
@@ -107,25 +124,23 @@ export default function PerformancePage() {
                   averageScore: Math.round(data.totalScore / data.count),
               };
            })
-          .filter(item => item.date !== 'Invalid Date') // Filter out invalid dates before sorting
+          .filter(item => item.date !== 'Invalid Date')
           .sort((a, b) => {
               try {
-                  // Attempt to parse back for sorting, handle potential errors
-                  const dateA = new Date(a.date + `, ${new Date().getFullYear()}`); // Add year for proper parsing
-                  const dateB = new Date(b.date + `, ${new Date().getFullYear()}`);
+                  const dateA = parseISO(a.date + `, ${new Date().getFullYear()}`); // Add year for parsing if needed
+                  const dateB = parseISO(b.date + `, ${new Date().getFullYear()}`);
                   return dateA.getTime() - dateB.getTime();
               } catch (e) {
                   console.error("Error sorting quiz history dates:", a.date, b.date, e);
-                  return 0; // Keep original order on error
+                  return 0;
               }
-           }); // Sort by date
-
+           });
 
   }, [userProgress?.quizHistory, selectedSubject]);
 
 
  const homeworkCompletionData = React.useMemo(() => {
-     const allHomework = userProgress?.upcomingHomework || []; // Use upcoming for now
+     const allHomework = userProgress?.upcomingHomework || [];
      const filteredHomework = selectedSubject === 'all'
          ? allHomework
          : allHomework.filter(hw => hw.subjectId === selectedSubject);
@@ -136,7 +151,7 @@ export default function PerformancePage() {
      return [
         { name: 'Completed', value: completedCount, fill: 'hsl(var(--chart-1))' },
         { name: 'Pending', value: pendingCount, fill: 'hsl(var(--chart-5))' },
-      ].filter(item => item.value > 0); // Filter out slices with 0 value
+      ].filter(item => item.value > 0);
 
  }, [userProgress?.upcomingHomework, selectedSubject]);
 
@@ -144,9 +159,12 @@ export default function PerformancePage() {
   // Chart Configurations
   const subjectMasteryConfig: ChartConfig = React.useMemo(() => {
       const config: ChartConfig = {};
-      subjectMasteryData.forEach((data, index) => {
-          config[data.name] = { label: data.name, color: data.fill };
+      subjectMasteryData.forEach((data) => {
+           if (!config[data.name]) { // Ensure unique keys
+              config[data.name] = { label: data.name, color: data.fill };
+           }
       });
+      config["mastery"] = { label: "Mastery", color: "hsl(var(--chart-1))" }; // Default/generic key
       return config;
   }, [subjectMasteryData]);
 
@@ -210,7 +228,8 @@ export default function PerformancePage() {
           <CardContent>
              {subjectMasteryData.length > 0 ? (
                 <ChartContainer config={subjectMasteryConfig} className="min-h-[250px] w-full">
-                  <BarChart accessibilityLayer data={subjectMasteryData} layout="vertical" margin={{ left: 10, right: 10 }}>
+                  {/* Use Renamed Recharts component */}
+                  <RechartsBarChart accessibilityLayer data={subjectMasteryData} layout="vertical" margin={{ left: 10, right: 10 }}>
                     <CartesianGrid horizontal={false} />
                     <YAxis
                       dataKey="name"
@@ -218,13 +237,20 @@ export default function PerformancePage() {
                       tickLine={false}
                       axisLine={false}
                       tickMargin={10}
-                      width={100} // Adjust width for labels
+                      width={100}
                        className="text-xs"
+                       stroke="hsl(var(--foreground))" // Explicitly set stroke color
                     />
                     <XAxis dataKey="mastery" type="number" hide />
-                    <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                     <Bar dataKey="mastery" radius={5} />
-                  </BarChart>
+                     {/* Use Shadcn Tooltip Content */}
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel indicator="dot" nameKey="name" />} />
+                     {/* Apply fill using Cell for individual colors */}
+                     <Bar dataKey="mastery" radius={5}>
+                       {subjectMasteryData.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={entry.fill} />
+                       ))}
+                     </Bar>
+                  </RechartsBarChart>
                 </ChartContainer>
               ) : (
                 <p className="text-center text-muted-foreground p-8">No subject mastery data available.</p>
@@ -241,11 +267,18 @@ export default function PerformancePage() {
            <CardContent className="flex items-center justify-center">
              {homeworkCompletionData.length > 0 ? (
                  <ChartContainer config={homeworkCompletionConfig} className="mx-auto aspect-square max-h-[250px]">
-                     <PieChart>
+                     {/* Use Renamed Recharts component */}
+                     <RechartsPieChart>
+                        {/* Use Shadcn Tooltip Content */}
                          <ChartTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
-                         <Pie data={homeworkCompletionData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80} />
-                        <Legend content={<ChartLegendContent nameKey="name" />} />
-                     </PieChart>
+                         <Pie data={homeworkCompletionData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80}>
+                            {homeworkCompletionData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                         </Pie>
+                         {/* Use Shadcn Legend Content */}
+                        <ChartLegendContent nameKey="name" />
+                     </RechartsPieChart>
                  </ChartContainer>
              ) : (
                  <p className="text-center text-muted-foreground p-8">No homework data available{selectedSubject !== 'all' ? ` for this subject` : ''}.</p>
@@ -261,17 +294,19 @@ export default function PerformancePage() {
               <CardDescription>Your average quiz scores over time {selectedSubject !== 'all' ? `for ${userProgress.subjectMastery.find(s=>s.subjectId === selectedSubject)?.subjectName}` : ''}.</CardDescription>
            </CardHeader>
            <CardContent>
-                 {quizHistoryData.length > 1 ? ( // Need at least 2 points for a line
+                 {quizHistoryData.length > 1 ? (
                     <ChartContainer config={quizHistoryConfig} className="min-h-[300px] w-full">
-                        <LineChart accessibilityLayer data={quizHistoryData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        {/* Use Renamed Recharts component */}
+                        <RechartsLineChart accessibilityLayer data={quizHistoryData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} />
                             <XAxis
                                 dataKey="date"
                                 tickLine={false}
                                 axisLine={false}
                                 tickMargin={8}
-                                tickFormatter={(value) => value} // Already formatted 'MMM d'
+                                tickFormatter={(value) => value}
                                  className="text-xs"
+                                 stroke="hsl(var(--foreground))" // Explicitly set stroke color
                             />
                            <YAxis
                                 domain={[0, 100]}
@@ -281,10 +316,12 @@ export default function PerformancePage() {
                                 width={30}
                                 tickFormatter={(value) => `${value}%`}
                                  className="text-xs"
+                                 stroke="hsl(var(--foreground))" // Explicitly set stroke color
                              />
+                             {/* Use Shadcn Tooltip Content */}
                             <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
                             <Line dataKey="averageScore" type="monotone" stroke="var(--color-averageScore)" strokeWidth={2} dot={false} />
-                        </LineChart>
+                        </RechartsLineChart>
                     </ChartContainer>
                 ) : (
                     <p className="text-center text-muted-foreground p-8">Not enough quiz data to show a trend{selectedSubject !== 'all' ? ` for this subject` : ''}.</p>
@@ -316,10 +353,8 @@ export default function PerformancePage() {
   );
 }
 
-// Helper functions (consider moving to a utils file)
-import { parseISO, format } from 'date-fns';
 
-// Basic function to assign colors based on subject ID - needs improvement for more subjects
+// Helper function to assign colors based on subject ID - needs improvement for more subjects
 const getSubjectColor = (subjectId: string, index: number): string => {
     const colors = [
         "hsl(var(--chart-1))",
@@ -328,10 +363,14 @@ const getSubjectColor = (subjectId: string, index: number): string => {
         "hsl(var(--chart-4))",
         "hsl(var(--chart-5))",
     ];
-    // Very simple hashing - replace with a better method if needed
+    // Simple hashing - distribute based on index if too many subjects
     let hash = 0;
-    for (let i = 0; i < subjectId.length; i++) {
-        hash = subjectId.charCodeAt(i) + ((hash << 5) - hash);
+    if (subjectId) {
+        for (let i = 0; i < subjectId.length; i++) {
+            hash = subjectId.charCodeAt(i) + ((hash << 5) - hash);
+        }
+         return colors[Math.abs(hash % colors.length)];
     }
-    return colors[Math.abs(hash % colors.length)];
+    // Fallback to index-based distribution if subjectId is missing or empty
+    return colors[index % colors.length];
 };
