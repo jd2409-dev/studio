@@ -76,6 +76,7 @@ export interface QuizResult {
     score: number; // Number of correct answers
     totalQuestions: number; // Total number of questions
     difficulty?: 'easy' | 'medium' | 'hard'; // Store the quiz difficulty
+    grade?: string; // Optional: Store the target grade level
 }
 
 export interface StudyPlannerEntry {

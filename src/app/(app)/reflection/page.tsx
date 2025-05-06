@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, BrainCircuit, Sparkles } from 'lucide-react'; // Added BrainCircuit, Sparkles
+import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, BrainCircuit, Sparkles, GraduationCap } from 'lucide-react'; // Added BrainCircuit, Sparkles, GraduationCap
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button"; // Import Button
@@ -125,6 +125,7 @@ export default function ReflectionPage() {
                 score: quiz.score,
                 totalQuestions: quiz.totalQuestions,
                 difficulty: quiz.difficulty,
+                grade: quiz.grade, // Pass grade to the flow
             };
 
             // Call the Genkit flow
@@ -175,17 +176,24 @@ export default function ReflectionPage() {
               {quizHistory.map((quiz) => (
                 <AccordionItem value={`quiz-${quiz.quizId}`} key={quiz.quizId} className="border rounded-md px-4 bg-background hover:bg-muted/30 transition-colors">
                   <AccordionTrigger className="py-4 text-left hover:no-underline">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
-                      <div className="flex items-center gap-2 mb-2 sm:mb-0">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{formatQuizDate(quiz.generatedDate)}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1">
+                             <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{formatQuizDate(quiz.generatedDate)}</span>
+                        </div>
                          {quiz.sourceContent && (
-                            <Badge variant="outline" className="ml-2 hidden lg:inline-flex text-xs">
+                            <Badge variant="outline" className="hidden md:inline-flex text-xs">
                                 Based on: "{quiz.sourceContent.substring(0, 30)}..."
                             </Badge>
                         )}
+                         {quiz.grade && (
+                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                <GraduationCap className="h-3 w-3"/> Grade {quiz.grade}
+                            </Badge>
+                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                          {quiz.difficulty && <Badge variant="secondary" className="capitalize">{quiz.difficulty}</Badge>}
                          <Badge variant={quiz.score / quiz.totalQuestions >= 0.7 ? "default" : "destructive"} className="w-fit">
                             Score: {quiz.score} / {quiz.totalQuestions} ({Math.round((quiz.score / quiz.totalQuestions) * 100)}%)

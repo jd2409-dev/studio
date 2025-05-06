@@ -27,6 +27,7 @@ const GenerateQuizInputSchema = z.object({
     .default(5)
     .describe('The number of questions to generate for the quiz.'),
   difficulty: DifficultyLevelSchema.default('medium'), // Add difficulty field
+  grade: z.string().optional().describe('The target grade level for the quiz (e.g., "9", "12").'), // Add grade field
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
 
@@ -52,7 +53,7 @@ const prompt = ai.definePrompt({
   name: 'generateQuizPrompt',
   model: gemini15Flash, // Specify the model to use
   input: {
-    schema: GenerateQuizInputSchema, // Update input schema to include difficulty
+    schema: GenerateQuizInputSchema, // Use updated input schema
   },
   output: {
     schema: GenerateQuizOutputSchema, // Output schema remains the same
@@ -61,6 +62,7 @@ const prompt = ai.definePrompt({
 
   Generate {{questionCount}} questions from the following textbook content.
   Vary the question types, ensure the answers are correct, and adjust the questions to match the requested difficulty level: **{{difficulty}}**.
+  {{#if grade}}The quiz should be appropriate for **Grade {{grade}}**.{{else}}The quiz should be appropriate for a general high school level.{{/if}}
 
   - **Easy:** Focus on basic definitions, simple recall, and straightforward facts.
   - **Medium:** Include application of concepts, interpretation, and slightly more complex recall.
@@ -75,6 +77,7 @@ const generateQuizFlow = ai.defineFlow(
     name: 'generateQuizFlow',
     inputSchema: GenerateQuizInputSchema,
     outputSchema: GenerateQuizOutputSchema,
+    model: gemini15Flash, // Specify model here too
   },
   async input => {
     const {output} = await prompt(input);

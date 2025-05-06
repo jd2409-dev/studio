@@ -32,6 +32,7 @@ export default function QuizGenerationPage() {
   const [textbookContent, setTextbookContent] = useState('');
   const [questionCount, setQuestionCount] = useState<number>(5); // Ensure state is number
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium'); // State for difficulty
+  const [grade, setGrade] = useState<string>(''); // State for grade level (use '' or 'none')
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,7 +67,9 @@ export default function QuizGenerationPage() {
       const input: GenerateQuizInput = {
           textbookContent,
           questionCount,
-          difficulty
+          difficulty,
+          // Pass grade only if it's selected (not empty or 'none')
+          grade: grade && grade !== 'none' ? grade : undefined,
       };
       const result = await generateQuiz(input);
 
@@ -88,7 +91,7 @@ export default function QuizGenerationPage() {
       });
       toast({
         title: "Success",
-        description: `Quiz generated successfully (Difficulty: ${difficulty})!`,
+        description: `Quiz generated successfully (Difficulty: ${difficulty}${grade && grade !== 'none' ? `, Grade: ${grade}` : ''})!`,
       });
     } catch (error) {
       console.error("Error generating quiz:", error);
@@ -156,6 +159,7 @@ export default function QuizGenerationPage() {
           score: finalScore,
           totalQuestions: quizData.quiz.length,
           difficulty: difficulty, // Store the difficulty level
+          grade: grade && grade !== 'none' ? grade : undefined, // Store the grade level if selected
       };
 
       try {
@@ -270,8 +274,8 @@ export default function QuizGenerationPage() {
                   className="mt-1"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                 <div className="sm:col-span-1">
                    <Label htmlFor="question-count">Number of Questions (1-20)</Label>
                    <Input
                      id="question-count"
@@ -287,7 +291,7 @@ export default function QuizGenerationPage() {
                      className="mt-1 w-full"
                    />
                  </div>
-                 <div>
+                 <div className="sm:col-span-1">
                    <Label htmlFor="difficulty">Difficulty</Label>
                     <Select
                         value={difficulty}
@@ -301,6 +305,25 @@ export default function QuizGenerationPage() {
                             <SelectItem value="easy">Easy</SelectItem>
                             <SelectItem value="medium">Medium</SelectItem>
                             <SelectItem value="hard">Hard</SelectItem>
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="sm:col-span-1">
+                    <Label htmlFor="grade-level">Grade Level (Optional)</Label>
+                    <Select
+                        value={grade || 'none'} // Use 'none' for empty selection
+                        onValueChange={setGrade}
+                        disabled={isLoading || !!quizState}
+                    >
+                        <SelectTrigger id="grade-level" className="mt-1 w-full">
+                            <SelectValue placeholder="Select grade..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                             {/* Change value from "" to "none" */}
+                             <SelectItem value="none">Any Grade</SelectItem>
+                            {[...Array(12)].map((_, i) => (
+                                <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                  </div>
@@ -426,13 +449,13 @@ export default function QuizGenerationPage() {
                        {quizState.questionIndex === quizData.quiz.length - 1 ? (
                           <Button
                             onClick={handleSubmitQuiz}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || !quizState.selectedAnswers[quizState.questionIndex]} // Also disable if current question not answered
                           >
                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                              Submit Quiz
                           </Button>
                         ) : (
-                          <Button onClick={handleNextQuestion} disabled={isSubmitting}>Next</Button>
+                          <Button onClick={handleNextQuestion} disabled={isSubmitting || !quizState.selectedAnswers[quizState.questionIndex]}>Next</Button> // Disable if not answered
                         )}
                      </div>
                  )}
@@ -453,3 +476,4 @@ export default function QuizGenerationPage() {
     </div>
   );
 }
+

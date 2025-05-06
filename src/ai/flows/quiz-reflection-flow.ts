@@ -28,6 +28,7 @@ const QuizReflectionInputSchema = z.object({
   score: z.number(),
   totalQuestions: z.number(),
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  grade: z.string().optional().describe('The grade level the quiz was intended for.'), // Add grade field
 });
 export type QuizReflectionInput = z.infer<typeof QuizReflectionInputSchema>;
 
@@ -53,7 +54,9 @@ const prompt = ai.definePrompt({
   input: { schema: QuizReflectionInputSchema },
   output: { schema: QuizReflectionOutputSchema },
   prompt: `You are an AI study assistant analyzing a student's quiz performance.
-The student scored {{score}} out of {{totalQuestions}} on a quiz with difficulty level '{{#if difficulty}}{{difficulty}}{{else}}not specified{{/if}}'.
+The student scored {{score}} out of {{totalQuestions}} on a quiz.
+{{#if difficulty}}Difficulty level: {{difficulty}}.{{/if}}
+{{#if grade}}Intended Grade Level: {{grade}}.{{/if}}
 
 Analyze the questions the student answered incorrectly and provide personalized feedback.
 Focus on understanding *why* the mistakes might have happened and suggest specific actions to improve understanding or avoid similar errors in the future.
@@ -119,3 +122,4 @@ const quizReflectionFlow = ai.defineFlow(
     return output;
   }
 );
+
