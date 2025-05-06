@@ -76,7 +76,7 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
-  // Define custom Handlebars helper for correctness check (case-insensitive for strings)
+  // Define custom Handlebars helpers for correctness check
   customize: (promptObject) => {
       // Ensure handlebarsOptions exists before modifying
       if (!promptObject.handlebarsOptions) {
