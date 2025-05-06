@@ -14,7 +14,7 @@ import { generateQuiz, type GenerateQuizInput, type GenerateQuizOutput } from '@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import db and helper
-import { doc, updateDoc, arrayUnion, Timestamp, setDoc, getDoc } from 'firebase/firestore'; // Import Firestore functions including setDoc and getDoc
+import { doc, updateDoc, arrayUnion, Timestamp, setDoc, getDoc, runTransaction } from 'firebase/firestore'; // Import Firestore functions including setDoc, getDoc, and runTransaction
 import type { QuizResult, QuizQuestion } from '@/types/user'; // Import QuizResult type
 import { cn } from '@/lib/utils';
 
@@ -167,7 +167,7 @@ export default function QuizGenerationPage() {
           const progressDocRef = doc(db!, 'userProgress', user.uid);
 
           // Transactionally check existence and update/set
-          await db!.runTransaction(async (transaction) => {
+          await runTransaction(db!, async (transaction) => { // Use runTransaction correctly
              const progressSnap = await transaction.get(progressDocRef);
              if (progressSnap.exists()) {
                  // Document exists, update the array
