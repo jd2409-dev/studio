@@ -3,42 +3,30 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection:
-    // - Authenticated users can read their own profile.
-    // - Authenticated users can create their own profile document if it doesn't exist.
-    // - Authenticated users can update their own profile document.
+    // Users can only read and write their own user document.
+    // Allow user to create their own document if it doesn't exist.
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
-      // Deny delete for user profiles by default unless specifically needed
-      allow delete: if false;
 
-      // TutorMessages subcollection:
-      // - Authenticated users can read and write their own tutor messages.
+      // Allow users to read and write their own tutor messages.
       match /tutorMessages/{messageId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // UserProgress collection:
-    // - Authenticated users can read their own progress.
-    // - Authenticated users can create their own progress document if it doesn't exist.
-    // - Authenticated users can update their own progress document.
+    // Users can only read and write their own progress document.
+    // Allow user to create their own document if it doesn't exist.
     match /userProgress/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
-      // Deny delete for user progress by default unless specifically needed
-      allow delete: if false;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Explicitly allow create if the document doesn't exist or if it's being created by the owner
+      // allow create: if request.auth != null && request.auth.uid == userId; // Covered by write
     }
-    
-    // SchoolBoards collection (assuming it's public or managed by admin)
-    // This is a placeholder - adjust based on how school boards are managed.
-    // If public, allow read for all. If admin-managed, restrict write.
+
+    // School boards collection (if you have one and it's public)
+    // Example: allow read for all authenticated users
     match /schoolBoards/{boardId} {
-      allow read: if true; // Example: Allow anyone to read school boards
-      allow write: if false; // Example: Disallow client-side writes
+      allow read: if request.auth != null;
     }
 
     // Default deny all other access

@@ -146,7 +146,7 @@ export default function DashboardPage() {
           let errorTitle = "Error Loading Data";
           let errorDesc = "Could not load dashboard data. Please try again later.";
 
-          if (error.message.includes("Firebase failed to initialize") || error.message.includes("Firebase services are not available")) {
+          if (error.message?.includes("Firebase failed to initialize") || error.message?.includes("Firebase services are not available")) {
               errorTitle = "Application Error";
               errorDesc = "Core application services are not available. Please refresh or contact support.";
           } else if (error.code === 'unavailable') {
@@ -156,12 +156,19 @@ export default function DashboardPage() {
           } else if (error.code === 'permission-denied') {
               errorTitle = "Permissions Error";
               errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
-              console.error("DashboardPage: Firestore permission denied. Check 'firestore.rules' and deploy: `firebase deploy --only firestore:rules`");
+              console.error("Firestore permission denied error occurred. This usually means the Firestore security rules defined in 'firestore.rules' have not been deployed, or they are incorrect. Please ensure the rules are deployed using the command: `firebase deploy --only firestore:rules`");
+              setDataFetchSource('error');
+          } else {
+              // Generic error
+              errorDesc = `Could not load dashboard data: ${error.message || 'Unknown error'}. Please try again later.`;
           }
           
           setFetchError(errorDesc); // Store the specific error message
-          setDataFetchSource('error');
-          setUserProgress({ ...defaultProgress, uid: user.uid }); // Fallback to default structure on error
+          
+          // If it's a permission error or a general error where we are not sure if data can be shown,
+          // we still try to set a fallback defaultProgress so UI doesn't break.
+          // DataFetchSource 'error' will be used to display an error message.
+          setUserProgress({ ...defaultProgress, uid: user.uid }); 
           toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
         } finally {
           setIsLoadingData(false);
@@ -205,7 +212,7 @@ export default function DashboardPage() {
                         {fetchError}
                         <p className="mt-2">Please try refreshing the page. If the issue persists, check your internet connection or contact support.</p>
                         {fetchError.includes("permission-denied") && 
-                            <p className="mt-1 text-xs">Ensure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code></p>
+                            <p className="mt-1 text-xs">Ensure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code>. Refer to the README for more details.</p>
                         }
                     </AlertDescription>
                 </Alert>
@@ -241,10 +248,10 @@ export default function DashboardPage() {
                <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
                <CardDescription>Here's your personalized study dashboard.</CardDescription>
              </div>
-               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Offline Data)</span>}
-               {/* Error state is handled by the block above now */}
+               {/* Display data fetch status (optional) */}
+               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Data from Offline Cache)</span>}
                {dataFetchSource === 'default' && <span className="text-xs text-muted-foreground">(Default Data Loaded)</span>}
-
+               {/* Error state is handled by the block above now */}
             </div>
         </CardHeader>
         <CardContent>

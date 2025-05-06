@@ -1,3 +1,4 @@
+
 # NexusLearn AI (Powered by Firebase Studio)
 
 This is a Next.js starter application featuring AI-powered learning tools, built within Firebase Studio.
@@ -9,7 +10,7 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 *   Student Dashboard
 *   Firebase Authentication (Email/Password, Google Sign-In)
 *   Firestore for User Data Storage
-*   Firebase Storage for File Uploads
+*   Firebase Storage for File Uploads (Optional - currently configured to use local Data URIs for file handling)
 *   Genkit Integration for AI Flows
 
 ## Getting Started
@@ -74,10 +75,12 @@ This is a Next.js starter application featuring AI-powered learning tools, built
     *   Start in **production mode** (secure by default - requires rules). Select a server location.
     *   Click "Enable".
 
-8.  **Set up Firebase Storage:**
-    *   In the Firebase Console, go to Storage.
-    *   Click "Get started".
-    *   Follow the prompts to set up Storage, using the **production** default security rules (secure by default - requires rules).
+8.  **Set up Firebase Storage (OPTIONAL - App currently uses local Data URIs for most file handling):**
+    *   If you wish to use Firebase Storage for actual file persistence (e.g., for user avatars or larger textbook uploads beyond Data URI limits):
+        *   In the Firebase Console, go to Storage.
+        *   Click "Get started".
+        *   Follow the prompts to set up Storage, using the **production** default security rules (secure by default - requires rules).
+    *   Note: The application is currently configured to handle files locally (e.g., avatars as Data URIs). If you enable Firebase Storage and want to integrate it fully, code changes in `src/app/(app)/profile/page.tsx` and `src/app/(app)/upload-textbook/page.tsx` would be needed to use `uploadBytesResumable` and `getDownloadURL` with Firebase Storage instead of local Data URI handling.
 
 9.  **Deploy Security Rules (CRITICAL for Fixing Permission Errors):**
     *   You need the Firebase CLI installed (`npm install -g firebase-tools`).
@@ -87,12 +90,13 @@ This is a Next.js starter application featuring AI-powered learning tools, built
         ```bash
         firebase deploy --only firestore:rules
         ```
-    *   **Deploy the Storage rules** (found in `storage.rules`):
+    *   **If you are using Firebase Storage, deploy the Storage rules** (found in `storage.rules`):
         ```bash
         firebase deploy --only storage
         ```
     *   <br/>
-    *   **🚨 VERY IMPORTANT:** **Failure to deploy these rules WILL cause `permission-denied` errors** when the application tries to read or write data (e.g., loading the dashboard, saving profile information, uploading files). Seeing messages like **"Error Loading Data"** or **"Could not load dashboard data due to insufficient permissions"** is a strong indicator that **rules have not been deployed.**
+    *   **🚨 VERY IMPORTANT:** **Failure to deploy these rules WILL cause `permission-denied` errors** when the application tries to read or write data (e.g., loading the dashboard, saving profile information, saving AI Tutor chat messages, uploading files). Seeing messages like **"Error Loading Data," "Could not load dashboard data due to insufficient permissions,"** or errors related to saving chat history is a strong indicator that **rules have not been deployed or are incorrect.**
+    *   **Whenever new features are added that interact with Firestore (like the AI Tutor chat history), you may need to update and re-deploy your `firestore.rules` file.**
     *   <br/>
     *   The provided rules in `firestore.rules` and `storage.rules` are designed for development and allow any *authenticated* user to access their *own* data (documents under `/users/{userId}`, `/userProgress/{userId}`, or files under `user_avatars/{userId}`, `user_uploads/{userId}` where `{userId}` matches their logged-in ID).
     *   **Review and tighten these rules before going to production.**
@@ -118,7 +122,7 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 *   **Authentication Context:** `src/context/AuthContext.tsx`
 *   **Styling:** Uses Tailwind CSS and CSS variables defined in `src/app/globals.css`.
 *   **Firestore Rules:** `firestore.rules` (Must be deployed)
-*   **Storage Rules:** `storage.rules` (Must be deployed)
+*   **Storage Rules:** `storage.rules` (Must be deployed if using Firebase Storage)
 
 ## Troubleshooting
 
@@ -128,12 +132,12 @@ This is a Next.js starter application featuring AI-powered learning tools, built
 *   **Other Authentication Errors:** Check the browser console for specific Firebase error codes (e.g., `auth/invalid-credential`, `auth/user-disabled`).
 *   **Google Sign-In Errors (`auth/popup-closed-by-user`, `auth/account-exists-with-different-credential`):** Check the browser console for details. Ensure popups aren't blocked. If an account exists with the same email via a different method, try that method first. **Also ensure the Google provider is enabled and `localhost` is in the authorized domains list in the Firebase Authentication settings.**
 *   **Genkit Errors:** Make sure the `GOOGLE_GENAI_API_KEY` is set correctly in your `.env` file if using AI features.
-*   **Firestore/Storage Permission Errors (`permission-denied` or `Missing or insufficient permissions`) / Dashboard shows "Error Loading":**
-    *   This *almost always* means your Firestore or Firebase Storage security rules are either blocking the action because they are too restrictive, OR **they haven't been deployed correctly**. Seeing "Error Loading" on the dashboard is a strong indicator of this issue.
+*   **Firestore/Storage Permission Errors (`permission-denied` or `Missing or insufficient permissions`) / Dashboard shows "Error Loading" / AI Tutor chat not saving:**
+    *   This *almost always* means your Firestore or Firebase Storage security rules are either blocking the action because they are too restrictive, OR **they haven't been deployed correctly.** Seeing "Error Loading" on the dashboard or issues with AI Tutor chat history are strong indicators of this issue.
     *   **FIX FOR DEVELOPMENT:**
-        1.  Ensure you have `firestore.rules` and `storage.rules` files in your project root (these should be included).
-        2.  **Deploy the rules using the Firebase CLI:** Run `firebase deploy --only firestore:rules` and `firebase deploy --only storage` (after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`). **This is the most critical step to fix permission errors.**
-        3.  The provided development rules allow any authenticated user access to their *own* data (e.g., documents under `/users/{userId}` or `/userProgress/{userId}` where `userId` matches their authenticated ID). **If you don't deploy these rules, the default production rules (secure by default, deny all access) will likely be active, causing permission errors.**
+        1.  Ensure you have `firestore.rules` (and `storage.rules` if using Firebase Storage) files in your project root (these should be included).
+        2.  **Deploy the rules using the Firebase CLI:** Run `firebase deploy --only firestore:rules` (and `firebase deploy --only storage` if applicable) after logging in with `firebase login` and selecting your project with `firebase use <your-project-id>`. **This is the most critical step to fix permission errors.**
+        3.  The provided development rules allow any authenticated user access to their *own* data (e.g., documents under `/users/{userId}` or `/userProgress/{userId}` or their subcollections like `/users/{userId}/tutorMessages/{messageId}` where `userId` matches their authenticated ID). **If you don't deploy these rules, the default production rules (secure by default, deny all access) will likely be active, causing permission errors.**
         4.  If you started Firestore in **test mode** (`allow read, write: if true;`), it allows *anyone* access, which is highly insecure but might bypass permission errors during initial setup. It's strongly recommended to use production mode and deploy the provided development rules instead.
     *   **VERY IMPORTANT FOR PRODUCTION:** The development rules (`allow ... : if request.auth != null && request.auth.uid == userId;`) are a starting point. Before deploying to production, you **MUST** write more specific rules based on your application's needs. For example, you might want to allow users to read public data but only write to their own documents. Use the Firebase Console Rules Simulator to test your production rules thoroughly.
 
