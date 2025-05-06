@@ -1,6 +1,7 @@
 
 'use client';
 
+import * as React from 'react'; // Import React
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { BarChart, LineChart, PieChart, ListChecks, Target, BrainCircuit, Loader2 } from "lucide-react";
@@ -12,6 +13,7 @@ import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { UserProgress, SubjectMastery, QuizResult, HomeworkAssignment } from '@/types/user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChartLegendContent } from '@/components/ui/chart'; // Import ChartLegendContent
 
 export default function PerformancePage() {
   const { toast } = useToast();
@@ -62,12 +64,27 @@ export default function PerformancePage() {
       const history = userProgress?.quizHistory || [];
       const filteredHistory = selectedSubject === 'all'
           ? history
-          : history.filter(q => q.questions.some(qs => qs.subjectId === selectedSubject)); // Needs subjectId on Question
+          : history.filter(q => q.questions.some(qs => (qs as any).subjectId === selectedSubject)); // Needs subjectId on Question
 
       // Simple aggregation: Average score per day
        const dailyScores: { [date: string]: { totalScore: number; count: number } } = {};
       filteredHistory.forEach(q => {
-          const dateStr = format(parseISO(q.generatedDate as string), 'yyyy-MM-dd'); // Assuming ISO string date
+           // Handle both Timestamp and string dates gracefully
+            let dateStr = '';
+            if (q.generatedDate) {
+                try {
+                     const dateObj = typeof q.generatedDate === 'string'
+                         ? parseISO(q.generatedDate)
+                         : (q.generatedDate as any).toDate ? (q.generatedDate as any).toDate() : new Date(); // Handle Timestamp or default
+                    dateStr = format(dateObj, 'yyyy-MM-dd');
+                } catch (e) {
+                     console.error("Error parsing quiz date:", q.generatedDate, e);
+                     dateStr = format(new Date(), 'yyyy-MM-dd'); // Fallback to today
+                }
+            } else {
+                dateStr = format(new Date(), 'yyyy-MM-dd'); // Fallback if date is missing
+            }
+
           const scorePercent = (q.score / q.totalQuestions) * 100;
           if (!dailyScores[dateStr]) {
               dailyScores[dateStr] = { totalScore: 0, count: 0 };
@@ -76,12 +93,33 @@ export default function PerformancePage() {
           dailyScores[dateStr].count += 1;
        });
 
-       return Object.entries(dailyScores)
-          .map(([date, data]) => ({
-             date: format(parseISO(date), 'MMM d'), // Format date for XAxis
-             averageScore: Math.round(data.totalScore / data.count),
-          }))
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort by date
+        // Map and sort
+        return Object.entries(dailyScores)
+          .map(([date, data]) => {
+              let formattedDate = 'Invalid Date';
+              try {
+                 formattedDate = format(parseISO(date), 'MMM d'); // Format date for XAxis
+              } catch (e) {
+                  console.error("Error formatting date string for chart:", date, e);
+              }
+              return {
+                  date: formattedDate,
+                  averageScore: Math.round(data.totalScore / data.count),
+              };
+           })
+          .filter(item => item.date !== 'Invalid Date') // Filter out invalid dates before sorting
+          .sort((a, b) => {
+              try {
+                  // Attempt to parse back for sorting, handle potential errors
+                  const dateA = new Date(a.date + `, ${new Date().getFullYear()}`); // Add year for proper parsing
+                  const dateB = new Date(b.date + `, ${new Date().getFullYear()}`);
+                  return dateA.getTime() - dateB.getTime();
+              } catch (e) {
+                  console.error("Error sorting quiz history dates:", a.date, b.date, e);
+                  return 0; // Keep original order on error
+              }
+           }); // Sort by date
+
 
   }, [userProgress?.quizHistory, selectedSubject]);
 
@@ -216,17 +254,13 @@ export default function PerformancePage() {
          </Card>
 
 
-         {/* Quiz Performance Trend (Placeholder) */}
+         {/* Quiz Performance Trend */}
          <Card className="lg:col-span-3">
            <CardHeader>
-             <CardTitle className="flex items-center gap-2"><LineChart className="text-secondary" /> Quiz Performance Trend (Placeholder)</CardTitle>
+             <CardTitle className="flex items-center gap-2"><LineChart className="text-secondary" /> Quiz Performance Trend</CardTitle>
               <CardDescription>Your average quiz scores over time {selectedSubject !== 'all' ? `for ${userProgress.subjectMastery.find(s=>s.subjectId === selectedSubject)?.subjectName}` : ''}.</CardDescription>
            </CardHeader>
            <CardContent>
-             {/* Replace with actual line chart */}
-              <div className="h-[300px] flex items-center justify-center border rounded-md bg-muted/30">
-                <p className="text-muted-foreground">Quiz performance chart coming soon.</p>
-                 {/*
                  {quizHistoryData.length > 1 ? ( // Need at least 2 points for a line
                     <ChartContainer config={quizHistoryConfig} className="min-h-[300px] w-full">
                         <LineChart accessibilityLayer data={quizHistoryData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -255,8 +289,6 @@ export default function PerformancePage() {
                 ) : (
                     <p className="text-center text-muted-foreground p-8">Not enough quiz data to show a trend{selectedSubject !== 'all' ? ` for this subject` : ''}.</p>
                 )}
-                */}
-              </div>
            </CardContent>
          </Card>
 
