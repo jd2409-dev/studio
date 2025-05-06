@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -51,6 +52,7 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
+  // Define custom Handlebars helpers and disable knownHelpersOnly
   customize: (promptObject) => {
     // Ensure handlebarsOptions exists before modifying
     if (!promptObject.handlebarsOptions) {
