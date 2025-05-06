@@ -84,7 +84,7 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
-  // Define custom Handlebars helpers for correctness check
+  // Define custom Handlebars helpers for correctness check and allow them
   customize: (promptObject) => {
       // Ensure handlebarsOptions exists before modifying
       if (!promptObject.handlebarsOptions) {
