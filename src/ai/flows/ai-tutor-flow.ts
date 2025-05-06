@@ -66,7 +66,7 @@ AI Tutor Response:`,
     // Define 'eq' locally to ensure it's available even if not globally registered
     promptObject.handlebarsOptions.helpers = {
         ...(promptObject.handlebarsOptions.helpers || {}),
-        eq: (a: any, b: any) => a === b,
+        eq: (a: any, b: any) => a === b, // Ensure eq helper is defined here
     };
     // Explicitly set knownHelpersOnly to false to allow custom/global helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
@@ -81,7 +81,6 @@ const aiTutorFlow = ai.defineFlow(
     name: 'aiTutorFlow',
     inputSchema: AiTutorInputSchema,
     outputSchema: AiTutorOutputSchema,
-    model: gemini15Flash, // Specify model here as well for context
   },
   async (input) => {
     // If history is empty, provide a default greeting or prompt
@@ -99,5 +98,3 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
-
-    
