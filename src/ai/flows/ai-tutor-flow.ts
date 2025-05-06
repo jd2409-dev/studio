@@ -65,7 +65,7 @@ AI Tutor Response:`,
     // Merge local helpers with globally registered ones or add custom ones if needed.
     promptObject.handlebarsOptions.helpers = {
         ...(promptObject.handlebarsOptions.helpers || {}),
-        // Define 'eq' locally to ensure it's available
+        // Define 'eq' locally to ensure it's available even if not globally registered
         eq: (a: any, b: any) => a === b,
     };
     // Explicitly set knownHelpersOnly to false to allow custom/global helpers
