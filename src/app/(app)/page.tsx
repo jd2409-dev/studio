@@ -10,79 +10,93 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useAuth } from '@/context/AuthContext';
-import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled flag
+import { db, ensureFirebaseInitialized, firebaseInitializationError, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled flag
 import { doc, getDoc, setDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore'; // Import Firestore getDoc variants
 import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, StudyRecommendation } from '@/types/user'; // Import types
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const router = useRouter(); // Initialize useRouter
-  const { user, loading: authLoading } = useAuth();
+  const router = useRouter(); 
+  const { user, loading: authLoading, authError } = useAuth(); // Get authError as well
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true); // For dashboard-specific data
   const [userName, setUserName] = useState<string>('Student');
-  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error' | 'nodata'>('server'); 
+  const [fetchError, setFetchError] = useState<string | null>(null); // Store specific fetch error message
+
 
    // Default placeholder data
    const defaultProgress: UserProgress = {
-        uid: user?.uid || 'default', // Assign a default UID or the user's UID
+        uid: user?.uid || 'default_uid_placeholder', // Assign a default UID or the user's UID
         subjectMastery: [
             { subjectId: 'math', subjectName: 'Mathematics', progress: 0, lastUpdated: new Date().toISOString() },
             { subjectId: 'physics', subjectName: 'Physics', progress: 0, lastUpdated: new Date().toISOString() },
-            { subjectId: 'chemistry', subjectName: 'Chemistry', progress: 0, lastUpdated: new Date().toISOString() },
-            { subjectId: 'biology', subjectName: 'Biology', progress: 0, lastUpdated: new Date().toISOString() },
         ],
         upcomingHomework: [],
         upcomingExams: [],
         studyRecommendations: [],
-        lastUpdated: new Date().toISOString(), // Add lastUpdated for the main progress object
+        lastUpdated: new Date().toISOString(),
    };
 
   // Fetch user progress data and name from Firestore
   useEffect(() => {
-    if (user) {
-      setIsLoadingData(true);
-       ensureFirebaseInitialized(); // Ensure Firebase is ready
+    console.log("DashboardPage: useEffect triggered. AuthLoading:", authLoading, "User:", !!user, "AuthError:", !!authError, "FirebaseInitError:", !!firebaseInitializationError);
 
-      const progressDocRef = doc(db!, 'userProgress', user.uid);
-      const userDocRef = doc(db!, 'users', user.uid); // For user name
+    // Abort if Firebase itself failed to initialize (handled by AuthProvider/Layout)
+    if (firebaseInitializationError || authError) {
+        console.log("DashboardPage: Aborting data fetch due to Firebase/Auth init error.");
+        setIsLoadingData(false);
+        setFetchError(firebaseInitializationError?.message || authError?.message || "Initialization or Authentication error.");
+        setDataFetchSource('error');
+        return;
+    }
+
+    // Only fetch data if auth is complete, user exists, and no init/auth errors
+    if (!authLoading && user) {
+      console.log("DashboardPage: Auth loaded, user exists. Starting data fetch for user:", user.uid);
+      setIsLoadingData(true);
+      setFetchError(null); // Reset previous errors
 
       const fetchData = async () => {
         try {
-          // Fetch user name (can often come from cache first)
+          ensureFirebaseInitialized(); // This will throw if services are not ready
+
+          const progressDocRef = doc(db!, 'userProgress', user.uid);
+          const userDocRef = doc(db!, 'users', user.uid);
+
+          // Fetch user name
           try {
             const userSnap = await getDoc(userDocRef);
-            if (userSnap.exists() && userSnap.data().name) {
-                 setUserName(userSnap.data().name);
+            if (userSnap.exists() && userSnap.data()?.name) {
+                 setUserName(userSnap.data()!.name);
             } else if (user.displayName) {
-                 setUserName(user.displayName); // Fallback to auth display name
+                 setUserName(user.displayName);
+            } else {
+                 setUserName('Student'); // Fallback if no name found
             }
-          } catch (userNameError) {
-             console.warn("Could not fetch user name:", userNameError);
-             // Use fallback even on error
-             if (user.displayName) setUserName(user.displayName);
+          } catch (userNameError: any) {
+             console.warn("DashboardPage: Could not fetch user name:", userNameError.message);
+             setUserName(user.displayName || 'Student'); // Fallback
           }
 
-
-          // Fetch user progress - Firestore handles offline persistence automatically
-          // It first tries cache, then server. We can check metadata for source.
+          // Fetch user progress
           const progressSnap = await getDoc(progressDocRef);
 
           if (progressSnap.exists()) {
-            // Ensure the fetched data conforms to the UserProgress structure
             const fetchedData = progressSnap.data();
-            // Basic validation: Check if core properties exist and have the correct types (example)
-             if (fetchedData && typeof fetchedData === 'object' && Array.isArray(fetchedData.subjectMastery)) {
-                const validatedProgress: UserProgress = {
+            // Basic validation
+            if (fetchedData && typeof fetchedData === 'object' && Array.isArray(fetchedData.subjectMastery)) {
+                const validatedProgress: UserProgress = { /* ... (validation logic as before, ensure defaults for all fields if missing) ... */ 
                     uid: user.uid,
-                    subjectMastery: (fetchedData.subjectMastery || []).map((sm: any): SubjectMastery => ({ // Add basic type checking/defaults inside map
-                        subjectId: sm?.subjectId || 'unknown',
+                    subjectMastery: (fetchedData.subjectMastery || []).map((sm: any): SubjectMastery => ({
+                        subjectId: sm?.subjectId || `unknown-${Math.random()}`,
                         subjectName: sm?.subjectName || 'Unknown Subject',
                         progress: typeof sm?.progress === 'number' ? sm.progress : 0,
                         lastUpdated: sm?.lastUpdated || new Date().toISOString(),
                     })),
-                     upcomingHomework: (fetchedData.upcomingHomework || []).map((hw: any): HomeworkAssignment => ({
+                    upcomingHomework: (fetchedData.upcomingHomework || []).map((hw: any): HomeworkAssignment => ({
                         id: hw?.id || `hw-${Date.now()}-${Math.random()}`,
                         subjectId: hw?.subjectId || 'unknown',
                         subjectName: hw?.subjectName || 'Unknown Subject',
@@ -95,9 +109,9 @@ export default function DashboardPage() {
                         subjectId: ex?.subjectId || 'unknown',
                         subjectName: ex?.subjectName || 'Unknown Subject',
                         title: ex?.title || 'Untitled Exam',
-                         date: ex?.date || new Date().toISOString(),
+                        date: ex?.date || new Date().toISOString(),
                     })),
-                     studyRecommendations: (fetchedData.studyRecommendations || []).map((rec: any): StudyRecommendation => ({
+                    studyRecommendations: (fetchedData.studyRecommendations || []).map((rec: any): StudyRecommendation => ({
                         id: rec?.id || `rec-${Date.now()}-${Math.random()}`,
                         type: rec?.type || 'topic_review',
                         subjectId: rec?.subjectId || 'unknown',
@@ -111,67 +125,67 @@ export default function DashboardPage() {
                 };
                 setUserProgress(validatedProgress);
                 setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
-                console.log(`Dashboard data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
-             } else {
-                 console.warn("Fetched userProgress data has invalid structure. Using default.", fetchedData);
-                 // Initialize with default data if structure is wrong
-                 const initialProgress = { ...defaultProgress, uid: user.uid }; // Ensure UID is set
-                 await setDoc(progressDocRef, initialProgress);
+                console.log(`DashboardPage: Data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
+            } else {
+                 console.warn("DashboardPage: Fetched userProgress data has invalid structure. Initializing with default.", fetchedData);
+                 const initialProgress = { ...defaultProgress, uid: user.uid };
+                 await setDoc(progressDocRef, initialProgress); // Attempt to save default
                  setUserProgress(initialProgress);
                  setDataFetchSource('default');
-             }
+            }
           } else {
-            // Initialize with default data if no progress exists
-             console.log("No progress data found for user:", user.uid, ". Initializing default progress in Firestore.");
-             const initialProgress = { ...defaultProgress, uid: user.uid }; // Ensure UID is set
-            await setDoc(progressDocRef, initialProgress);
+            console.log("DashboardPage: No progress data found for user:", user.uid, ". Initializing default progress in Firestore.");
+            const initialProgress = { ...defaultProgress, uid: user.uid };
+            await setDoc(progressDocRef, initialProgress); // Attempt to save default
             setUserProgress(initialProgress);
-             setDataFetchSource('default');
+            setDataFetchSource('default');
           }
 
         } catch (error: any) {
-          console.error("Error fetching dashboard data:", error);
-           // Differentiate between error types for better feedback
-           let errorTitle = "Error Loading Data";
-           let errorDesc = "Could not load dashboard data. Please try again later.";
+          console.error("DashboardPage: Error fetching dashboard data:", error.code, error.message, error);
+          let errorTitle = "Error Loading Data";
+          let errorDesc = "Could not load dashboard data. Please try again later.";
 
-           if (error.code === 'unavailable') {
-               errorTitle = "Offline";
-               errorDesc = "Could not reach server. Displaying cached or default data if available.";
-               console.warn("Firestore data fetch failed: Network unavailable. Persistence might be inactive or data not cached.");
-               setDataFetchSource('error'); // Mark as error, but might show cached data
-            } else if (error.code === 'permission-denied') {
-                errorTitle = "Permissions Error";
-                errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
-                console.error("Firestore permission denied error occurred. This usually means the Firestore security rules defined in 'firestore.rules' have not been deployed, or they are incorrect. Please ensure the rules are deployed using the command: `firebase deploy --only firestore:rules`");
-                setDataFetchSource('error');
-           } else {
-                // Generic error
-                setDataFetchSource('error');
-           }
-
-            toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
-            // Always attempt to set fallback data on error to prevent crashes
-            const fallbackProgress = { ...defaultProgress, uid: user.uid };
-            setUserProgress(fallbackProgress);
-
+          if (error.message.includes("Firebase failed to initialize") || error.message.includes("Firebase services are not available")) {
+              errorTitle = "Application Error";
+              errorDesc = "Core application services are not available. Please refresh or contact support.";
+          } else if (error.code === 'unavailable') {
+              errorTitle = "Offline";
+              errorDesc = "Could not reach server. Displaying cached or default data if available.";
+              console.warn("DashboardPage: Firestore data fetch failed: Network unavailable.");
+          } else if (error.code === 'permission-denied') {
+              errorTitle = "Permissions Error";
+              errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
+              console.error("DashboardPage: Firestore permission denied. Check 'firestore.rules' and deploy: `firebase deploy --only firestore:rules`");
+          }
+          
+          setFetchError(errorDesc); // Store the specific error message
+          setDataFetchSource('error');
+          setUserProgress({ ...defaultProgress, uid: user.uid }); // Fallback to default structure on error
+          toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
         } finally {
           setIsLoadingData(false);
+          console.log("DashboardPage: Data fetching process finished. isLoadingData: false");
         }
       };
       fetchData();
-    } else if (!authLoading) {
-       // Handle case where user is null after auth check (should be redirected)
+    } else if (!authLoading && !user) {
+       // User is not logged in, and auth check is complete.
+       // Layout should handle redirect. Dashboard should not attempt to load data.
+       console.log("DashboardPage: Auth loaded, but no user. Data fetch skipped. Redirect handled by AppLayout.");
        setIsLoadingData(false);
+       setDataFetchSource('nodata'); // Indicate no data to fetch because no user
+       setFetchError("User not authenticated.");
     }
-  }, [user, authLoading, toast]); // Add toast to dependency array
+  }, [user, authLoading, authError, toast]); // Removed router from deps as navigateTo is used
 
    const navigateTo = (path: string) => {
      router.push(path);
    };
 
-   // Loading state for the whole dashboard
-   if (isLoadingData || authLoading) {
+   // Combined loading state
+   if (authLoading || isLoadingData) {
+     console.log("DashboardPage: Rendering loading spinner. AuthLoading:", authLoading, "IsLoadingData:", isLoadingData);
      return (
        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
          <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -179,14 +193,42 @@ export default function DashboardPage() {
      );
    }
 
+   // If there was a fetch error after loading, display it
+    if (dataFetchSource === 'error' && fetchError) {
+        console.log("DashboardPage: Rendering error message due to fetchError:", fetchError);
+        return (
+            <div className="container mx-auto py-8">
+                <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <CardTitle>Error Loading Dashboard</CardTitle>
+                    <AlertDescription>
+                        {fetchError}
+                        <p className="mt-2">Please try refreshing the page. If the issue persists, check your internet connection or contact support.</p>
+                        {fetchError.includes("permission-denied") && 
+                            <p className="mt-1 text-xs">Ensure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code></p>
+                        }
+                    </AlertDescription>
+                </Alert>
+            </div>
+        );
+    }
+    
+    // If auth is loaded, no user, and no data to fetch (e.g. redirected but component hasn't unmounted)
+    if (dataFetchSource === 'nodata' && !user) {
+        console.log("DashboardPage: No user and 'nodata' source. Rendering minimal or null.");
+        // This case should ideally be handled by redirect in AppLayout, but as a fallback:
+        return <p className="text-center text-muted-foreground p-8">Please log in to view your dashboard.</p>;
+    }
+
+
    // Ensure userProgress is not null before rendering components that depend on it
-   // Use optional chaining and provide default values to prevent runtime errors if userProgress is null
+   const currentProgress = userProgress || { ...defaultProgress, uid: user?.uid || 'fallback_uid' };
    const {
-       subjectMastery = defaultProgress.subjectMastery,
-       upcomingHomework = defaultProgress.upcomingHomework,
-       upcomingExams = defaultProgress.upcomingExams,
-       studyRecommendations = defaultProgress.studyRecommendations
-   } = userProgress || {};
+       subjectMastery,
+       upcomingHomework,
+       upcomingExams,
+       studyRecommendations
+   } = currentProgress;
 
 
   return (
@@ -199,9 +241,10 @@ export default function DashboardPage() {
                <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
                <CardDescription>Here's your personalized study dashboard.</CardDescription>
              </div>
-               {/* Display data fetch status (optional) */}
-               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Data from Offline Cache)</span>}
-               {dataFetchSource === 'error' && <span className="text-xs text-destructive">(Error Loading)</span>}
+               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Offline Data)</span>}
+               {/* Error state is handled by the block above now */}
+               {dataFetchSource === 'default' && <span className="text-xs text-muted-foreground">(Default Data Loaded)</span>}
+
             </div>
         </CardHeader>
         <CardContent>
@@ -233,7 +276,6 @@ export default function DashboardPage() {
                   <p className="font-medium">{hw.title}</p>
                   <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
                 </div>
-                {/* Format dueDate before displaying */}
                 <span className="text-sm font-semibold text-accent">
                   {hw.dueDate ? new Date(hw.dueDate as string).toLocaleDateString() : 'No due date'}
                 </span>
@@ -298,9 +340,9 @@ export default function DashboardPage() {
           <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> Quick Study Recommendations</CardTitle>
           <CardDescription>AI-powered suggestions for your next study session.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 min-h-[100px]">
           {studyRecommendations && studyRecommendations.length > 0 ? (
-             studyRecommendations.slice(0, 3).map((rec) => ( // Show top 3 recommendations
+             studyRecommendations.slice(0, 3).map((rec) => ( 
               <div key={rec.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
                  <p className="font-medium text-sm">{rec.title}</p>
                  <p className="text-xs text-muted-foreground">{rec.reason} - <span className="capitalize">{rec.priority} priority</span></p>
@@ -316,8 +358,6 @@ export default function DashboardPage() {
             </Button>
         </CardFooter>
       </Card>
-
-
     </div>
   );
 }

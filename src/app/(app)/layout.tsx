@@ -4,33 +4,37 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react'; // Changed icon
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { auth, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import Firebase auth instance and helper
+import { auth, ensureFirebaseInitialized, firebaseInitializationError } from '@/lib/firebase/config'; // Import Firebase auth instance and helper
 import { signOut } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading } = useAuth(); // Get user and loading state
+  const { user, loading: authLoading, authError } = useAuth(); // Get user, loading state, and authError
 
   useEffect(() => {
-    // Redirect to login if not loading and no user is authenticated
-    if (!loading && !user) {
+    console.log("AppLayout: useEffect triggered. AuthLoading:", authLoading, "User:", !!user, "AuthError:", !!authError);
+    // Redirect to login if auth check is complete, no user, and no auth error (auth error handled by AuthProvider)
+    if (!authLoading && !user && !authError) {
+      console.log("AppLayout: Not loading, no user, no auth error. Redirecting to /login.");
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, authError, router]);
 
   const handleLogout = async () => {
     try {
-       ensureFirebaseInitialized(); // Ensure Firebase is initialized before using auth
-      await signOut(auth!); // Use non-null assertion as we check initialization
+      ensureFirebaseInitialized(); // Ensure Firebase is initialized before using auth
+      if (!auth) throw new Error("Firebase auth is not initialized for logout.");
+      await signOut(auth);
       toast({
         title: "Logged Out",
         description: "You have been logged out successfully.",
@@ -40,28 +44,44 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       console.error("Logout Error:", error);
       toast({
         title: "Logout Failed",
-        description: "An error occurred during logout. Please try again.",
+        description: error instanceof Error ? error.message : "An error occurred during logout. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-   // Show loading spinner while auth state is being determined
-   if (loading) {
+   // If there's a firebaseInitializationError, AuthProvider will show an error screen.
+   // AppLayout shouldn't render its UI in this case.
+   if (firebaseInitializationError) {
+       console.log("AppLayout: Firebase initialization error detected by config. Returning null.");
+       return null; // AuthProvider handles the error display
+   }
+
+   // If there's an authError from AuthContext, AuthProvider also handles its display.
+   if (authError) {
+       console.log("AppLayout: AuthContext error detected. Returning null.");
+       return null; // AuthProvider handles the error display
+   }
+
+   // Show loading spinner while auth state is being determined by AuthProvider
+   if (authLoading) {
+    console.log("AppLayout: Auth is loading. Displaying loader.");
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
         </div>
-     )
+     );
   }
 
-  // If user is null after loading, it means they should be redirected,
-  // but we render null briefly to avoid flashing the layout.
+  // If user is null after loading and no error, it means they should be redirected by the useEffect.
+  // Render null briefly to avoid flashing the layout while redirect happens.
   if (!user) {
+      console.log("AppLayout: Auth loaded, but no user. Redirect should occur. Returning null.");
       return null;
   }
 
-
+  // If we reach here, auth is loaded, user exists, and no critical errors.
+  console.log("AppLayout: Auth loaded, user exists. Rendering layout for user:", user.uid);
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar>
@@ -79,7 +99,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
              <SidebarMenuItem>
-                 {/* Correct usage: Link is the direct child when using asChild */}
                  <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                    <Link href="/">
                      <Home />
@@ -172,7 +191,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              {/* Correct usage: Direct button action, no asChild needed */}
               <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
                 <LogOut />
                  <span>Log Out</span>
@@ -200,3 +218,4 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+

@@ -30,13 +30,13 @@ const isInvalidConfigValue = (value: string | undefined): boolean => {
     return !value || value.includes('YOUR_') || value.includes('_HERE') || value.trim() === '';
 }
 
-console.log("Firebase config module loaded. typeof window:", typeof window);
+console.log("Firebase config module loading... typeof window:", typeof window);
 
 // Check if Firebase app is already initialized - Client-side only initialization
 if (typeof window !== 'undefined') {
-    console.log("Running Firebase initialization checks on the client...");
+    console.log("CLIENT_SIDE: Firebase initialization checks starting...");
     if (!getApps().length) {
-        console.log("No Firebase app initialized yet. Proceeding with initialization.");
+        console.log("CLIENT_SIDE: No Firebase app initialized yet. Proceeding with initialization.");
 
         const requiredKeys: (keyof typeof firebaseConfig)[] = [
             'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
@@ -50,83 +50,110 @@ if (typeof window !== 'undefined') {
         });
 
         if (errorMessages.length > 0) {
-            const errorMessage = `Firebase configuration contains placeholder or missing values for keys: ${errorMessages.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Refer to README.md for setup instructions.`;
+            const errorMessage = `Firebase configuration contains placeholder or missing values for critical keys: ${errorMessages.join(', ')}. Please update your .env file with valid credentials from your Firebase project settings. Refer to README.md for setup instructions. App functionality will be severely limited.`;
             console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            console.error("!!! FIREBASE CONFIGURATION ERROR !!!");
+            console.error("!!! FIREBASE CONFIGURATION ERROR (CRITICAL) !!!");
             console.error(errorMessage);
             console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             firebaseInitializationError = new Error(errorMessage);
             // Explicitly set services to null if config is invalid
             app = null; db = null; auth = null; storage = null;
+            persistenceEnabled = false;
         } else {
             try {
-                console.log("Firebase config appears valid, calling initializeApp()...");
+                console.log("CLIENT_SIDE: Firebase config appears valid. Attempting initializeApp()...");
                 app = initializeApp(firebaseConfig);
-                console.log("initializeApp() successful. Getting Auth, Storage, Firestore.");
+                console.log("CLIENT_SIDE: initializeApp() successful. Getting Auth, Storage, Firestore instances...");
                 auth = getAuth(app);
                 storage = getStorage(app);
                 db = getFirestore(app);
+                console.log("CLIENT_SIDE: Firebase services (Auth, Storage, Firestore) obtained.");
 
-                console.log("Firebase services obtained. Attempting to enable Firestore offline persistence...");
+                console.log("CLIENT_SIDE: Attempting to enable Firestore offline persistence...");
                 enableIndexedDbPersistence(db)
                   .then(() => {
                       persistenceEnabled = true;
-                      console.log("Firestore offline persistence enabled successfully.");
+                      console.log("CLIENT_SIDE: Firestore offline persistence enabled successfully.");
                   })
                   .catch((err) => {
-                    console.warn("Firestore offline persistence setup warning/error:", err.code, err.message);
-                    if (err.code == 'failed-precondition') {
-                        persistenceEnabled = true; // Assume already enabled or handled by another tab
-                    } else {
+                    console.warn("CLIENT_SIDE: Firestore offline persistence setup warning/error:", err.code, err.message);
+                    if (err.code === 'failed-precondition') {
+                        // This means persistence is likely already enabled in another tab or couldn't be enabled now.
+                        // For robustness, we might assume it's effectively enabled or will be.
+                        persistenceEnabled = true; 
+                        console.warn("CLIENT_SIDE: Persistence 'failed-precondition' likely means it's active in another tab or already set up.");
+                    } else if (err.code === 'unimplemented') {
+                        console.warn("CLIENT_SIDE: Firestore offline persistence is not supported in this browser environment.");
                         persistenceEnabled = false;
+                    } else {
+                         persistenceEnabled = false; // For other errors, assume it's not enabled.
                     }
                   });
-                console.log("Firebase core initialization successful.");
+                console.log("CLIENT_SIDE: Firebase core initialization process completed.");
             } catch (error: any) {
-                console.error("Firebase initialization error during initializeApp() or service retrieval:", error);
-                let detailedErrorMessage = `Firebase Core Initialization Failed. Code: ${error.code || 'N/A'}, Message: ${error.message || 'Unknown error'}. Check browser console and network tab.`;
+                const detailedErrorMessage = `Firebase Core Initialization Failed during app/service setup. Code: ${error.code || 'N/A'}, Message: ${error.message || 'Unknown error'}. Check browser console and network tab for more details. Ensure Firebase SDK versions are compatible.`;
+                console.error("CLIENT_SIDE: Firebase initialization error:", detailedErrorMessage, error);
                 firebaseInitializationError = new Error(detailedErrorMessage);
                 app = null; db = null; auth = null; storage = null;
+                persistenceEnabled = false;
             }
         }
     } else {
-        console.log("Firebase app already initialized. Getting existing instance and services.");
-        app = getApp();
+        console.log("CLIENT_SIDE: Firebase app already initialized. Getting existing instance and services.");
+        app = getApp(); // Get the default app
         try {
            auth = getAuth(app);
            storage = getStorage(app);
            db = getFirestore(app);
-           persistenceEnabled = true; // Assume persistence was handled if app already exists
-           console.log("Retrieved existing Firebase services successfully.");
+           // If app exists, persistence might have been set up. We can't re-run enableIndexedDbPersistence easily
+           // without checking if it's already active, which is complex. Assume it's handled.
+           // A more robust way would be to check a flag set by the first initialization.
+           // For now, if app exists, we assume persistence was attempted.
+           // We can't *guarantee* persistenceEnabled is true here without more complex state management across initializations.
+           // Let's assume if the app object exists, persistence was previously attempted.
+           // The 'persistenceEnabled' flag primarily informs other parts of the app if the *attempt* to enable was made.
+           console.log("CLIENT_SIDE: Retrieved existing Firebase services successfully.");
         } catch (error: any) {
-            console.error("Error getting Firebase services from existing app:", error);
-            firebaseInitializationError = new Error(`Failed to get services from existing Firebase app: ${error.message}`);
+            const serviceRetrievalErrorMessage = `Failed to get services (Auth, DB, Storage) from existing Firebase app: ${error.message}. This can happen if the app instance is corrupted or not fully initialized.`;
+            console.error("CLIENT_SIDE: Error getting Firebase services from existing app:", serviceRetrievalErrorMessage, error);
+            firebaseInitializationError = new Error(serviceRetrievalErrorMessage);
+            // Nullify services to reflect the error state
             app = null; db = null; auth = null; storage = null;
             persistenceEnabled = false;
         }
     }
 } else {
-    console.log("Not on client, Firebase initialization skipped for now (will run on client).");
+    console.log("SERVER_SIDE: Firebase initialization skipped (will run on client).");
 }
 
-console.log("Firebase config.ts final state:");
+console.log("Firebase config.ts final state check:");
 console.log("  App initialized:", !!app);
 console.log("  Auth service:", !!auth);
 console.log("  Firestore service:", !!db);
 console.log("  Storage service:", !!storage);
-console.log("  Initialization Error:", firebaseInitializationError ? firebaseInitializationError.message : "No");
-console.log("  Persistence Enabled Flag:", persistenceEnabled);
+console.log("  Initialization Error:", firebaseInitializationError ? firebaseInitializationError.message : "No explicit error");
+console.log("  Persistence Enabled Attempted/Successful (Flag):", persistenceEnabled);
 
 
 // Function to check initialization status and throw if failed
 function ensureFirebaseInitialized() {
     if (firebaseInitializationError) {
-        throw new Error(`Firebase failed to initialize. Check console logs and your .env file. Original error: ${firebaseInitializationError.message}`);
+        console.error("ensureFirebaseInitialized check failed due to firebaseInitializationError:", firebaseInitializationError.message);
+        throw new Error(`Firebase critical initialization failure. Check console logs and your .env file. Original error: ${firebaseInitializationError.message}`);
     }
     if (!app || !db || !auth || !storage) {
-         throw new Error("Firebase services (app, db, auth, storage) are not available. Initialization may have failed or was skipped on the server, or encountered an issue on the client.");
+        const missingServices = [
+            !app ? "app" : null,
+            !db ? "db" : null,
+            !auth ? "auth" : null,
+            !storage ? "storage" : null,
+        ].filter(Boolean).join(', ');
+         const serviceErrorMessage = `Firebase services (${missingServices}) are not available. Initialization may have failed, been skipped on the server, or encountered an issue on the client.`;
+         console.error("ensureFirebaseInitialized check failed:", serviceErrorMessage);
+         throw new Error(serviceErrorMessage);
     }
 }
 
 
 export { app, db, auth, storage, firebaseInitializationError, ensureFirebaseInitialized, persistenceEnabled };
+

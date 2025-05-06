@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -39,7 +38,7 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
 // Define the prompt for the AI tutor
 const prompt = ai.definePrompt({
   name: 'aiTutorPrompt',
-  model: gemini15Flash, // Specify the model to use
+  model: gemini15Flash, // Specify the model to use for this prompt
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `You are NexusLearn AI, a helpful and knowledgeable AI tutor designed to assist students. Your goal is to provide clear explanations, answer questions accurately, and help students understand complex concepts across various subjects. Engage in a supportive and encouraging conversation.
@@ -52,7 +51,6 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
-  // Add customize function to configure Handlebars and disable knownHelpersOnly
   customize: (promptObject) => {
     // Ensure handlebarsOptions exists before modifying
     if (!promptObject.handlebarsOptions) {
@@ -65,7 +63,7 @@ AI Tutor Response:`,
     // Merge local helpers with globally registered ones or add custom ones if needed.
     // Define 'eq' locally to ensure it's available even if not globally registered
     promptObject.handlebarsOptions.helpers = {
-        ...(promptObject.handlebarsOptions.helpers || {}),
+        ...(promptObject.handlebarsOptions.helpers || {}), // Preserve existing helpers
         eq: (a: any, b: any) => a === b, // Ensure eq helper is defined here
     };
     // Explicitly set knownHelpersOnly to false to allow custom/global helpers
@@ -81,6 +79,10 @@ const aiTutorFlow = ai.defineFlow(
     name: 'aiTutorFlow',
     inputSchema: AiTutorInputSchema,
     outputSchema: AiTutorOutputSchema,
+    // It's good practice to also specify the model at the flow level if it's consistent
+    // or if the flow might directly use `ai.generate` without a pre-defined prompt.
+    // However, if the prompt already specifies a model, that will be used for that prompt.
+    // model: gemini15Flash, 
   },
   async (input) => {
     // If history is empty, provide a default greeting or prompt
