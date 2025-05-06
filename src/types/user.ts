@@ -1,3 +1,5 @@
+import type { Timestamp } from 'firebase/firestore';
+
 export interface UserProfile {
   uid: string; // Firebase Auth UID
   name: string;
@@ -5,8 +7,8 @@ export interface UserProfile {
   avatarUrl?: string;
   schoolBoard?: string; // e.g., 'cbse', 'icse'
   grade?: string; // e.g., '10', '12'
-  joinDate?: Date | string; // Store as Timestamp in Firestore, handle conversion
-  lastLogin?: Date | string; // Store as Timestamp
+  joinDate?: Timestamp | Date | string; // Store as Timestamp in Firestore, handle conversion
+  lastLogin?: Timestamp | Date | string; // Store as Timestamp
   // User preferences (can be expanded)
   preferences?: {
     darkMode?: boolean;
@@ -20,7 +22,7 @@ export interface SubjectMastery {
   subjectId: string; // e.g., 'math', 'physics'
   subjectName: string; // e.g., 'Mathematics', 'Physics'
   progress: number; // Percentage (0-100)
-  lastUpdated: Date | string;
+  lastUpdated: Timestamp | Date | string;
 }
 
 export interface HomeworkAssignment {
@@ -29,7 +31,7 @@ export interface HomeworkAssignment {
     subjectName: string;
     title: string;
     description?: string;
-    dueDate: Date | string; // Store as Timestamp
+    dueDate: Timestamp | Date | string; // Store as Timestamp
     completed: boolean;
     score?: number; // Optional score
 }
@@ -39,7 +41,7 @@ export interface ExamSchedule {
     subjectId: string;
     subjectName: string;
     title: string; // e.g., 'Midterm Exam'
-    date: Date | string; // Store as Timestamp
+    date: Timestamp | Date | string; // Store as Timestamp
     topics?: string[]; // Optional list of topics
 }
 
@@ -51,24 +53,27 @@ export interface StudyRecommendation {
     title: string; // e.g., 'Review Newton\'s Laws'
     reason: string; // e.g., 'Low score on last quiz'
     priority: 'high' | 'medium' | 'low';
-    generatedDate: Date | string;
+    generatedDate: Timestamp | Date | string;
 }
 
+// Represents a single question within a quiz, consistent with Genkit Flow output
 export interface QuizQuestion {
     question: string;
     type: 'multiple-choice' | 'fill-in-the-blanks' | 'true/false' | 'short-answer';
-    answers?: string[];
+    answers?: string[]; // Options for multiple-choice
     correctAnswer: string;
+    // subjectId?: string; // Optional: If flow can provide subject context
 }
 
+// Represents the result of a completed quiz attempt saved in Firestore
 export interface QuizResult {
     quizId: string; // Unique ID for this quiz instance
-    generatedDate: Date | string;
-    sourceContent?: string; // Optional: snippet of the source text
-    questions: QuizQuestion[];
-    userAnswers: (string | undefined)[];
-    score: number;
-    totalQuestions: number;
+    generatedDate: Timestamp | Date | string; // Use Firestore Timestamp for reliable sorting/querying
+    sourceContent?: string; // Optional: snippet of the source text for context
+    questions: QuizQuestion[]; // Array of the questions in the quiz
+    userAnswers: (string | undefined)[]; // User's answers corresponding to questions array
+    score: number; // Number of correct answers
+    totalQuestions: number; // Total number of questions
 }
 
 export interface StudyPlannerEntry {
@@ -83,13 +88,14 @@ export interface StudyPlannerEntry {
     notes?: string; // Optional notes
 }
 
+// Represents the main progress document for a user in Firestore
 export interface UserProgress {
   uid: string; // Corresponds to UserProfile uid
   subjectMastery: SubjectMastery[];
   upcomingHomework: HomeworkAssignment[];
   upcomingExams: ExamSchedule[];
   studyRecommendations: StudyRecommendation[];
-  quizHistory?: QuizResult[]; // Add quiz history
-  studyPlanner?: StudyPlannerEntry[]; // Add study planner entries
-  lastUpdated: Date | string;
+  quizHistory?: QuizResult[]; // Array to store past quiz results
+  studyPlanner?: StudyPlannerEntry[]; // Array to store study plan entries
+  lastUpdated: Timestamp | Date | string; // Store as Timestamp
 }
