@@ -30,7 +30,7 @@ type DifficultyLevel = 'easy' | 'medium' | 'hard'; // Define difficulty type
 
 export default function QuizGenerationPage() {
   const [textbookContent, setTextbookContent] = useState('');
-  const [questionCount, setQuestionCount] = useState(5);
+  const [questionCount, setQuestionCount] = useState<number>(5); // Ensure state is number
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium'); // State for difficulty
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
@@ -49,6 +49,16 @@ export default function QuizGenerationPage() {
       });
       return;
     }
+    // Ensure questionCount is valid before proceeding
+     if (isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
+       toast({
+         title: "Invalid Input",
+         description: "Please enter a valid number of questions between 1 and 20.",
+         variant: "destructive",
+       });
+       return;
+     }
+
 
     setIsLoading(true);
     setQuizData(null);
@@ -187,6 +197,22 @@ export default function QuizGenerationPage() {
     }, 0);
   };
 
+  const handleQuestionCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+       const value = e.target.value;
+       const num = parseInt(value, 10);
+       // Update state only if it's a valid number within the range, or if empty (to allow clearing)
+       if (value === '' || (!isNaN(num) && num >= 1 && num <= 20)) {
+           setQuestionCount(isNaN(num) ? 0 : num); // Store as number, handle empty string as 0 or another default
+       } else if (!isNaN(num) && num > 20) {
+            setQuestionCount(20); // Cap at max
+       } else if (!isNaN(num) && num < 1) {
+            setQuestionCount(1); // Floor at min
+       }
+       // If the input was invalid and resulted in NaN, `num` will be NaN, and `questionCount` won't update,
+       // keeping the previous valid number.
+  };
+
+
   const currentQuestion = quizData?.quiz[quizState?.questionIndex ?? 0];
   const score = quizState?.submitted ? calculateScore() : null;
 
@@ -227,8 +253,9 @@ export default function QuizGenerationPage() {
                      type="number"
                      min="1"
                      max="20"
-                     value={questionCount}
-                     onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
+                     // Pass the string representation of the number, or empty string if 0/invalid
+                     value={questionCount > 0 ? String(questionCount) : ''}
+                     onChange={handleQuestionCountChange} // Use the new handler
                      disabled={isLoading || !!quizState} // Disable if loading or quiz is active
                      required
                      className="mt-1 w-full"
