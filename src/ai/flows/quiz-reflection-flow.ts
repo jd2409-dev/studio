@@ -84,7 +84,7 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
       }
       promptObject.handlebarsOptions.helpers = {
           ...(promptObject.handlebarsOptions.helpers || {}), // Merge with existing helpers if any
-          sum: (a: number, b: number) => a + b, // Renamed helper from 'add' to 'sum'
+          sum: (a: number, b: number) => a + b, // Helper to add 1 to index for display
           join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
           isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
               if (userAnswer === undefined || userAnswer === null) return false;
