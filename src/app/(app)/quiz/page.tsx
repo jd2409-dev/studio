@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type FormEvent } from 'react';
@@ -10,12 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Wand2, Check, X } from 'lucide-react';
 import { generateQuiz, type GenerateQuizInput, type GenerateQuizOutput } from '@/ai/flows/quiz-generation';
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { db, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import db and helper
+import { doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore'; // Import Firestore functions
+import type { QuizResult, QuizQuestion } from '@/types/user'; // Import QuizResult type
 import { cn } from '@/lib/utils';
 
 type QuizState = {
+    quizId: string; // Unique ID for this quiz instance
     questionIndex: number;
     selectedAnswers: (string | undefined)[];
     submitted: boolean;
+    startTime: number; // Timestamp when quiz started
 };
 
 export default function QuizGenerationPage() {
@@ -24,7 +31,9 @@ export default function QuizGenerationPage() {
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // State for submission process
   const { toast } = useToast();
+  const { user } = useAuth(); // Get user
 
   const handleGenerateQuiz = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,11 +53,22 @@ export default function QuizGenerationPage() {
     try {
       const input: GenerateQuizInput = { textbookContent, questionCount };
       const result = await generateQuiz(input);
-      setQuizData(result);
+
+      // Add subjectId to each question if possible (needs flow update)
+      // For now, we'll assume it's not available from the flow
+       const questionsWithPossibleSubject = result.quiz.map(q => ({
+          ...q,
+          // subjectId: q.subjectId || 'unknown' // Add this if flow provides it
+       }));
+
+
+      setQuizData({ quiz: questionsWithPossibleSubject });
       setQuizState({
+        quizId: `quiz-${Date.now()}-${user?.uid || 'anon'}`, // Generate unique ID
         questionIndex: 0,
         selectedAnswers: new Array(result.quiz.length).fill(undefined),
         submitted: false,
+        startTime: Date.now(),
       });
       toast({
         title: "Success",
@@ -95,16 +115,54 @@ export default function QuizGenerationPage() {
     }
   };
 
-  const handleSubmitQuiz = () => {
-      if (!quizState) return;
+  const handleSubmitQuiz = async () => {
+      if (!quizState || !quizData || !user) {
+          toast({ title: "Error", description: "Cannot submit quiz. User not logged in or quiz data missing.", variant: "destructive" });
+          return;
+      }
       // Check if all questions are answered
       const allAnswered = quizState.selectedAnswers.every(answer => answer !== undefined && answer !== '');
       if(!allAnswered && !window.confirm("You haven't answered all questions. Submit anyway?")) {
           return;
       }
-      setQuizState({ ...quizState, submitted: true });
-      toast({ title: "Quiz Submitted", description: "Check your results below." });
+
+      setIsSubmitting(true); // Indicate submission process start
+
+      const finalScore = calculateScore();
+      const quizResult: QuizResult = {
+          quizId: quizState.quizId,
+          generatedDate: Timestamp.now(), // Use Firestore Timestamp
+          sourceContent: textbookContent.substring(0, 500) + (textbookContent.length > 500 ? '...' : ''), // Store snippet
+          questions: quizData.quiz, // Assuming QuizQuestion type aligns
+          userAnswers: quizState.selectedAnswers,
+          score: finalScore,
+          totalQuestions: quizData.quiz.length,
+      };
+
+      try {
+          ensureFirebaseInitialized();
+          const progressDocRef = doc(db!, 'userProgress', user.uid);
+          await updateDoc(progressDocRef, {
+              quizHistory: arrayUnion(quizResult) // Add result to history array
+          }, { merge: true }); // Create quizHistory field if it doesn't exist
+
+          setQuizState({ ...quizState, submitted: true });
+          toast({ title: "Quiz Submitted", description: `Your score: ${finalScore} / ${quizData.quiz.length}. Results saved.` });
+
+      } catch (error: any) {
+          console.error("Error saving quiz result:", error);
+          let errorDesc = "Could not save quiz results.";
+            if (error.code === 'permission-denied') {
+                errorDesc = "Permission denied. Check Firestore rules.";
+            }
+          toast({ title: "Submission Error", description: errorDesc, variant: "destructive" });
+           // Still mark as submitted locally even if save fails, to show score
+           setQuizState({ ...quizState, submitted: true });
+      } finally {
+          setIsSubmitting(false); // Indicate submission process end
+      }
   };
+
 
   const calculateScore = () => {
     if (!quizData || !quizState) return 0;
@@ -126,7 +184,7 @@ export default function QuizGenerationPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">AI Quiz Generation</h1>
       <p className="text-muted-foreground mb-8">
-        Paste content from your textbook, choose the number of questions, and generate an interactive quiz with AI feedback.
+        Paste content from your textbook, choose the number of questions, and generate an interactive quiz. Results are saved to your profile.
       </p>
 
       <div className="grid md:grid-cols-2 gap-8">
@@ -146,7 +204,7 @@ export default function QuizGenerationPage() {
                   value={textbookContent}
                   onChange={(e) => setTextbookContent(e.target.value)}
                   rows={10}
-                  disabled={isLoading}
+                  disabled={isLoading || !!quizState} // Disable if loading or quiz is active
                   required
                   className="mt-1"
                 />
@@ -160,19 +218,21 @@ export default function QuizGenerationPage() {
                   max="20"
                   value={questionCount}
                   onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
-                  disabled={isLoading}
+                  disabled={isLoading || !!quizState} // Disable if loading or quiz is active
                   required
                   className="mt-1 w-24"
                 />
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || !!quizState}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Generating...
                   </>
+                ) : !!quizState ? (
+                     'Quiz Active' // Indicate quiz is in progress
                 ) : (
                   <>
                     <Wand2 className="mr-2 h-4 w-4" /> Generate Quiz
@@ -192,11 +252,14 @@ export default function QuizGenerationPage() {
                  Quiz Finished! Your Score: <span className="font-bold text-primary">{score} / {quizData.quiz.length}</span>
                </CardDescription>
              )}
-             {!quizState?.submitted && quizData && (
+             {!quizState?.submitted && quizData && quizState && (
                 <CardDescription>Answer the questions below. Question {quizState.questionIndex + 1} of {quizData.quiz.length}.</CardDescription>
              )}
               {!quizData && !isLoading && (
                  <CardDescription>Generate a quiz to start.</CardDescription>
+              )}
+              {isLoading && (
+                  <CardDescription>Generating quiz...</CardDescription>
               )}
           </CardHeader>
           <CardContent className="min-h-[300px] flex flex-col justify-between">
@@ -213,16 +276,16 @@ export default function QuizGenerationPage() {
                     <RadioGroup
                       value={quizState.selectedAnswers[quizState.questionIndex]}
                       onValueChange={handleAnswerChange}
-                      disabled={quizState.submitted}
+                      disabled={quizState.submitted || isSubmitting}
                     >
                       {currentQuestion.answers.map((answer, idx) => (
                         <div key={idx} className={cn(
-                            "flex items-center space-x-2 p-2 rounded-md border border-transparent",
+                            "flex items-center space-x-2 p-2 rounded-md border border-transparent transition-colors",
                             quizState.submitted && answer === currentQuestion.correctAnswer && "bg-green-100 border-green-300 dark:bg-green-900 dark:border-green-700",
                             quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && answer !== currentQuestion.correctAnswer && "bg-red-100 border-red-300 dark:bg-red-900 dark:border-red-700"
                         )}>
                           <RadioGroupItem value={answer} id={`q${quizState.questionIndex}-a${idx}`} />
-                          <Label htmlFor={`q${quizState.questionIndex}-a${idx}`}>{answer}</Label>
+                          <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer">{answer}</Label>
                            {quizState.submitted && answer === currentQuestion.correctAnswer && <Check className="h-4 w-4 text-green-600 dark:text-green-400 ml-auto" />}
                            {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && answer !== currentQuestion.correctAnswer && <X className="h-4 w-4 text-red-600 dark:text-red-400 ml-auto" />}
                         </div>
@@ -233,16 +296,16 @@ export default function QuizGenerationPage() {
                      <RadioGroup
                         value={quizState.selectedAnswers[quizState.questionIndex]}
                         onValueChange={handleAnswerChange}
-                        disabled={quizState.submitted}
+                        disabled={quizState.submitted || isSubmitting}
                       >
                        {['True', 'False'].map((answer, idx) => (
                            <div key={idx} className={cn(
-                               "flex items-center space-x-2 p-2 rounded-md border border-transparent",
+                               "flex items-center space-x-2 p-2 rounded-md border border-transparent transition-colors",
                                quizState.submitted && answer === currentQuestion.correctAnswer && "bg-green-100 border-green-300 dark:bg-green-900 dark:border-green-700",
                                quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && answer !== currentQuestion.correctAnswer && "bg-red-100 border-red-300 dark:bg-red-900 dark:border-red-700"
                            )}>
                              <RadioGroupItem value={answer} id={`q${quizState.questionIndex}-a${idx}`} />
-                             <Label htmlFor={`q${quizState.questionIndex}-a${idx}`}>{answer}</Label>
+                             <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer">{answer}</Label>
                               {quizState.submitted && answer === currentQuestion.correctAnswer && <Check className="h-4 w-4 text-green-600 dark:text-green-400 ml-auto" />}
                            {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && answer !== currentQuestion.correctAnswer && <X className="h-4 w-4 text-red-600 dark:text-red-400 ml-auto" />}
                            </div>
@@ -256,7 +319,7 @@ export default function QuizGenerationPage() {
                            placeholder="Your answer here..."
                            value={quizState.selectedAnswers[quizState.questionIndex] || ''}
                            onChange={handleShortAnswerChange}
-                           disabled={quizState.submitted}
+                           disabled={quizState.submitted || isSubmitting}
                            className={cn(
                                quizState.submitted && (quizState.selectedAnswers[quizState.questionIndex]?.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase() ? "border-green-500 focus-visible:ring-green-500" : "border-red-500 focus-visible:ring-red-500")
                            )}
@@ -275,26 +338,28 @@ export default function QuizGenerationPage() {
                 </div>
 
                 {/* Navigation/Submit Buttons */}
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={handlePreviousQuestion}
-                    disabled={quizState.questionIndex === 0}
-                  >
-                    Previous
-                  </Button>
-                  {quizState.questionIndex === quizData.quiz.length - 1 ? (
-                     <Button
-                       onClick={handleSubmitQuiz}
-                       disabled={quizState.submitted}
-                       variant={quizState.submitted ? "secondary" : "default"}
-                     >
-                       {quizState.submitted ? "Quiz Submitted" : "Submit Quiz"}
-                     </Button>
-                   ) : (
-                     <Button onClick={handleNextQuestion}>Next</Button>
-                   )}
-                </div>
+                 {!quizState.submitted && (
+                     <div className="flex justify-between items-center pt-4 border-t mt-6">
+                       <Button
+                         variant="outline"
+                         onClick={handlePreviousQuestion}
+                         disabled={quizState.questionIndex === 0 || isSubmitting}
+                       >
+                         Previous
+                       </Button>
+                       {quizState.questionIndex === quizData.quiz.length - 1 ? (
+                          <Button
+                            onClick={handleSubmitQuiz}
+                            disabled={isSubmitting}
+                          >
+                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                             Submit Quiz
+                          </Button>
+                        ) : (
+                          <Button onClick={handleNextQuestion} disabled={isSubmitting}>Next</Button>
+                        )}
+                     </div>
+                 )}
               </div>
             ) : (
               !isLoading && <p className="text-muted-foreground text-center h-full flex items-center justify-center">Generate a quiz using the panel on the left.</p>
@@ -302,7 +367,7 @@ export default function QuizGenerationPage() {
           </CardContent>
            <CardFooter>
                {quizData && (
-                  <Button variant="outline" size="sm" onClick={() => {setQuizData(null); setQuizState(null); setTextbookContent('')}}>
+                  <Button variant="outline" size="sm" onClick={() => {setQuizData(null); setQuizState(null); setTextbookContent(''); setQuestionCount(5);}} disabled={isLoading}>
                       Start New Quiz
                   </Button>
                )}

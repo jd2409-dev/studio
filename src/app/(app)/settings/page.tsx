@@ -2,75 +2,142 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getSchoolBoards, type SchoolBoard } from '@/services/school-board';
+import { useAuth } from '@/context/AuthContext';
+import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import type { UserProfile } from '@/types/user';
+import { Loader2 } from 'lucide-react';
+
+type SettingsPreferences = NonNullable<UserProfile['preferences']>;
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
 
-  // State for settings
-  const [darkMode, setDarkMode] = useState(false);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(false);
-  const [selectedBoard, setSelectedBoard] = useState<string | undefined>(undefined);
-  const [selectedGrade, setSelectedGrade] = useState<string | undefined>(undefined);
-  const [voiceCommands, setVoiceCommands] = useState(false);
-  const [schoolBoards, setSchoolBoards] = useState<SchoolBoard[]>([]);
-  const [isLoadingBoards, setIsLoadingBoards] = useState(true);
+  // State for settings - Initialize with defaults
+   const [preferences, setPreferences] = useState<SettingsPreferences>({
+      darkMode: false,
+      emailNotifications: true,
+      pushNotifications: false,
+      voiceCommands: false,
+   });
+   const [isLoading, setIsLoading] = useState(true);
+   const [isSaving, setIsSaving] = useState(false);
 
 
-  // Fetch school boards on mount
+  // Fetch user profile data (including preferences) on mount
   useEffect(() => {
-    const fetchBoards = async () => {
-      setIsLoadingBoards(true);
-      try {
-        const boards = await getSchoolBoards();
-        setSchoolBoards(boards);
-         // Simulate loading user preferences - replace with actual fetch
-         await new Promise(resolve => setTimeout(resolve, 500));
-         // Set default/loaded values (example)
-         setSelectedBoard('cbse');
-         setSelectedGrade('10');
-         // Check system/saved theme preference
-         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-             setDarkMode(true);
+    if (user) {
+      const fetchPreferences = async () => {
+        setIsLoading(true);
+        ensureFirebaseInitialized();
+        const userDocRef = doc(db!, 'users', user.uid);
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            const profile = docSnap.data() as UserProfile;
+             // Merge fetched preferences with defaults
+             setPreferences(prev => ({ ...prev, ...profile.preferences }));
+             // Apply dark mode immediately if loaded
+             if (profile.preferences?.darkMode) {
+                document.documentElement.classList.add('dark');
+             } else {
+                 // Check system preference if no saved preference
+                 const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                 if(systemPrefersDark) {
+                    document.documentElement.classList.add('dark');
+                    // Update state to reflect system pref if no user pref
+                     setPreferences(prev => ({ ...prev, darkMode: true }));
+                 } else {
+                    document.documentElement.classList.remove('dark');
+                 }
+             }
+          } else {
+             // User profile doc doesn't exist, use defaults
+             console.log("User profile not found, using default settings.");
+              // Apply system dark mode preference initially
+              const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              if(systemPrefersDark) {
+                 document.documentElement.classList.add('dark');
+                  setPreferences(prev => ({ ...prev, darkMode: true }));
+              }
+          }
+        } catch (error) {
+          console.error("Failed to fetch user preferences:", error);
+          toast({ title: "Error", description: "Could not load settings.", variant: "destructive" });
+           // Apply system dark mode preference on error too
+           const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+             if(systemPrefersDark) {
+                document.documentElement.classList.add('dark');
+                 setPreferences(prev => ({ ...prev, darkMode: true }));
+             }
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchPreferences();
+    } else if (!authLoading) {
+         setIsLoading(false); // Stop loading if user is null
+         // Apply system dark mode preference if not logged in
+         const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if(systemPrefersDark) {
              document.documentElement.classList.add('dark');
-         }
-
-      } catch (error) {
-        console.error("Failed to fetch school boards:", error);
-        toast({ title: "Error", description: "Could not load school boards.", variant: "destructive" });
-      } finally {
-        setIsLoadingBoards(false);
-      }
-    };
-    fetchBoards();
-  }, [toast]);
-
-
-  // Handlers for settings changes
-  const handleSettingChange = (settingName: string, value: any) => {
-    // In a real app, you would save this preference to user settings (e.g., database or localStorage)
-    console.log(`Setting ${settingName} changed to:`, value);
-    toast({
-      title: "Settings Updated",
-      description: `${settingName} preference saved (simulation).`,
-    });
-
-    // Handle dark mode specifically
-    if (settingName === 'Dark Mode') {
-       setDarkMode(value);
-       if (value) {
-          document.documentElement.classList.add('dark');
-       } else {
-           document.documentElement.classList.remove('dark');
-       }
+             // No need to set state as it won't be saved
+          }
     }
+  }, [user, authLoading, toast]);
+
+
+  const handleSettingChange = (settingKey: keyof SettingsPreferences, value: boolean) => {
+      setPreferences(prev => ({ ...prev, [settingKey]: value }));
+
+      // Handle dark mode specifically for immediate UI update
+      if (settingKey === 'darkMode') {
+          if (value) {
+              document.documentElement.classList.add('dark');
+          } else {
+              document.documentElement.classList.remove('dark');
+          }
+      }
   };
+
+  const handleSaveChanges = async () => {
+      if (!user) {
+          toast({ title: "Error", description: "You must be logged in to save settings.", variant: "destructive" });
+          return;
+      }
+      setIsSaving(true);
+      ensureFirebaseInitialized();
+      const userDocRef = doc(db!, 'users', user.uid);
+      try {
+         // Use setDoc with merge: true to create or update the preferences field
+         await setDoc(userDocRef, { preferences }, { merge: true });
+         toast({ title: "Settings Saved", description: "Your preferences have been updated." });
+      } catch (error: any) {
+          console.error("Error saving settings:", error);
+          let errorDesc = "Could not save settings.";
+         if (error.code === 'permission-denied') {
+             errorDesc = "Permission denied. Check Firestore rules.";
+         }
+          toast({ title: "Save Failed", description: errorDesc, variant: "destructive" });
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+
+  if (authLoading || isLoading) {
+     return (
+        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+     );
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -79,7 +146,7 @@ export default function SettingsPage() {
         Manage your account preferences and application settings.
       </p>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
           <Card>
               <CardHeader>
                   <CardTitle>Appearance</CardTitle>
@@ -87,11 +154,17 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                    <div className="flex items-center justify-between">
-                       <Label htmlFor="dark-mode">Dark Mode</Label>
+                       <Label htmlFor="dark-mode" className="flex flex-col space-y-1">
+                           <span>Dark Mode</span>
+                           <span className="font-normal leading-snug text-muted-foreground">
+                                Adjust the application theme.
+                           </span>
+                        </Label>
                        <Switch
                           id="dark-mode"
-                          checked={darkMode}
-                          onCheckedChange={(checked) => handleSettingChange('Dark Mode', checked)}
+                          checked={preferences.darkMode}
+                          onCheckedChange={(checked) => handleSettingChange('darkMode', checked)}
+                          disabled={isSaving}
                         />
                    </div>
                    {/* Add more appearance settings here */}
@@ -105,101 +178,68 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                    <div className="flex items-center justify-between">
-                       <Label htmlFor="email-notifications">Email Notifications</Label>
+                        <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
+                           <span>Email Notifications</span>
+                           <span className="font-normal leading-snug text-muted-foreground">
+                                Receive important updates via email.
+                           </span>
+                        </Label>
                        <Switch
                           id="email-notifications"
-                          checked={emailNotifications}
-                          onCheckedChange={(checked) => {
-                            setEmailNotifications(checked);
-                            handleSettingChange('Email Notifications', checked);
-                          }}
+                          checked={preferences.emailNotifications}
+                          onCheckedChange={(checked) => handleSettingChange('emailNotifications', checked)}
+                          disabled={isSaving}
                         />
                    </div>
                    <div className="flex items-center justify-between">
-                       <Label htmlFor="push-notifications">Push Notifications</Label>
+                        <Label htmlFor="push-notifications" className="flex flex-col space-y-1">
+                           <span>Push Notifications</span>
+                           <span className="font-normal leading-snug text-muted-foreground">
+                                Get real-time alerts on your device (requires setup).
+                           </span>
+                        </Label>
                        <Switch
                            id="push-notifications"
-                           checked={pushNotifications}
-                           onCheckedChange={(checked) => {
-                               setPushNotifications(checked);
-                               handleSettingChange('Push Notifications', checked)
-                           }}
+                           checked={preferences.pushNotifications}
+                           onCheckedChange={(checked) => handleSettingChange('pushNotifications', checked)}
+                           disabled={isSaving}
                         />
                    </div>
                     {/* Add more notification settings here */}
               </CardContent>
           </Card>
 
-          <Card>
-              <CardHeader>
-                  <CardTitle>Learning Preferences</CardTitle>
-                  <CardDescription>Set your preferred school board and grade.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                   <div>
-                       <Label htmlFor="school-board">School Board</Label>
-                       <Select
-                         value={selectedBoard}
-                         onValueChange={(value) => {
-                             setSelectedBoard(value);
-                             handleSettingChange('School Board', value);
-                         }}
-                         disabled={isLoadingBoards}
-                       >
-                           <SelectTrigger id="school-board">
-                               <SelectValue placeholder={isLoadingBoards ? "Loading boards..." : "Select board..."} />
-                           </SelectTrigger>
-                           <SelectContent>
-                                {schoolBoards.map(board => (
-                                    <SelectItem key={board.id} value={board.id}>{board.name}</SelectItem>
-                                ))}
-                                <SelectItem value="state">State Board</SelectItem> {/* Example fallback */}
-                           </SelectContent>
-                       </Select>
-                   </div>
-                    <div>
-                       <Label htmlFor="grade-level">Grade Level</Label>
-                       <Select
-                           value={selectedGrade}
-                           onValueChange={(value) => {
-                               setSelectedGrade(value);
-                               handleSettingChange('Grade Level', value);
-                            }}
-                       >
-                           <SelectTrigger id="grade-level">
-                               <SelectValue placeholder="Select grade..." />
-                           </SelectTrigger>
-                           <SelectContent>
-                               {[...Array(12)].map((_, i) => (
-                                   <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
-                               ))}
-                           </SelectContent>
-                       </Select>
-                   </div>
-              </CardContent>
-          </Card>
-
-           <Card>
+           <Card className="md:col-span-2">
               <CardHeader>
                   <CardTitle>Accessibility</CardTitle>
                   <CardDescription>Configure accessibility options.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                    <div className="flex items-center justify-between">
-                       <Label htmlFor="voice-commands">Enable Voice Commands</Label>
+                        <Label htmlFor="voice-commands" className="flex flex-col space-y-1">
+                           <span>Voice Commands</span>
+                           <span className="font-normal leading-snug text-muted-foreground">
+                                Enable voice interactions (experimental).
+                           </span>
+                        </Label>
                        <Switch
                           id="voice-commands"
-                          checked={voiceCommands}
-                          onCheckedChange={(checked) => {
-                              setVoiceCommands(checked);
-                              handleSettingChange('Voice Commands', checked);
-                          }}
+                          checked={preferences.voiceCommands}
+                          onCheckedChange={(checked) => handleSettingChange('voiceCommands', checked)}
+                          disabled={isSaving}
                        />
                    </div>
                    {/* Add font size, contrast settings etc. */}
               </CardContent>
           </Card>
       </div>
+
+       <div className="mt-8 flex justify-center">
+           <Button onClick={handleSaveChanges} disabled={isSaving || !user}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isSaving ? 'Saving...' : 'Save Preferences'}
+           </Button>
+       </div>
     </div>
   );
 }

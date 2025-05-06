@@ -7,6 +7,13 @@ export interface UserProfile {
   grade?: string; // e.g., '10', '12'
   joinDate?: Date | string; // Store as Timestamp in Firestore, handle conversion
   lastLogin?: Date | string; // Store as Timestamp
+  // User preferences (can be expanded)
+  preferences?: {
+    darkMode?: boolean;
+    emailNotifications?: boolean;
+    pushNotifications?: boolean;
+    voiceCommands?: boolean;
+  };
 }
 
 export interface SubjectMastery {
@@ -47,6 +54,34 @@ export interface StudyRecommendation {
     generatedDate: Date | string;
 }
 
+export interface QuizQuestion {
+    question: string;
+    type: 'multiple-choice' | 'fill-in-the-blanks' | 'true/false' | 'short-answer';
+    answers?: string[];
+    correctAnswer: string;
+}
+
+export interface QuizResult {
+    quizId: string; // Unique ID for this quiz instance
+    generatedDate: Date | string;
+    sourceContent?: string; // Optional: snippet of the source text
+    questions: QuizQuestion[];
+    userAnswers: (string | undefined)[];
+    score: number;
+    totalQuestions: number;
+}
+
+export interface StudyPlannerEntry {
+    id: string; // Unique ID for the entry
+    date: string; // Store as YYYY-MM-DD string for simplicity
+    subjectId?: string;
+    subjectName?: string;
+    task: string; // e.g., "Read Chapter 5", "Practice Algebra Problems"
+    startTime?: string; // e.g., "10:00" (Optional)
+    endTime?: string; // e.g., "11:30" (Optional)
+    completed: boolean;
+    notes?: string; // Optional notes
+}
 
 export interface UserProgress {
   uid: string; // Corresponds to UserProfile uid
@@ -54,5 +89,7 @@ export interface UserProgress {
   upcomingHomework: HomeworkAssignment[];
   upcomingExams: ExamSchedule[];
   studyRecommendations: StudyRecommendation[];
+  quizHistory?: QuizResult[]; // Add quiz history
+  studyPlanner?: StudyPlannerEntry[]; // Add study planner entries
   lastUpdated: Date | string;
 }
