@@ -75,7 +75,7 @@ export interface QuizResult {
     userAnswers: (string | undefined)[]; // User's answers corresponding to questions array
     score: number; // Number of correct answers
     totalQuestions: number; // Total number of questions
-    difficulty?: 'easy' | 'medium' | 'hard'; // Optional: Store the quiz difficulty
+    difficulty?: 'easy' | 'medium' | 'hard'; // Store the quiz difficulty
 }
 
 export interface StudyPlannerEntry {
@@ -101,5 +101,3 @@ export interface UserProgress {
   studyPlanner?: StudyPlannerEntry[]; // Array to store study plan entries
   lastUpdated: Timestamp | Date | string; // Store as Timestamp
 }
-
-    

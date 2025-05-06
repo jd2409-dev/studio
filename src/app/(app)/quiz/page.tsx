@@ -14,7 +14,7 @@ import { generateQuiz, type GenerateQuizInput, type GenerateQuizOutput } from '@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import db and helper
-import { doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore'; // Import Firestore functions
+import { doc, updateDoc, arrayUnion, Timestamp, setDoc, getDoc } from 'firebase/firestore'; // Import Firestore functions including setDoc and getDoc
 import type { QuizResult, QuizQuestion } from '@/types/user'; // Import QuizResult type
 import { cn } from '@/lib/utils';
 
@@ -49,8 +49,7 @@ export default function QuizGenerationPage() {
       });
       return;
     }
-    // Ensure questionCount is valid before proceeding
-     if (isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
+    if (isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
        toast({
          title: "Invalid Input",
          description: "Please enter a valid number of questions between 1 and 20.",
@@ -59,31 +58,23 @@ export default function QuizGenerationPage() {
        return;
      }
 
-
     setIsLoading(true);
     setQuizData(null);
     setQuizState(null);
 
     try {
-      // Include difficulty in the input
       const input: GenerateQuizInput = {
           textbookContent,
           questionCount,
-          difficulty // Add selected difficulty
+          difficulty
       };
       const result = await generateQuiz(input);
 
-      // Add subjectId to each question if possible (needs flow update)
-      // For now, we'll assume it's not available from the flow
-       const questionsWithPossibleSubject = result.quiz.map(q => ({
-          ...q,
-          // subjectId: q.subjectId || 'unknown' // Add this if flow provides it
-       }));
-
+      const questionsWithPossibleSubject = result.quiz.map(q => ({ ...q }));
 
       setQuizData({ quiz: questionsWithPossibleSubject });
       setQuizState({
-        quizId: `quiz-${Date.now()}-${user?.uid || 'anon'}`, // Generate unique ID
+        quizId: `quiz-${Date.now()}-${user?.uid || 'anon'}`,
         questionIndex: 0,
         selectedAnswers: new Array(result.quiz.length).fill(undefined),
         submitted: false,
@@ -95,9 +86,13 @@ export default function QuizGenerationPage() {
       });
     } catch (error) {
       console.error("Error generating quiz:", error);
+       let errorDesc = "Failed to generate quiz. Please try again.";
+       if (error instanceof Error && error.message) {
+           errorDesc = error.message;
+       }
       toast({
         title: "Error",
-        description: "Failed to generate quiz. Please try again.",
+        description: errorDesc,
         variant: "destructive",
       });
     } finally {
@@ -119,7 +114,6 @@ export default function QuizGenerationPage() {
      setQuizState({ ...quizState, selectedAnswers: newSelectedAnswers });
  };
 
-
   const handleNextQuestion = () => {
     if (!quizState || !quizData) return;
     if (quizState.questionIndex < quizData.quiz.length - 1) {
@@ -139,47 +133,69 @@ export default function QuizGenerationPage() {
           toast({ title: "Error", description: "Cannot submit quiz. User not logged in or quiz data missing.", variant: "destructive" });
           return;
       }
-      // Check if all questions are answered
       const allAnswered = quizState.selectedAnswers.every(answer => answer !== undefined && answer !== '');
       if(!allAnswered && !window.confirm("You haven't answered all questions. Submit anyway?")) {
           return;
       }
 
-      setIsSubmitting(true); // Indicate submission process start
+      setIsSubmitting(true);
 
       const finalScore = calculateScore();
       const quizResult: QuizResult = {
           quizId: quizState.quizId,
           generatedDate: Timestamp.now(), // Use Firestore Timestamp
-          sourceContent: textbookContent.substring(0, 500) + (textbookContent.length > 500 ? '...' : ''), // Store snippet
-          questions: quizData.quiz, // Assuming QuizQuestion type aligns
+          sourceContent: textbookContent.substring(0, 500) + (textbookContent.length > 500 ? '...' : ''),
+          questions: quizData.quiz,
           userAnswers: quizState.selectedAnswers,
           score: finalScore,
           totalQuestions: quizData.quiz.length,
-          difficulty: difficulty, // Store the difficulty level with the result
+          difficulty: difficulty, // Store the difficulty level
       };
 
       try {
           ensureFirebaseInitialized();
           const progressDocRef = doc(db!, 'userProgress', user.uid);
-          await updateDoc(progressDocRef, {
-              quizHistory: arrayUnion(quizResult) // Add result to history array
-          }, { merge: true }); // Create quizHistory field if it doesn't exist
+
+           // Check if the document exists before updating
+           const docSnap = await getDoc(progressDocRef);
+
+           if (docSnap.exists()) {
+               // Document exists, update the array
+               await updateDoc(progressDocRef, {
+                   quizHistory: arrayUnion(quizResult)
+               });
+           } else {
+               // Document doesn't exist, create it with the quizHistory array
+               await setDoc(progressDocRef, {
+                   uid: user.uid, // Make sure to include uid
+                   quizHistory: [quizResult],
+                   // Initialize other fields if necessary
+                   subjectMastery: [],
+                   upcomingHomework: [],
+                   upcomingExams: [],
+                   studyRecommendations: [],
+                   studyPlanner: [],
+                   lastUpdated: Timestamp.now(),
+               });
+               console.log("Created userProgress document and added first quiz result.");
+           }
+
 
           setQuizState({ ...quizState, submitted: true });
-          toast({ title: "Quiz Submitted", description: `Your score: ${finalScore} / ${quizData.quiz.length}. Results saved.` });
+          toast({ title: "Quiz Submitted", description: `Your score: ${finalScore} / ${quizData.quiz.length}. Results saved to Reflection.` });
 
       } catch (error: any) {
           console.error("Error saving quiz result:", error);
           let errorDesc = "Could not save quiz results.";
             if (error.code === 'permission-denied') {
                 errorDesc = "Permission denied. Check Firestore rules.";
+            } else if (error instanceof Error && error.message) {
+                 errorDesc = error.message;
             }
           toast({ title: "Submission Error", description: errorDesc, variant: "destructive" });
-           // Still mark as submitted locally even if save fails, to show score
            setQuizState({ ...quizState, submitted: true });
       } finally {
-          setIsSubmitting(false); // Indicate submission process end
+          setIsSubmitting(false);
       }
   };
 
@@ -188,11 +204,9 @@ export default function QuizGenerationPage() {
     if (!quizData || !quizState) return 0;
     return quizState.selectedAnswers.reduce((score, selectedAnswer, index) => {
         const question = quizData.quiz[index];
-        // Case-insensitive comparison for text-based answers
         const isCorrect = typeof selectedAnswer === 'string' && typeof question.correctAnswer === 'string'
             ? selectedAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
             : selectedAnswer === question.correctAnswer;
-
         return score + (isCorrect ? 1 : 0);
     }, 0);
   };
@@ -200,16 +214,13 @@ export default function QuizGenerationPage() {
   const handleQuestionCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
        const value = e.target.value;
        const num = parseInt(value, 10);
-       // Update state only if it's a valid number within the range, or if empty (to allow clearing)
        if (value === '' || (!isNaN(num) && num >= 1 && num <= 20)) {
-           setQuestionCount(isNaN(num) ? 0 : num); // Store as number, handle empty string as 0 or another default
+           setQuestionCount(isNaN(num) ? 0 : num);
        } else if (!isNaN(num) && num > 20) {
-            setQuestionCount(20); // Cap at max
+            setQuestionCount(20);
        } else if (!isNaN(num) && num < 1) {
-            setQuestionCount(1); // Floor at min
+            setQuestionCount(1);
        }
-       // If the input was invalid and resulted in NaN, `num` will be NaN, and `questionCount` won't update,
-       // keeping the previous valid number.
   };
 
 
@@ -220,7 +231,7 @@ export default function QuizGenerationPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">AI Quiz Generation</h1>
       <p className="text-muted-foreground mb-8">
-        Paste content from your textbook, choose settings, and generate an interactive quiz. Results are saved to your profile.
+        Paste content, choose settings, and generate a quiz. Results are saved for reflection.
       </p>
 
       <div className="grid md:grid-cols-2 gap-8">
@@ -228,7 +239,7 @@ export default function QuizGenerationPage() {
         <Card>
           <CardHeader>
             <CardTitle>Generate Quiz</CardTitle>
-            <CardDescription>Input textbook content and settings.</CardDescription>
+            <CardDescription>Input content and settings.</CardDescription>
           </CardHeader>
           <form onSubmit={handleGenerateQuiz}>
             <CardContent className="space-y-4">
@@ -240,7 +251,7 @@ export default function QuizGenerationPage() {
                   value={textbookContent}
                   onChange={(e) => setTextbookContent(e.target.value)}
                   rows={10}
-                  disabled={isLoading || !!quizState} // Disable if loading or quiz is active
+                  disabled={isLoading || !!quizState}
                   required
                   className="mt-1"
                 />
@@ -253,10 +264,9 @@ export default function QuizGenerationPage() {
                      type="number"
                      min="1"
                      max="20"
-                     // Pass the string representation of the number, or empty string if 0/invalid
                      value={questionCount > 0 ? String(questionCount) : ''}
-                     onChange={handleQuestionCountChange} // Use the new handler
-                     disabled={isLoading || !!quizState} // Disable if loading or quiz is active
+                     onChange={handleQuestionCountChange}
+                     disabled={isLoading || !!quizState}
                      required
                      className="mt-1 w-full"
                    />
@@ -283,16 +293,11 @@ export default function QuizGenerationPage() {
             <CardFooter>
               <Button type="submit" disabled={isLoading || !!quizState}>
                 {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
                 ) : !!quizState ? (
-                     'Quiz Active' // Indicate quiz is in progress
+                     'Quiz Active'
                 ) : (
-                  <>
-                    <Wand2 className="mr-2 h-4 w-4" /> Generate Quiz
-                  </>
+                  <><Wand2 className="mr-2 h-4 w-4" /> Generate Quiz</>
                 )}
               </Button>
             </CardFooter>
@@ -393,7 +398,6 @@ export default function QuizGenerationPage() {
                   )}
                 </div>
 
-                {/* Navigation/Submit Buttons */}
                  {!quizState.submitted && (
                      <div className="flex justify-between items-center pt-4 border-t mt-6">
                        <Button
@@ -433,5 +437,3 @@ export default function QuizGenerationPage() {
     </div>
   );
 }
-
-    
