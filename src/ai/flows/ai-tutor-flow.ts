@@ -52,7 +52,6 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
-  // Define custom Handlebars helpers and disable knownHelpersOnly
   customize: (promptObject) => {
     // Ensure handlebarsOptions exists before modifying
     if (!promptObject.handlebarsOptions) {
@@ -81,10 +80,6 @@ const aiTutorFlow = ai.defineFlow(
     name: 'aiTutorFlow',
     inputSchema: AiTutorInputSchema,
     outputSchema: AiTutorOutputSchema,
-    // It's good practice to also specify the model at the flow level if it's consistent
-    // or if the flow might directly use `ai.generate` without a pre-defined prompt.
-    // However, if the prompt already specifies a model, that will be used for that prompt.
-    // model: gemini15Flash, 
   },
   async (input) => {
     // If history is empty, provide a default greeting or prompt
@@ -102,3 +97,4 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
+
