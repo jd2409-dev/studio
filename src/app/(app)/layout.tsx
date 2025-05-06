@@ -144,8 +144,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
              </SidebarMenuItem>
-             {/* Removed Reflection Link */}
-             {/*
+             {/* Reflection Link */}
              <SidebarMenuItem>
                  <SidebarMenuButton asChild isActive={pathname === '/reflection'} tooltip="Reflection">
                     <Link href="/reflection">
@@ -154,7 +153,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     </Link>
                  </SidebarMenuButton>
              </SidebarMenuItem>
-             */}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -203,3 +201,4 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
