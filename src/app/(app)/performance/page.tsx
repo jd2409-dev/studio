@@ -329,22 +329,29 @@ export default function PerformancePage() {
            </CardContent>
          </Card>
 
-         {/* AI Recommendations (Placeholder) */}
+         {/* AI Recommendations */}
          <Card className="lg:col-span-3">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> AI-Powered Insights (Placeholder)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> AI-Powered Insights</CardTitle>
                 <CardDescription>Personalized recommendations based on your performance.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-               <div className="p-4 border rounded-md bg-muted/30">
-                  <p className="font-medium text-sm">Focus Area: Algebra</p>
-                  <p className="text-xs text-muted-foreground">Recent quiz scores suggest difficulty with quadratic equations. Try practicing more problems.</p>
-               </div>
-                <div className="p-4 border rounded-md bg-muted/30">
-                  <p className="font-medium text-sm">Strength: Physics Concepts</p>
-                  <p className="text-xs text-muted-foreground">You consistently score well on conceptual physics questions. Keep it up!</p>
-               </div>
-               {/* Add more dynamic recommendations here */}
+            <CardContent className="space-y-3 min-h-[100px]">
+               {/* Conditional rendering for insights */}
+               {quizHistoryData.length >= 3 ? ( // Example condition: Need at least 3 quizzes for insights
+                   <>
+                     <div className="p-4 border rounded-md bg-muted/30">
+                        <p className="font-medium text-sm">Focus Area: Algebra</p>
+                        <p className="text-xs text-muted-foreground">Recent quiz scores suggest difficulty with quadratic equations. Try practicing more problems.</p>
+                     </div>
+                      <div className="p-4 border rounded-md bg-muted/30">
+                        <p className="font-medium text-sm">Strength: Physics Concepts</p>
+                        <p className="text-xs text-muted-foreground">You consistently score well on conceptual physics questions. Keep it up!</p>
+                     </div>
+                     {/* Add more dynamic recommendations here based on actual analysis */}
+                  </>
+               ) : (
+                 <p className="text-center text-muted-foreground p-8">Not enough data to provide an insight.</p>
+               )}
             </CardContent>
          </Card>
 
