@@ -19,38 +19,37 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  // Store both initialization and auth state errors
-  const [error, setError] = useState<Error | null>(firebaseInitializationError);
+  const [error, setError] = useState<Error | null>(null); // Initialize error to null initially
 
   useEffect(() => {
-    // If Firebase already failed to initialize, we don't proceed with auth listener setup.
+    console.log("Auth Provider: useEffect triggered.");
+
+    // 1. Check for Firebase initialization error from config.ts
     if (firebaseInitializationError) {
-        console.warn("Auth Provider: Skipping Auth setup due to Firebase initialization error.");
-        setError(firebaseInitializationError); // Ensure the error state reflects the init error
+        console.error("Auth Provider: Firebase initialization failed. Error:", firebaseInitializationError.message);
+        setError(firebaseInitializationError);
         setLoading(false);
-        return;
+        return; // Stop further execution if Firebase itself failed to init
     }
 
-    // If firebaseInitializationError is null, but auth is still null, it's an unexpected state.
-    // This might happen if config.ts didn't run correctly on the client.
+    // 2. Check if `auth` object is available (it should be if firebaseInitializationError is null)
     if (!auth) {
-         const unexpectedError = new Error("Auth Provider: Firebase auth instance is unexpectedly null, but no specific initialization error was caught.");
+         const unexpectedError = new Error("Auth Provider: Firebase auth instance is unexpectedly null, despite no explicit initialization error. This indicates a problem with firebase/config.ts or its import.");
          console.error(unexpectedError.message);
          setError(unexpectedError);
          setLoading(false);
-         return;
+         return; // Stop further execution
     }
 
-    // Only subscribe if Firebase initialized correctly and auth exists
-    console.log("Auth Provider: Setting up Firebase Auth listener.");
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("Auth Provider: Auth state changed, user:", user ? user.uid : null);
-      setUser(user);
-      setError(null); // Clear previous errors on successful state change
-      setLoading(false); // Auth state determined
+    // 3. If Firebase initialized and `auth` object exists, set up the listener
+    console.log("Auth Provider: Firebase initialized and auth object exists. Setting up onAuthStateChanged listener.");
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("Auth Provider: onAuthStateChanged callback fired. User:", currentUser ? currentUser.uid : null);
+      setUser(currentUser);
+      setError(null); // Clear previous auth-specific errors on successful state change
+      setLoading(false);
     }, (authStateError) => {
-        // Handle errors during auth state listening specifically
-        console.error("Auth Provider: Firebase Auth state change error:", authStateError);
+        console.error("Auth Provider: Error in onAuthStateChanged listener:", authStateError);
         setError(authStateError);
         setUser(null);
         setLoading(false);
@@ -58,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Cleanup subscription on unmount
     return () => {
-        console.log("Auth Provider: Cleaning up Firebase Auth listener.");
+        console.log("Auth Provider: Cleaning up onAuthStateChanged listener.");
         unsubscribe();
     }
   }, []); // Run only once on mount
@@ -66,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Render loading state
    if (loading) {
+       console.log("Auth Provider: Rendering loading state.");
        return (
            <div className="flex items-center justify-center min-h-screen bg-background">
                <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -75,15 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Render error state if there was an initialization or auth subscription error
   if (error) {
-        const isInitError = error === firebaseInitializationError;
+        console.log("Auth Provider: Rendering error state. Error:", error.message);
+        const isInitError = error === firebaseInitializationError || error.message.includes("Firebase configuration contains placeholder");
         const title = isInitError ? "Application Configuration Error" : "Authentication Error";
         let description = isInitError
-            ? `Could not initialize Firebase services. Please ensure your Firebase project configuration is correct.`
+            ? `Could not initialize Firebase services. ${error.message}`
             : `Could not verify authentication status. Please try refreshing the page. (${error.message})`;
 
-        // Provide specific guidance for config errors
-        if (isInitError) {
-            description += ` Check that the NEXT_PUBLIC_FIREBASE_* variables in your .env file match your Firebase project settings.`;
+        if (isInitError && error.message.includes("NEXT_PUBLIC_FIREBASE_")) {
+            description += ` Ensure your .env file has correct NEXT_PUBLIC_FIREBASE_* variables.`;
         }
 
         return (
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                  <AlertTitle>{title}</AlertTitle>
                  <AlertDescription>
                    {description}
-                   <p className="text-xs mt-2">If the issue persists, check the browser console for more details.</p>
+                   <p className="text-xs mt-2">If the issue persists, check the browser console for more details. The application may not function correctly until this is resolved.</p>
                  </AlertDescription>
                </Alert>
            </div>
@@ -101,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   // Render children only if loading is complete and there's no error
+  console.log("Auth Provider: Rendering children. User authenticated:", !!user);
   return (
     <AuthContext.Provider value={{ user, loading, authError: error }}>
       {children}
@@ -115,4 +116,3 @@ export function useAuth() {
   }
   return context;
 }
-
