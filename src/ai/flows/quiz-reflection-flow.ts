@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -13,6 +12,15 @@ import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
 import type { QuizQuestion, QuizResult } from '@/types/user'; // Assuming types are correctly defined
+import Handlebars from 'handlebars'; // Import Handlebars
+
+// Register the 'sum' helper globally (or within the customize function)
+Handlebars.registerHelper("sum", function(a, b) {
+    // Ensure both arguments are numbers before adding
+    const numA = typeof a === 'number' ? a : 0;
+    const numB = typeof b === 'number' ? b : 0;
+    return numA + numB;
+});
 
 // Define the input schema based on the relevant parts of QuizResult
 const QuizReflectionInputSchema = z.object({
@@ -84,7 +92,12 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
       }
       promptObject.handlebarsOptions.helpers = {
           ...(promptObject.handlebarsOptions.helpers || {}), // Merge with existing helpers if any
-          sum: (a: number, b: number) => a + b, // Helper to add 1 to index for display
+          sum: (a: number, b: number) => {
+              // Ensure both arguments are numbers before adding
+              const numA = typeof a === 'number' ? a : 0;
+              const numB = typeof b === 'number' ? b : 0;
+              return numA + numB;
+          },
           join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '', // Handle potential undefined array
           isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
               if (userAnswer === undefined || userAnswer === null) return false;
