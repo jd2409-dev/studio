@@ -73,7 +73,7 @@ Tutor, provide your response:
       },
     };
     // Explicitly set knownHelpersOnly to false to allow custom helpers
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    promptObject.handlebarsOptions.knownHelpersOnly = false; // Ensure this is set correctly
     return promptObject;
   },
   config: {
