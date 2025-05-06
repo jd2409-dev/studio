@@ -68,13 +68,13 @@ Tutor, provide your response:
     }
     // Add/overwrite the 'eq' helper
     promptObject.handlebarsOptions.helpers = {
-      ...(promptObject.handlebarsOptions.helpers || {}), // Spread existing helpers first
+      ...(promptObject.handlebarsOptions.helpers), // Spread existing helpers first
       eq: function (a: string, b: string) { // Define 'eq' helper
         return a === b;
       },
     };
     // Explicitly set knownHelpersOnly to false to allow custom helpers like 'eq'
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    promptObject.handlebarsOptions.knownHelpersOnly = false; // <<<< THIS IS THE CRITICAL FIX
     return promptObject;
   },
   config: {
