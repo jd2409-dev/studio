@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -57,15 +56,17 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
+    // Ensure handlebarsOptions and its helpers property exist
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
     if (!promptObject.handlebarsOptions.helpers) {
         promptObject.handlebarsOptions.helpers = {};
     }
+    // Add/overwrite the 'eq' helper
     promptObject.handlebarsOptions.helpers = {
-      ...(promptObject.handlebarsOptions.helpers || {}),
-      eq: function (a: string, b: string) {
+      ...(promptObject.handlebarsOptions.helpers), // Spread existing helpers first
+      eq: function (a: string, b: string) { // Define 'eq' helper
         return a === b;
       },
     };
@@ -95,4 +96,3 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
-
