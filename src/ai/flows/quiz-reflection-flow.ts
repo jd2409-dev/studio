@@ -15,13 +15,13 @@ import { gemini15Flash } from '@genkit-ai/googleai';
 import type { QuizQuestion, QuizResult } from '@/types/user'; // Assuming types are correctly defined
 import Handlebars from 'handlebars'; // Import Handlebars
 
-// Register the 'sum' helper globally
-Handlebars.registerHelper("sum", function(a: number, b: number) {
-    // Ensure both arguments are numbers before adding
-    const numA = typeof a === 'number' ? a : 0;
-    const numB = typeof b === 'number' ? b : 0;
-    return numA + numB;
-});
+// Register the 'sum' helper globally - This seems to not always work reliably with Genkit's setup.
+// Handlebars.registerHelper("sum", function(a: number, b: number) {
+//     // Ensure both arguments are numbers before adding
+//     const numA = typeof a === 'number' ? a : 0;
+//     const numB = typeof b === 'number' ? b : 0;
+//     return numA + numB;
+// });
 
 // Define the input schema based on the relevant parts of QuizResult
 const QuizReflectionInputSchema = z.object({
@@ -85,7 +85,7 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
-  // Define custom Handlebars helpers for correctness check
+  // Define custom Handlebars helpers and disable knownHelpersOnly
   customize: (promptObject) => {
       // Ensure handlebarsOptions exists before modifying
       if (!promptObject.handlebarsOptions) {
@@ -95,11 +95,14 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
       if (!promptObject.handlebarsOptions.helpers) {
           promptObject.handlebarsOptions.helpers = {};
       }
-      // Merge local helpers (if any future ones are added) with globally registered ones.
-      // The 'sum' helper is now globally registered, but we keep this structure.
+      // Merge local helpers, including 'sum' specifically here.
       promptObject.handlebarsOptions.helpers = {
           ...(promptObject.handlebarsOptions.helpers || {}),
-          // 'sum' is now global, but we keep the local helper definitions for others
+          sum: (a: number, b: number) => { // Define 'sum' locally
+              const numA = typeof a === 'number' ? a : 0;
+              const numB = typeof b === 'number' ? b : 0;
+              return numA + numB;
+          },
           join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '',
           isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
               if (userAnswer === undefined || userAnswer === null) return false;
@@ -107,8 +110,6 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
               return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
           },
           lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered'
-          // Explicitly add 'sum' here if global registration isn't sufficient for some reason
-          // sum: (a: number, b: number) => (typeof a === 'number' ? a : 0) + (typeof b === 'number' ? b : 0),
       };
       // Explicitly set knownHelpersOnly to false to allow custom/global helpers
       promptObject.handlebarsOptions.knownHelpersOnly = false;
@@ -146,3 +147,4 @@ const quizReflectionFlow = ai.defineFlow(
     return output;
   }
 );
+

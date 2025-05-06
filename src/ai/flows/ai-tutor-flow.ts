@@ -14,10 +14,10 @@ import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
 import Handlebars from 'handlebars'; // Import Handlebars
 
-// Register helper globally (if not already)
-Handlebars.registerHelper('eq', function (a, b) {
-  return a === b;
-});
+// Register helper globally (if not already) - Seems less reliable in Genkit, defining locally instead
+// Handlebars.registerHelper('eq', function (a, b) {
+//   return a === b;
+// });
 
 
 // Define the structure for a single chat message
@@ -59,7 +59,7 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
- // Add customize function to configure Handlebars
+ // Add customize function to configure Handlebars and disable knownHelpersOnly
   customize: (promptObject) => {
     // Ensure handlebarsOptions exists before modifying
     if (!promptObject.handlebarsOptions) {
@@ -72,7 +72,7 @@ AI Tutor Response:`,
     // Merge local helpers with globally registered ones or add custom ones if needed.
     promptObject.handlebarsOptions.helpers = {
         ...(promptObject.handlebarsOptions.helpers || {}),
-        // 'eq' is globally registered, but this ensures it's allowed if needed locally
+        // Define 'eq' locally to ensure it's available
         eq: (a: any, b: any) => a === b,
     };
     // Explicitly set knownHelpersOnly to false to allow custom/global helpers
@@ -105,5 +105,6 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
+
 
 
