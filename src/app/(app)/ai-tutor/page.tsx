@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type FormEvent, useEffect, useRef } from 'react';
@@ -8,15 +9,12 @@ import { Loader2, Send, Sparkles, User, Bot } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { getTutorResponse, type AiTutorInput, type AiTutorOutput } from '@/ai/flows/ai-tutor-flow';
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"; // Import Avatar
-// Removed Handlebars import as helper registration is now handled in the flow
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
-
-// Removed global Handlebars.registerHelper("eq", ...)
 
 export default function AiTutorPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -52,12 +50,25 @@ export default function AiTutorPage() {
       const flowInput: AiTutorInput = { history: newMessages };
       const result: AiTutorOutput = await getTutorResponse(flowInput);
 
-      if (!result?.response) throw new Error("Unexpected AI response format. The AI did not provide a response.");
+      if (!result?.response) {
+          console.error("AI Tutor Error: No response content from AI for input:", JSON.stringify(flowInput));
+          throw new Error("The AI tutor did not provide a response. Please try rephrasing your question.");
+      }
 
       setMessages([...newMessages, { role: 'assistant', content: result.response }]);
     } catch (error) {
       console.error("Error getting tutor response:", error);
-      const errorDesc = error instanceof Error ? error.message : "An unexpected error occurred while contacting the AI tutor.";
+      let errorDesc = "An unexpected error occurred while contacting the AI tutor. Please try again.";
+      if (error instanceof Error) {
+           // Use a more user-friendly message if it's a flow-specific error
+           if (error.message.startsWith("AI Tutor encountered an error:")) {
+               errorDesc = "I'm having a little trouble right now. Could you try asking again in a moment?";
+           } else if (error.message.includes("No output received from the AI model")) {
+               errorDesc = "I couldn't generate a response for that. Perhaps try a different question?";
+           } else {
+               errorDesc = error.message; // Default to the error's message if not a specific known type
+           }
+      }
       
       toast({
         title: "AI Tutor Error",

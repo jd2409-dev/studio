@@ -12,7 +12,7 @@
 
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
+import { gemini15Flash } from '@genkit-ai/googleai'; 
 
 const ExplainTextbookPdfInputSchema = z.object({
   fileDataUri: z
@@ -31,12 +31,13 @@ const ExplainTextbookPdfOutputSchema = z.object({
 export type ExplainTextbookPdfOutput = z.infer<typeof ExplainTextbookPdfOutputSchema>;
 
 export async function explainTextbookPdf(input: ExplainTextbookPdfInput): Promise<ExplainTextbookPdfOutput> {
-  return explainTextbookPdfFlow(input);
+  const validatedInput = ExplainTextbookPdfInputSchema.parse(input);
+  return explainTextbookPdfFlow(validatedInput);
 }
 
 const prompt = ai.definePrompt({
   name: 'explainTextbookPdfPrompt',
-  model: gemini15Flash, // Specify the model to use
+  model: gemini15Flash, 
   input: { schema: ExplainTextbookPdfInputSchema },
   output: { schema: ExplainTextbookPdfOutputSchema },
   prompt: `You are an expert AI tutor specializing in explaining complex textbook content clearly and concisely.
@@ -45,12 +46,15 @@ Analyze the provided PDF document content. Your task is to generate the followin
 
 1.  **textExplanation:** A detailed explanation of the main concepts, theories, definitions, and examples presented in the document. Break down complex ideas into simpler terms. Use formatting like headings, bullet points, and bold text to improve readability. Aim for clarity and thoroughness.
 2.  **audioExplanationScript:** A script suitable for text-to-speech generation that explains the key points of the document. Structure it like a mini-lecture or a clear verbal explanation. Use conversational language but maintain accuracy. Ensure it flows logically.
-3.  **mindMapExplanation:** A hierarchical mind map representing the core ideas and their relationships as presented in the explanation. Use Markdown list format, with indentation to represent parent-child relationships (e.g., - Main Topic\n  - Subtopic A\n    - Detail A.1\n  - Subtopic B). Focus on the structure derived from your text explanation.
+3.  **mindMapExplanation:** A hierarchical mind map representing the core ideas and their relationships as presented in the explanation. Use Markdown list format, with indentation to represent parent-child relationships (e.g., - Main Topic\\n  - Subtopic A\\n    - Detail A.1\\n  - Subtopic B). Focus on the structure derived from your text explanation.
 
 PDF Content:
 {{media url=fileDataUri}}
 
-Generate the outputs based solely on the information present in the PDF.`,
+Generate the outputs based solely on the information present in the PDF. If the PDF content is too short, unclear, or seems to be non-academic (e.g., random images, unrelated text), state that you cannot provide a meaningful explanation for the given document.`,
+   config: {
+    temperature: 0.6, // Slightly lower temperature for more factual explanation
+  }
 });
 
 const explainTextbookPdfFlow = ai.defineFlow(
@@ -60,29 +64,29 @@ const explainTextbookPdfFlow = ai.defineFlow(
     outputSchema: ExplainTextbookPdfOutputSchema,
   },
   async (input) => {
-    console.log(`Starting textbook explanation flow for PDF...`);
+    console.log(`Textbook Explainer Flow: Starting explanation for PDF...`);
 
     try {
         const { output } = await prompt(input);
 
-        if (!output) {
-            throw new Error("Explanation generation failed: No output received from the AI model.");
+        if (!output || !output.textExplanation || !output.audioExplanationScript || !output.mindMapExplanation) {
+            console.error("Textbook Explainer Flow: Explanation generation failed - incomplete output from AI model. Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
+            throw new Error("Explanation generation failed: The AI model did not return all required explanation components.");
         }
-        console.log(`Textbook explanation generated successfully.`);
+        console.log(`Textbook Explainer Flow: Explanation generated successfully.`);
         return output;
 
     } catch (error: any) {
-        console.error(`Error in explainTextbookPdfFlow:`, error);
+        console.error(`Error in explainTextbookPdfFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
 
-        // Check for specific Genkit/Gemini error related to safety blocking
-        if (error.message && error.message.includes('Generation blocked')) {
-             console.error("Explanation generation blocked due to safety settings or potentially harmful content.");
-             throw new Error("Explanation generation was blocked, possibly due to safety filters or the content of the PDF. Please try a different document or section.");
+        if (error.message?.includes('Generation blocked') || error.message?.includes('SAFETY')) {
+             console.error("Textbook Explainer Flow: Explanation generation blocked due to safety settings or potentially harmful content.");
+             throw new Error("Explanation generation was blocked, possibly due to safety filters or the content of the PDF. Please try a different document or section, or ensure the content is appropriate.");
         }
-
-        // Re-throw other errors
-        throw error;
+        if (error.message?.includes("did not return all required explanation components")) {
+            throw error; // Re-throw specific known errors
+        }
+        throw new Error(`Failed to generate textbook explanation: ${error.message}`);
     }
   }
 );
-

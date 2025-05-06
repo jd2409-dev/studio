@@ -12,7 +12,7 @@
 
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
+import { gemini15Flash } from '@genkit-ai/googleai'; 
 
 const GenerateTextbookSummaryInputSchema = z.object({
   fileDataUri: z
@@ -32,13 +32,10 @@ const GenerateTextbookSummaryOutputSchema = z.object({
 export type GenerateTextbookSummaryOutput = z.infer<typeof GenerateTextbookSummaryOutputSchema>;
 
 export async function generateTextbookSummary(input: GenerateTextbookSummaryInput): Promise<GenerateTextbookSummaryOutput> {
-  return generateTextbookSummaryFlow(input);
+  const validatedInput = GenerateTextbookSummaryInputSchema.parse(input);
+  return generateTextbookSummaryFlow(validatedInput);
 }
 
-// Define base prompt schema excluding the file input itself
-const BasePromptInputSchema = z.object({}); // Empty for now, can add common fields later if needed
-
-// Define output schema remains the same
 const PromptOutputSchema = z.object({
     textSummary: z.string().describe('A concise text summary of the key points in the content.'),
     audioSummary: z.string().describe('A script suitable for text-to-speech, summarizing the content.'),
@@ -46,11 +43,10 @@ const PromptOutputSchema = z.object({
 });
 
 
-// Define the prompt for image files
 const imagePrompt = ai.definePrompt({
   name: 'generateSummaryFromImagePrompt',
   model: gemini15Flash,
-  input: { schema: z.object({ fileDataUri: z.string() }) }, // Specific input for this prompt
+  input: { schema: z.object({ fileDataUri: z.string() }) }, 
   output: { schema: PromptOutputSchema },
   prompt: `You are an AI assistant that helps students understand textbooks better by analyzing images of pages.
 
@@ -62,13 +58,15 @@ Analyze the provided textbook page image and generate the following outputs:
 Textbook Page Image: {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the content visible in the image.`,
+  config: {
+    temperature: 0.5,
+  }
 });
 
-// Define the prompt for text-based files (PDF, TXT, DOCX)
 const textPrompt = ai.definePrompt({
   name: 'generateSummaryFromTextPrompt',
   model: gemini15Flash,
-  input: { schema: z.object({ fileDataUri: z.string() }) }, // Specific input for this prompt
+  input: { schema: z.object({ fileDataUri: z.string() }) }, 
   output: { schema: PromptOutputSchema },
   prompt: `You are an AI assistant that helps students understand text content better. The following content was extracted from a file.
 
@@ -81,10 +79,12 @@ File Content:
 {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the provided content.`,
+   config: {
+    temperature: 0.5,
+  }
 });
 
 
-// The main flow that routes based on file type
 const generateTextbookSummaryFlow = ai.defineFlow(
   {
     name: 'generateTextbookSummaryFlow',
@@ -94,53 +94,39 @@ const generateTextbookSummaryFlow = ai.defineFlow(
   async (input) => {
     const { fileDataUri, fileType } = input;
 
-    console.log(`Received file of type: ${fileType}`); // Log file type
+    console.log(`Textbook Summary Flow: Received file of type: ${fileType}`); 
 
     try {
         let promptToUse;
-        let promptInput = { fileDataUri }; // Input object for the selected prompt
+        let promptInput = { fileDataUri }; 
 
-        // Route based on MIME type
         if (fileType.startsWith('image/')) {
-            console.log("Using image prompt.");
+            console.log("Textbook Summary Flow: Using image prompt.");
             promptToUse = imagePrompt;
         } else if (fileType === 'application/pdf' || fileType === 'text/plain' || fileType === 'application/msword' || fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            console.log("Using text-based file prompt.");
+            console.log("Textbook Summary Flow: Using text-based file prompt.");
             promptToUse = textPrompt;
-            // Potentially add specific preprocessing instructions or context here if needed
         } else {
-            // Handle unsupported file types gracefully
-            console.warn(`Unsupported file type: ${fileType}`);
-            throw new Error(`File type "${fileType}" currently not supported for summarization.`);
-            // Alternatively, return a structured error response:
-            // return {
-            //     textSummary: "Unsupported file type.",
-            //     audioSummary: "Unsupported file type.",
-            //     mindMap: "Unsupported file type.",
-            // };
+            console.warn(`Textbook Summary Flow: Unsupported file type: ${fileType}`);
+            throw new Error(`File type "${fileType}" is currently not supported for summarization. Please use an image, PDF, TXT, or DOCX file.`);
         }
 
-        // Call the selected prompt
         const { output } = await promptToUse(promptInput);
 
-        // Ensure output is not null or undefined before returning
-        if (!output) {
-            throw new Error("Summary generation failed: No output received from the AI model.");
+        if (!output || !output.textSummary || !output.audioSummary || !output.mindMap) {
+            console.error("Textbook Summary Flow: Summary generation failed - incomplete output from AI model. Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
+            throw new Error("Summary generation failed: The AI model did not return all required summary components.");
         }
+        console.log("Textbook Summary Flow: Summaries generated successfully.");
         return output;
 
     } catch (error: any) {
-        console.error(`Error in generateTextbookSummaryFlow for type ${fileType}:`, error);
-        // Re-throw the error to be caught by the caller, or return a specific error structure
-        // Re-throwing allows the frontend to display the specific error message (e.g., unsupported type)
-        throw error;
-
-        // Example of returning a structured error:
-        // return {
-        //     textSummary: `Error: ${error.message || 'Failed to process file.'}`,
-        //     audioSummary: "Error processing file.",
-        //     mindMap: "Error processing file.",
-        // };
+        console.error(`Error in generateTextbookSummaryFlow for type ${fileType}:`, error.message, error.stack, "Input:", JSON.stringify(input));
+        // Re-throw with a potentially more user-friendly message, or keep original if specific
+        if (error.message.includes("not supported for summarization")) {
+            throw error;
+        }
+        throw new Error(`Failed to generate textbook summary: ${error.message}`);
     }
   }
 );

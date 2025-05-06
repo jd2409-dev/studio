@@ -44,6 +44,7 @@ Be patient, encouraging, and adapt your explanations to the student's needs.
 If a question is ambiguous, ask for clarification. If a topic is complex, break it down into simpler parts.
 Maintain a supportive and educational tone.
 Answer any question the student asks, on any topic. Be comprehensive and helpful.
+If you cannot find relevant information or answer a question confidently, it is better to state that you cannot provide an answer for that specific query rather than providing incorrect information.
 
 Chat History (the last message is the student's current query):
 {{#each history}}
@@ -87,14 +88,23 @@ const aiTutorFlow = ai.defineFlow(
     outputSchema: aiTutorOutputSchema,
   },
   async (input) => {
-    // Call the prompt object directly
-    const { output } = await tutorPrompt(input);
+    try {
+      // Call the prompt object directly
+      const { output } = await tutorPrompt(input);
 
-    // Ensure output is not null or undefined before returning
-    if (!output) {
-      throw new Error("AI Tutor generation failed: No output received from the AI model.");
+      // Ensure output is not null or undefined before returning
+      if (!output) {
+        console.error("AI Tutor generation failed: No output received from the AI model for input:", JSON.stringify(input));
+        throw new Error("AI Tutor generation failed: No output received from the AI model.");
+      }
+      return output;
+    } catch (error: any) {
+        console.error("Error in aiTutorFlow:", error.message, error.stack, "Input:", JSON.stringify(input));
+        // Re-throw the error or return a structured error response
+        // For now, re-throwing to let the frontend handle it via toast.
+        // Could also return: return { response: "Sorry, I encountered an internal error and couldn't process your request." };
+        throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
-    return output;
   }
 );
 
