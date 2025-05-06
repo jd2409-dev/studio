@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react'; // Added useEffect, useRef
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, Lightbulb } from 'lucide-react'; // Added Lightbulb
+import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, Lightbulb, Play, Pause, StopCircle } from 'lucide-react'; // Added Play, Pause, StopCircle
 import { explainTextbookPdf, type ExplainTextbookPdfOutput } from '@/ai/flows/textbook-explainer-flow';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,8 +20,24 @@ export default function TextbookExplainerPage() {
   const [explanation, setExplanation] = useState<ExplainTextbookPdfOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false); // Kept for potential future API use
+
+  // State for Web Speech API control
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Cleanup speech synthesis on unmount or when explanation changes
+  useEffect(() => {
+    return () => {
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      utteranceRef.current = null; // Clear ref on cleanup
+      setIsSpeaking(false);
+      setIsPaused(false);
+    };
+  }, [explanation]); // Re-run cleanup if explanation changes
 
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +69,13 @@ export default function TextbookExplainerPage() {
 
       setFile(selectedFile);
       setExplanation(null); // Clear previous explanation
-      setAudioSrc(null); // Clear previous audio
+      // Cancel any ongoing speech
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      utteranceRef.current = null;
+      setIsSpeaking(false);
+      setIsPaused(false);
     }
   };
 
@@ -70,7 +92,13 @@ export default function TextbookExplainerPage() {
 
     setIsLoading(true);
     setExplanation(null);
-    setAudioSrc(null); // Clear previous audio
+    // Cancel any ongoing speech
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      utteranceRef.current = null;
+      setIsSpeaking(false);
+      setIsPaused(false);
 
     // Read file as Data URI to pass to the flow
     const reader = new FileReader();
@@ -112,57 +140,73 @@ export default function TextbookExplainerPage() {
     };
   };
 
-  const generateAudio = async () => {
-      if (!explanation?.audioExplanationScript) {
-          toast({ title: "Error", description: "No audio script available to generate audio.", variant: "destructive" });
-          return;
-      }
+  const handlePlayPause = () => {
+      if (!explanation?.audioExplanationScript || !('speechSynthesis' in window)) return;
 
-      setIsGeneratingAudio(true);
-      setAudioSrc(null);
+      if (isSpeaking && !isPaused) {
+          // Pause
+          speechSynthesis.pause();
+          setIsPaused(true);
+          toast({ title: "Audio Paused" });
+      } else {
+          // Play or Resume
+          if (isPaused && utteranceRef.current) {
+              speechSynthesis.resume();
+          } else {
+               // Start new speech
+               if (speechSynthesis.speaking) { // Cancel previous if any
+                   speechSynthesis.cancel();
+                   setIsSpeaking(false);
+                   setIsPaused(false);
+                   utteranceRef.current = null;
+               }
 
-      try {
-           // Use the Web Speech API for TTS
-           if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(explanation.audioExplanationScript);
-                // Optional: Configure voice, rate, pitch, etc.
-                // const voices = window.speechSynthesis.getVoices();
-                // utterance.voice = voices[ desiredVoiceIndex ]; // Find a suitable voice
-                // utterance.rate = 1; // Speed
-                // utterance.pitch = 1; // Pitch
+              const utterance = new SpeechSynthesisUtterance(explanation.audioExplanationScript);
+              utteranceRef.current = utterance; // Store the reference
 
-                // Create a Blob URL for the generated speech
-                utterance.onend = () => {
-                    // This part is tricky - Web Speech API doesn't directly give a downloadable file.
-                    // We'll just allow playing it directly.
-                    // A workaround would involve recording the audio output, which is complex.
-                    // For simplicity, we will just trigger the speech synthesis.
-                    window.speechSynthesis.speak(utterance);
-                    setIsGeneratingAudio(false);
-                    // We can't easily set an audioSrc here, so we'll just indicate speech has started.
-                    toast({ title: "Audio Playing", description: "Speech synthesis started." });
-                     // Simulate setting audioSrc to enable the player controls (though it won't have a downloadable source)
-                    setAudioSrc("data:audio/wav;base64,"); // Placeholder to show controls
-
-                };
-                 utterance.onerror = (event) => {
-                    console.error("Speech synthesis error:", event.error);
-                    toast({ title: "Audio Error", description: `Speech synthesis failed: ${event.error}`, variant: "destructive" });
-                    setIsGeneratingAudio(false);
-                };
-
-                 // Start speech synthesis
-                 window.speechSynthesis.speak(utterance);
-
-           } else {
-               toast({ title: "Audio Error", description: "Your browser does not support the Web Speech API.", variant: "destructive" });
-               setIsGeneratingAudio(false);
+              utterance.onstart = () => {
+                  setIsSpeaking(true);
+                  setIsPaused(false);
+                  console.log("Speech started");
+              };
+              utterance.onend = () => {
+                  setIsSpeaking(false);
+                  setIsPaused(false);
+                  utteranceRef.current = null; // Clear ref on end
+                  console.log("Speech ended");
+                  toast({ title: "Audio Finished" });
+              };
+              utterance.onpause = () => {
+                  setIsPaused(true); // Ensure state consistency
+                  console.log("Speech paused");
+              };
+              utterance.onresume = () => {
+                  setIsPaused(false); // Ensure state consistency
+                  console.log("Speech resumed");
+              };
+               utterance.onerror = (event) => {
+                  console.error("Speech synthesis error:", event.error);
+                  toast({ title: "Audio Error", description: `Speech synthesis failed: ${event.error}`, variant: "destructive" });
+                  setIsSpeaking(false);
+                  setIsPaused(false);
+                  utteranceRef.current = null;
+              };
+              speechSynthesis.speak(utterance);
+          }
+          setIsPaused(false); // Always ensure paused is false when playing/resuming
+           if (!isSpeaking) { // Only toast 'playing' if it wasn't already paused
+               toast({ title: "Audio Playing" });
            }
+      }
+  };
 
-      } catch (error) {
-          console.error("Error generating audio:", error);
-          toast({ title: "Audio Generation Failed", description: "Could not generate audio.", variant: "destructive" });
-          setIsGeneratingAudio(false);
+  const handleStop = () => {
+      if ('speechSynthesis' in window) {
+          speechSynthesis.cancel(); // Stops speaking immediately
+          setIsSpeaking(false);
+          setIsPaused(false);
+          utteranceRef.current = null; // Clear ref on stop
+          toast({ title: "Audio Stopped" });
       }
   };
 
@@ -178,7 +222,7 @@ export default function TextbookExplainerPage() {
             <Lightbulb className="h-4 w-4" />
             <AlertTitle>How it works</AlertTitle>
             <AlertDescription>
-            The AI analyzes the PDF content you upload and generates comprehensive explanations to help you understand the material better.
+            The AI analyzes the PDF content you upload and generates comprehensive explanations to help you understand the material better. Audio uses your browser's text-to-speech.
             </AlertDescription>
         </Alert>
 
@@ -257,21 +301,31 @@ export default function TextbookExplainerPage() {
                 </TabsContent>
                  <TabsContent value="audio" className="mt-4 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto space-y-4">
                    <h3 className="font-semibold mb-2">Audio Explanation</h3>
-                   <Button onClick={generateAudio} disabled={isGeneratingAudio || !explanation.audioExplanationScript || !('speechSynthesis' in window)}>
-                       {isGeneratingAudio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AudioLines className="mr-2 h-4 w-4" />}
-                       {isGeneratingAudio ? 'Generating...' : 'Play Explanation'}
-                   </Button>
+                    <div className="flex gap-2">
+                       <Button
+                           onClick={handlePlayPause}
+                           disabled={isGeneratingAudio || !explanation.audioExplanationScript || !('speechSynthesis' in window)}
+                           variant={isSpeaking && !isPaused ? "secondary" : "default"}
+                           size="icon"
+                           aria-label={isSpeaking && !isPaused ? "Pause" : "Play"}
+                       >
+                           {isSpeaking && !isPaused ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                       </Button>
+                       <Button
+                           onClick={handleStop}
+                           disabled={!isSpeaking || !('speechSynthesis' in window)}
+                           variant="outline"
+                           size="icon"
+                           aria-label="Stop"
+                       >
+                           <StopCircle className="h-4 w-4" />
+                       </Button>
+                   </div>
                    {!('speechSynthesis' in window) && (
                        <p className="text-xs text-destructive">Your browser does not support speech synthesis.</p>
                    )}
-                   {/* Display player if audioSrc exists (even placeholder for direct synthesis) */}
-                   {audioSrc && (
-                        <audio controls className="w-full" src={audioSrc}>
-                            Your browser does not support the audio element.
-                        </audio>
-                   )}
                     <p className="text-xs text-muted-foreground mt-2">
-                        Click play to hear the AI explain the content using your browser's text-to-speech capabilities.
+                        Use the controls above to play, pause, or stop the explanation using your browser's text-to-speech.
                     </p>
                    <h4 className="font-medium text-xs pt-4 border-t">Audio Script:</h4>
                    <p className="text-xs whitespace-pre-wrap">{explanation.audioExplanationScript}</p>
@@ -287,7 +341,18 @@ export default function TextbookExplainerPage() {
             )}
           </CardContent>
            <CardFooter>
-              {explanation && <Button variant="outline" size="sm" onClick={() => { setExplanation(null); setFile(null); setAudioSrc(null); const input = document.getElementById('textbook-pdf') as HTMLInputElement; if(input) input.value = ''; }}>Clear</Button>}
+              {explanation && <Button variant="outline" size="sm" onClick={() => {
+                  setExplanation(null);
+                  setFile(null);
+                  if (speechSynthesis.speaking) { // Stop speech if clearing
+                      speechSynthesis.cancel();
+                  }
+                  utteranceRef.current = null;
+                  setIsSpeaking(false);
+                  setIsPaused(false);
+                  const input = document.getElementById('textbook-pdf') as HTMLInputElement;
+                  if(input) input.value = '';
+              }}>Clear</Button>}
            </CardFooter>
         </Card>
       </div>
