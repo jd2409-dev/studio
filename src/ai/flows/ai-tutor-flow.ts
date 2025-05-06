@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -52,7 +51,7 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
- // Add customize function to configure Handlebars and disable knownHelpersOnly
+  // Add customize function to configure Handlebars and disable knownHelpersOnly
   customize: (promptObject) => {
     // Ensure handlebarsOptions exists before modifying
     if (!promptObject.handlebarsOptions) {
@@ -99,3 +98,4 @@ const aiTutorFlow = ai.defineFlow(
   }
 );
 
+    
