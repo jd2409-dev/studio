@@ -8,6 +8,7 @@ import { Loader2, Send, Sparkles, User, Bot } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { getTutorResponse, type AiTutorInput, type AiTutorOutput } from '@/ai/flows/ai-tutor-flow';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"; // Import Avatar
 // Removed Handlebars import as helper registration is now handled in the flow
 
 interface ChatMessage {
