@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -84,7 +85,7 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below:
 `,
-  // Define custom Handlebars helpers for correctness check and allow them
+  // Define custom Handlebars helpers for correctness check
   customize: (promptObject) => {
       // Ensure handlebarsOptions exists before modifying
       if (!promptObject.handlebarsOptions) {
@@ -102,11 +103,14 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below:
           join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '',
           isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
               if (userAnswer === undefined || userAnswer === null) return false;
+              // Case-insensitive and trim comparison
               return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
           },
           lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered'
+          // Explicitly add 'sum' here if global registration isn't sufficient for some reason
+          // sum: (a: number, b: number) => (typeof a === 'number' ? a : 0) + (typeof b === 'number' ? b : 0),
       };
-      // Explicitly set knownHelpersOnly to false to allow custom helpers
+      // Explicitly set knownHelpersOnly to false to allow custom/global helpers
       promptObject.handlebarsOptions.knownHelpersOnly = false;
       return promptObject;
   },
@@ -125,6 +129,7 @@ const quizReflectionFlow = ai.defineFlow(
     const incorrectAnswersExist = input.questions.some((q, index) => {
         const userAnswer = input.userAnswers[index];
          if (userAnswer === undefined || userAnswer === null) return true; // Treat unanswered as incorrect for feedback
+         // Case-insensitive and trim comparison
          return String(userAnswer).trim().toLowerCase() !== String(q.correctAnswer).trim().toLowerCase();
     });
 

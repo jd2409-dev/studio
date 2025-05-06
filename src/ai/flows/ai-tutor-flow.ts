@@ -12,6 +12,13 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
+import Handlebars from 'handlebars'; // Import Handlebars
+
+// Register helper globally (if not already)
+Handlebars.registerHelper('eq', function (a, b) {
+  return a === b;
+});
+
 
 // Define the structure for a single chat message
 const ChatMessageSchema = z.object({
@@ -52,6 +59,26 @@ Conversation History:
 {{/each}}
 
 AI Tutor Response:`,
+ // Add customize function to configure Handlebars
+  customize: (promptObject) => {
+    // Ensure handlebarsOptions exists before modifying
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+     // Make sure helpers object exists
+    if (!promptObject.handlebarsOptions.helpers) {
+        promptObject.handlebarsOptions.helpers = {};
+    }
+    // Merge local helpers with globally registered ones or add custom ones if needed.
+    promptObject.handlebarsOptions.helpers = {
+        ...(promptObject.handlebarsOptions.helpers || {}),
+        // 'eq' is globally registered, but this ensures it's allowed if needed locally
+        eq: (a: any, b: any) => a === b,
+    };
+    // Explicitly set knownHelpersOnly to false to allow custom/global helpers
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
 });
 
 
@@ -68,29 +95,8 @@ const aiTutorFlow = ai.defineFlow(
         return { response: "Hello! I'm NexusLearn AI, your study partner. How can I help you today?" };
     }
 
-    // Construct the prompt string with history
-    let historyString = '';
-    input.history.forEach(message => {
-        const prefix = message.role === 'user' ? 'User:' : 'AI Tutor:';
-        historyString += `${prefix} ${message.content}\n`;
-    });
-
-    const promptText = `You are NexusLearn AI, a helpful and knowledgeable AI tutor designed to assist students. Your goal is to provide clear explanations, answer questions accurately, and help students understand complex concepts across various subjects. Engage in a supportive and encouraging conversation.
-
-Analyze the following conversation history and provide a relevant and helpful response to the last user message.
-
-Conversation History:
-${historyString}
-AI Tutor Response:`;
-
-
-    // Call the AI model directly with the constructed prompt text
-     const { output } = await ai.generate({
-            model: gemini15Flash,
-            prompt: promptText,
-            output: { schema: AiTutorOutputSchema },
-     });
-
+    // Call the prompt object directly
+    const { output } = await prompt(input);
 
     // Ensure output is not null or undefined before returning
     if (!output) {
@@ -99,4 +105,5 @@ AI Tutor Response:`;
     return output;
   }
 );
+
 
