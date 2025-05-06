@@ -69,6 +69,7 @@ Tutor, provide your response:
         return a === b;
       },
     };
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -85,7 +86,7 @@ const aiTutorFlow = ai.defineFlow(
   },
   async (input) => {
     // Call the prompt object directly
-    const { output } = await tutorPrompt(input); // Changed from prompt to tutorPrompt
+    const { output } = await tutorPrompt(input); 
 
     // Ensure output is not null or undefined before returning
     if (!output) {
@@ -94,3 +95,4 @@ const aiTutorFlow = ai.defineFlow(
     return output;
   }
 );
+
