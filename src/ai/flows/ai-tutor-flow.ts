@@ -2,11 +2,7 @@
 
 /**
  * @fileOverview AI Tutor for NexusLearn AI.
- * This flow handles student interactions with the AI tutor, providing assistance and explanations.
- *
- * - getTutorResponse - A function that processes the chat history and generates a response from the AI tutor.
- * - AiTutorInput - The input type for the getTutorResponse function.
- * - AiTutorOutput - The return type for the getTutorResponse function.
+ * Handles student interactions with the AI tutor, providing academic guidance and explanations.
  */
 
 import { ai } from '@/ai/ai-instance';
@@ -31,47 +27,42 @@ const AiTutorOutputSchema = z.object({
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
-
+// Define the AI tutor prompt
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
   model: gemini15Flash,
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
-  prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
-Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
-Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
+  prompt: `
+You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 
-Strive to answer all student questions comprehensively, drawing connections to academic subjects whenever relevant.
-If a question is genuinely and completely unrelated to educational topics or seeks inappropriate content, politely decline to answer that specific query and offer to help with academic subjects instead.
-If a question is unclear or ambiguous, ask for clarification before attempting to answer.
-Utilize the provided conversation history to maintain context and provide relevant follow-up responses.
-Aim for comprehensive yet easy-to-understand explanations. Use examples, analogies, or step-by-step breakdowns where appropriate.
-Avoid giving direct answers to homework or test questions; instead, guide the student to discover the answer themselves by explaining underlying concepts or asking probing questions.
-Your tone should be supportive and motivational at all times.
+Your goal is to help students understand academic concepts and guide them through learning processes. Use the provided conversation history for context.
 
 Conversation History:
 {{#each history}}
   {{#if (eq role "user")}}
 User: {{{content}}}
-  {{else}}
+  {{else if (eq role "assistant")}}
 Tutor: {{{content}}}
+  {{else}}
+Unknown: {{{content}}}
   {{/if}}
 {{/each}}
 
 Tutor, provide your response:
-`,
+  `,
   handlebarsOptions: {
-     knownHelpersOnly: false, // Allow custom and built-in helpers
-     helpers: {
-        eq: (a: any, b: any) => a === b,
-     }
+    knownHelpersOnly: false,
+    helpers: {
+      eq: (a: any, b: any) => a === b,
+    }
   },
   config: {
     temperature: 0.7,
   },
 });
 
-
+// Define the AI Tutor flow
 const aiTutorFlow = ai.defineFlow(
   {
     name: 'nexusLearnAiTutorFlow',
@@ -79,56 +70,68 @@ const aiTutorFlow = ai.defineFlow(
     outputSchema: AiTutorOutputSchema,
   },
   async (input) => {
-    console.log("AI Tutor Flow: Received input - History length:", input.history.length);
-    if (input.history.length > 0) {
-        console.log("AI Tutor Flow: Last user message:", input.history[input.history.length-1].content);
-    }
-
     try {
-      // Call the prompt object directly
-      const { output } = await tutorPrompt(input);
+      console.log("AI Tutor Flow: Received input - History length:", input.history.length);
 
-      if (!output || typeof output.response !== 'string') {
-        console.error("AI Tutor generation failed: Invalid or missing response text received from the AI model. Output:", output, "Input:", JSON.stringify(input));
-        throw new Error("AI Tutor generation failed: No valid response received from the AI model.");
+      // Ensure safe fallback for empty history
+      if (!input.history || input.history.length === 0) {
+        input.history = [{
+          role: 'user',
+          content: 'Hi, I need help with a topic.',
+        }];
       }
-      console.log("AI Tutor Flow: Response generated - ", output.response.substring(0, 100) + "...");
-      return output;
 
-    } catch (error: any) {
-      console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
-      if (error.message?.includes("unknown helper")) {
-          // This specific check helps identify if the Handlebars helper issue persists.
-          // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
-          throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
+      // Normalize history content to avoid runtime issues
+      input.history = input.history.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content?.trim() || '[No content provided]',
+      }));
+
+      console.log("AI Tutor Flow: Normalized input. Calling prompt...");
+
+      let output: AiTutorOutput;
+
+      try {
+        const result = await tutorPrompt(input);
+        output = result?.output;
+
+        if (!output || typeof output.response !== 'string') {
+          console.error("Prompt returned invalid response:", result);
+          throw new Error("AI Tutor generation failed: Invalid or missing response.");
+        }
+
+        console.log("AI Tutor Flow: Response generated -", output.response.slice(0, 100) + "...");
+        return output;
+
+      } catch (promptError) {
+        console.error("Prompt execution error:", promptError);
+        return {
+          response: "Sorry, something went wrong while generating your answer. Please try again shortly.",
+        };
       }
-       if (error.message?.includes("Generation blocked")) {
-          console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
-          throw new Error("I cannot respond to this request due to safety guidelines.");
-       }
-      throw new Error(`AI Tutor encountered an error: ${error.message}`);
+
+    } catch (flowError: any) {
+      console.error("AI Tutor Flow: Unexpected failure:", flowError.message, flowError.stack);
+      throw new Error(`AI Tutor encountered an error: ${flowError.message}`);
     }
   }
 );
 
-// Exported wrapper function to be called by the frontend
+// Wrapper function exposed to frontend
 export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
-    console.log("getTutorResponse: Validating input...");
-    try {
-        // Validate the input against the Zod schema before passing to the flow
-        const validatedInput = AiTutorInputSchema.parse(input);
-        console.log("getTutorResponse: Input validated successfully. Calling aiTutorFlow...");
-        return await aiTutorFlow(validatedInput);
-    } catch (error: any) {
-        console.error(`Error in getTutorResponse (wrapper):`, error.message, error.stack, "Input:", JSON.stringify(input));
-        if (error instanceof z.ZodError) {
-            // Provide specific validation error details
-            const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-            console.error("getTutorResponse: Zod validation failed:", validationErrors);
-            throw new Error(`Invalid input for AI Tutor: ${validationErrors}`);
-        }
-        // Re-throw other errors (including those from the flow) so the calling page can handle them
-        throw error;
-    }
-}
+  console.log("getTutorResponse: Validating input...");
+  try {
+    const validatedInput = AiTutorInputSchema.parse(input);
+    console.log("getTutorResponse: Input validated successfully. Calling AI Tutor flow...");
+    return await aiTutorFlow(validatedInput);
+  } catch (error: any) {
+    console.error("getTutorResponse: Validation or runtime error:", error.message, error.stack);
 
+    if (error instanceof z.ZodError) {
+      const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      throw new Error(`Invalid input for AI Tutor: ${validationErrors}`);
+    }
+
+    throw error;
+  }
+}
