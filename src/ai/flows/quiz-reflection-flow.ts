@@ -93,15 +93,14 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below. If all answers are correct, provide a congratulatory message.
 `,
-  // No customize needed as helpers are registered globally
-  // customize: (promptObject) => {
-  //     // Explicitly set knownHelpersOnly to false
-  //     if (!promptObject.handlebarsOptions) {
-  //         promptObject.handlebarsOptions = {};
-  //     }
-  //     promptObject.handlebarsOptions.knownHelpersOnly = false;
-  //     return promptObject;
-  // },
+  customize: (promptObject) => {
+      // Explicitly set knownHelpersOnly to false to allow globally registered helpers
+      if (!promptObject.handlebarsOptions) {
+          promptObject.handlebarsOptions = {};
+      }
+      promptObject.handlebarsOptions.knownHelpersOnly = false;
+      return promptObject;
+  },
   config: {
     temperature: 0.7,
   }

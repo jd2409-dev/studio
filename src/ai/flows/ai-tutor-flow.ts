@@ -12,13 +12,14 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-import Handlebars from 'handlebars'; 
-
-// Register the 'eq' helper globally for Handlebars used within this flow
-// This helper is used in the prompt template.
-Handlebars.registerHelper('eq', function(a, b) {
-  return a === b;
-});
+// import Handlebars from 'handlebars'; // Global Handlebars instance
+ 
+// Global Handlebars registration might not be picked up by Genkit's internal instance for prompts.
+// It's safer and more explicit to define helpers directly within the prompt's `customize` function
+// or ensure `knownHelpersOnly: false` is respected for globally registered helpers.
+// Handlebars.registerHelper('eq', function(a, b) {
+//   return a === b;
+// });
 
 
 // Define the schema for a single message in the history
@@ -69,12 +70,21 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false.
-    // This ensures that Handlebars doesn't restrict usage to only its built-in helpers,
-    // allowing our globally registered 'eq' helper to be recognized.
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    if (!promptObject.handlebarsOptions.helpers) {
+      promptObject.handlebarsOptions.helpers = {};
+    }
+    // Define the 'eq' helper directly within the prompt's Handlebars options
+    // This is more robust than relying on global registration for Genkit prompts.
+    promptObject.handlebarsOptions.helpers = {
+      ...promptObject.handlebarsOptions.helpers,
+      eq: function(a: any, b: any) { 
+        return a === b;
+      },
+    };
+    // Crucially, also ensure knownHelpersOnly is false
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
