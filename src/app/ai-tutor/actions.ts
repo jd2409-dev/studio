@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Server Actions for the AI Tutor feature.
@@ -20,7 +21,7 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
     const result = await aiTutorFlow(validatedInput);
 
     // Check if the flow itself returned an error message (like safety block or invalid response)
-     if (result?.response?.startsWith("Sorry,") || result?.response?.startsWith("I cannot provide a response")) {
+     if (result?.response?.startsWith("Sorry,") || result?.response?.startsWith("I cannot provide a response") || result?.response?.includes("internal error occurred")) {
          console.warn("getTutorResponse Server Action: Flow returned a handled error state:", result.response);
          // Return the error message from the flow directly
           return result;
@@ -52,4 +53,3 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
      throw new Error(`AI Tutor Error: ${err.message}`);
   }
 }
-```

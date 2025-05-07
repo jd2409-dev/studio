@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useState, type FormEvent, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send, Sparkles, User, Bot } from 'lucide-react';
+import { Loader2, Send, Sparkles, Bot } from 'lucide-react'; // Removed User icon as it's not used directly here
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 // Import the action function and types (types are safe to import)
@@ -33,7 +32,7 @@ export default function AiTutorPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const { toast } = useToast() || { toast: () => {} };
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Get user state
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
@@ -50,31 +49,44 @@ export default function AiTutorPage() {
 
   // Fetch/subscribe to chat history
   useEffect(() => {
+    // If auth is still loading, wait
+    if (authLoading) {
+        setIsLoadingHistory(true);
+        return;
+    }
+    // If auth is done and no user, clear messages and stop loading history
     if (!user) {
-      setMessages([]); // Clear messages if user logs out
-      setIsLoadingHistory(false);
-      return;
+        setMessages([]); // Clear messages if user logs out
+        setIsLoadingHistory(false);
+        return;
     }
 
+    // Proceed if user exists and auth is loaded
     let unsubscribe: () => void = () => {};
     try {
-        ensureFirebaseInitialized();
+        ensureFirebaseInitialized(); // Ensure Firebase is ready
         const messagesColRef = collection(db!, 'users', user.uid, 'tutorMessages');
         const q = query(messagesColRef, orderBy('timestamp', 'asc'));
 
-        setIsLoadingHistory(true);
+        setIsLoadingHistory(true); // Start loading history specifically for this user
         unsubscribe = onSnapshot(q, (snapshot) => {
           const fetchedMessages: ChatMessage[] = snapshot.docs.map(doc => {
             const data = doc.data() as DocumentData;
+            // Basic validation for essential fields
+             if (!data.role || !data.content) {
+                console.warn("Skipping invalid message from Firestore:", doc.id, data);
+                return null; // Skip invalid messages
+             }
             return {
               id: doc.id,
-              role: data.role,
-              content: data.content,
+              role: data.role === 'user' ? 'user' : 'assistant', // Ensure valid role
+              content: String(data.content), // Ensure content is string
               timestamp: data.timestamp, // Keep as Firestore Timestamp or Date
             };
-          });
+          }).filter((msg): msg is ChatMessage => msg !== null); // Filter out null (invalid) messages
+
           setMessages(fetchedMessages);
-          setIsLoadingHistory(false);
+          setIsLoadingHistory(false); // Stop loading history after fetch/update
         }, (error: FirestoreError) => {
           console.error("Error fetching chat history:", error);
           let errorDesc = "Could not load previous chat messages. " + error.message;
@@ -108,18 +120,21 @@ export default function AiTutorPage() {
         // console.log("Unsubscribing from Firestore chat history.");
         unsubscribe();
     };
-  }, [user, toast]); // Dependency array includes user and toast
+  }, [user, authLoading, toast]); // Dependency array includes user and authLoading
+
 
   const handleSendMessage = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     const userMessageContent = input.trim();
-    if (!userMessageContent || isLoading || !user) return;
+    if (!userMessageContent || isLoading || !user || isLoadingHistory) {
+        // Prevent sending if loading history, AI is processing, no user, or empty input
+        return;
+    }
 
     setIsLoading(true);
     setInput('');
 
     // Optimistically create the user message for the flow input
-    // Note: We don't add this to the state directly anymore, relies on Firestore update
     const optimisticUserMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: new Date() };
     // Construct history for the flow using current messages + optimistic user message
     const historyForFlow: AiTutorInput = {
@@ -144,14 +159,15 @@ export default function AiTutorPage() {
       // --- Server Action Call End ---
 
       // Check if the result contains an error message from the flow/action itself
-      if (result?.response?.startsWith("Sorry,") || result?.response?.startsWith("I cannot provide a response") || result?.response?.startsWith("AI Tutor Error:")) {
-         console.error("AI Tutor Error Response Received:", result.response);
+      if (!result || result.response.startsWith("Sorry,") || result.response.startsWith("I cannot provide a response") || result.response.startsWith("AI Tutor Error:")) {
+         const errorMessage = result?.response || "AI Tutor returned an empty or invalid response.";
+         console.error("AI Tutor Error Response Received:", errorMessage);
          // Throw an error so it's caught by the catch block and displayed as a toast
-         throw new Error(result.response);
+         throw new Error(errorMessage);
       }
 
       // Ensure we have a valid string response
-      if (!result?.response || typeof result.response !== 'string') {
+      if (typeof result.response !== 'string') {
         console.error("AI Tutor Error: No valid response content from AI action for input:", JSON.stringify(historyForFlow), "Result:", result);
         throw new Error("The AI tutor did not provide a valid response. Please try rephrasing your question.");
       }
@@ -186,6 +202,9 @@ export default function AiTutorPage() {
           } else if (error.code === 'unavailable') {
                errorTitle = "Network Error";
                errorDesc = "Could not save message. Please check your connection and try again.";
+          } else if (error.message.startsWith("AI Tutor internal template error:")) {
+             errorTitle = "AI Tutor Template Error";
+             errorDesc = error.message.replace("AI Tutor internal template error:", "").trim() + " Please contact support.";
           }
       }
 
@@ -232,13 +251,13 @@ export default function AiTutorPage() {
                   For example: "Explain Newton's first law" or "What is photosynthesis?"
                 </div>
               )}
-              {messages.map((message) => (
-                <div key={message.id || `msg-${Math.random()}`} className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
+              {messages.map((message, index) => ( // Use index as key if message.id is not always available (e.g., optimistic)
+                <div key={message.id || `msg-${index}`} className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
                   {message.role === 'assistant' && <Avatar className="h-8 w-8 flex-shrink-0 mt-1"><AvatarImage src="https://picsum.photos/seed/nexuslearn-bot/40/40" alt="AI Bot" data-ai-hint="bot avatar" /><AvatarFallback>AI</AvatarFallback></Avatar>}
                   <div className={`rounded-lg px-4 py-3 max-w-[75%] shadow-md ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
-                  {message.role === 'user' && <Avatar className="h-8 w-8 flex-shrink-0 mt-1"><AvatarImage src="https://picsum.photos/seed/nexuslearn-user/40/40" alt="User" data-ai-hint="user avatar" /><AvatarFallback>U</AvatarFallback></Avatar>}
+                  {message.role === 'user' && <Avatar className="h-8 w-8 flex-shrink-0 mt-1"><AvatarImage src={user?.photoURL || `https://avatar.vercel.sh/${user?.email}.png`} alt="User" data-ai-hint="user avatar" /><AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback></Avatar>}
                 </div>
               ))}
               {isLoading && !isLoadingHistory && ( // Show AI thinking indicator only if not loading history and AI is processing
@@ -255,11 +274,11 @@ export default function AiTutorPage() {
         <CardFooter className="border-t p-4 bg-background">
           <form onSubmit={handleSendMessage} className="flex w-full items-center space-x-2">
             <Textarea
-              placeholder="Type your question here..."
+              placeholder={isLoadingHistory ? "Loading history..." : (!user ? "Please log in to chat" : "Type your question here...")}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isLoadingHistory) {
+                if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isLoadingHistory && user) {
                   e.preventDefault();
                   handleSendMessage();
                 }
@@ -279,4 +298,3 @@ export default function AiTutorPage() {
     </div>
   );
 }
-```
