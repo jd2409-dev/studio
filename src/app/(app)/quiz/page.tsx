@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type FormEvent, useEffect } from 'react'; // Added useEffect
@@ -57,15 +58,19 @@ export default function QuizGenerationPage() {
   const handleGenerateQuiz = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-        toast({ title: "Authentication Required", description: "Please log in to generate a quiz.", variant = "destructive" });
+        toast({
+            title: "Authentication Required",
+            description: "Please log in to generate a quiz.",
+            variant: "destructive" // Corrected syntax
+        });
         return;
     }
     if (!textbookContent.trim()) {
-      toast({ title: "Input Required", description: "Please paste some textbook content first.", variant = "destructive" });
+      toast({ title: "Input Required", description: "Please paste some textbook content first.", variant: "destructive" });
       return;
     }
     if (isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
-       toast({ title: "Invalid Input", description: "Please enter a valid number of questions between 1 and 20.", variant = "destructive" });
+       toast({ title: "Invalid Input", description: "Please enter a valid number of questions between 1 and 20.", variant: "destructive" });
        return;
      }
 
@@ -155,7 +160,7 @@ export default function QuizGenerationPage() {
   const handleSubmitQuiz = async () => {
       if (!quizState || !quizData || !user || quizState.submitted) { // Prevent re-submission
           console.warn("Submit quiz aborted:", { quizState, quizData, userExists: !!user, submitted: quizState?.submitted });
-          toast({ title: "Error", description: "Cannot submit quiz. User not logged in, quiz data missing, or already submitted.", variant = "destructive" });
+          toast({ title: "Error", description: "Cannot submit quiz. User not logged in, quiz data missing, or already submitted.", variant: "destructive" });
           return;
       }
       const allAnswered = quizState.selectedAnswers.every(answer => answer !== undefined && String(answer).trim() !== '');
@@ -230,7 +235,7 @@ export default function QuizGenerationPage() {
             } else if (error instanceof Error) {
                  errorDesc = error.message;
             }
-          toast({ title: "Submission Error", description: errorDesc, variant = "destructive" });
+          toast({ title: "Submission Error", description: errorDesc, variant: "destructive" });
           // Don't revert client state, let user see their score but know it wasn't saved.
       } finally {
           setIsSubmitting(false);
@@ -540,3 +545,4 @@ export default function QuizGenerationPage() {
     </div>
   );
 }
+
