@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -13,7 +12,7 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-import Handlebars from 'handlebars'; // Import Handlebars
+import Handlebars from 'handlebars'; 
 
 // Register the 'eq' helper globally for Handlebars used within this flow
 Handlebars.registerHelper('eq', function(a, b) {
@@ -27,14 +26,14 @@ const MessageSchema = z.object({
   content: z.string(),
 });
 
-// Define the input schema for the AI Tutor flow
-export const AiTutorInputSchema = z.object({
+// Define the input schema for the AI Tutor flow - NOT EXPORTED
+const AiTutorInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
-// Define the output schema for the AI Tutor flow
-export const AiTutorOutputSchema = z.object({
+// Define the output schema for the AI Tutor flow - NOT EXPORTED
+const AiTutorOutputSchema = z.object({
   response: z.string().describe('The AI tutor\'s response to the user.'),
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
@@ -42,18 +41,9 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
-  model: gemini15Flash, // Ensure a model is specified here
+  model: gemini15Flash, 
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
-  // No customize needed if Handlebars helpers are registered globally before prompt definition
-  // customize: (promptObject) => {
-  //   // Explicitly set knownHelpersOnly to false - *THIS IS THE FIX*
-  //   if (!promptObject.handlebarsOptions) {
-  //       promptObject.handlebarsOptions = {};
-  //   }
-  //   promptObject.handlebarsOptions.knownHelpersOnly = false;
-  //   return promptObject;
-  // },
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
 Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
@@ -75,6 +65,14 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
 `,
+  customize: (promptObject) => {
+    // Explicitly set knownHelpersOnly to false
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
   config: {
     temperature: 0.7,
   },
@@ -97,8 +95,6 @@ const aiTutorFlow = ai.defineFlow(
       // Call the prompt object directly
       const { output } = await tutorPrompt(input);
 
-      // Ensure output is not null or undefined before returning
-      // Also check specifically for output.response
       if (!output || typeof output.response !== 'string') {
         console.error("AI Tutor generation failed: Invalid or missing response text received from the AI model. Output:", output, "Input:", JSON.stringify(input));
         throw new Error("AI Tutor generation failed: No valid response received from the AI model.");
@@ -108,11 +104,9 @@ const aiTutorFlow = ai.defineFlow(
 
     } catch (error: any) {
       console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
-      // Check if the error message indicates a knownHelpersOnly issue, though the config should prevent it
       if (error.message?.includes("unknown helper")) {
           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
       }
-      // For other errors, re-throw a more generic error message
       throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
   }
@@ -121,17 +115,14 @@ const aiTutorFlow = ai.defineFlow(
 // Exported wrapper function to be called by the frontend
 export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
     try {
-        // Validate input with Zod schema before calling the flow
         const validatedInput = AiTutorInputSchema.parse(input);
         return await aiTutorFlow(validatedInput);
     } catch (error: any) {
         console.error(`Error in getTutorResponse (wrapper):`, error.message, error.stack, "Input:", JSON.stringify(input));
-        // Re-throw a more specific error or handle it as needed
         if (error instanceof z.ZodError) {
             throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
         }
-        // For errors from the flow itself, use the error message it throws
-        // The flow already throws a new Error with a message like "AI Tutor encountered an error: ..." or others
         throw error;
     }
 }
+
