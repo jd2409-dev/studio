@@ -31,10 +31,10 @@ You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tuto
 
 Conversation History:
 {{#each history}}
-  {{#if (eq role "user")}}
-User: {{{content}}}
+  {{#if (roleIsUser this.role)}}
+User: {{{this.content}}}
   {{else}}
-Tutor: {{{content}}}
+Tutor: {{{this.content}}}
   {{/if}}
 {{/each}}
 
@@ -42,12 +42,10 @@ Tutor, provide your response:
   `,
   // Ensure handlebarsOptions is correctly defined HERE
   handlebarsOptions: {
-    knownHelpersOnly: false, // Explicitly set to false
+    knownHelpersOnly: false, // Keep false to allow custom helpers
     helpers: {
-      // Define the 'eq' helper required by the template
-      eq: function (a: any, b: any): boolean {
-        return String(a) === String(b);
-      }
+      // Define the 'roleIsUser' helper required by the updated template
+      roleIsUser: (role: string) => role === 'user',
     }
   },
   config: {
@@ -64,7 +62,7 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
     validatedInput = AiTutorInputSchema.parse(input); // Zod throws on failure
   } catch (validationError: any) {
       console.error("runTutorPrompt: Zod validation failed:", validationError.errors);
-      // Throw a specific validation error
+      // Throw a specific validation error message, suitable for frontend display
       throw new Error(`Invalid input for AI Tutor: ${validationError.errors.map((e:any) => e.message).join(', ')}`);
   }
 
@@ -73,7 +71,7 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
   // Basic input handling/normalization
   if (!validatedInput.history || validatedInput.history.length === 0) {
     console.warn("runTutorPrompt: Received empty history. Providing default initial input.");
-    // Let the prompt handle potentially empty history.
+    validatedInput.history = [{ role: 'user', content: 'Hi, I need help with a topic.' }];
   }
 
   // Ensure content exists and roles are correct (redundant if Zod validation is strict, but safe)
@@ -107,8 +105,7 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
     // Check if the error is the Handlebars helper issue SPECIFICALLY
     if (error.message?.includes("unknown helper")) {
       console.error("runTutorPrompt: Handlebars template error detected:", error.message);
-      // This specific check helps identify if the Handlebars helper issue persists.
-      // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
+      // This specific check helps identify if the global registration wasn't effective or knownHelpersOnly was overridden.
       throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`); // Keep this specific error for template issues
     }
      if (error.message?.includes("Generation blocked")) {
