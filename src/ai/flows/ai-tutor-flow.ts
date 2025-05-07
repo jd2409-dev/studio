@@ -1,16 +1,13 @@
+
 'use server';
 
 /**
  * @fileOverview AI Tutor Flow for NexusLearn AI.
- *
- * - getTutorResponse - Handles chat interactions with the AI tutor.
- * - AiTutorInput - Input schema for the tutor flow.
- * - AiTutorOutput - Output schema for the tutor flow.
  */
 
-import { ai } from '@/ai/ai-instance';
+import { ai } from '@/ai/ai-instance'; // Correctly import 'ai' instance
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; // Ensures a model is specified
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 // -----------------------------
 // Input / Output Schemas
@@ -43,7 +40,7 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
 // -----------------------------
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
-  model: gemini15Flash, // Specify the model for the prompt
+  model: gemini15Flash,
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
@@ -67,23 +64,22 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
-    // Ensure handlebarsOptions exists
+    // Ensure handlebarsOptions and its helpers property exist
     if (!promptObject.handlebarsOptions) {
-      promptObject.handlebarsOptions = {};
+        promptObject.handlebarsOptions = {};
     }
-
-    // Ensure helpers within handlebarsOptions exists and is an object
-    if (typeof promptObject.handlebarsOptions.helpers !== 'object' || promptObject.handlebarsOptions.helpers === null) {
-      promptObject.handlebarsOptions.helpers = {};
+    if (!promptObject.handlebarsOptions.helpers) {
+        promptObject.handlebarsOptions.helpers = {};
     }
-    
-    // Register the 'eq' helper
-    // Typing helpers explicitly if needed, though 'any' is often used for simplicity here
-    (promptObject.handlebarsOptions.helpers as any).eq = (a: string, b: string) => a === b;
-
-    // Allow dynamic helpers by explicitly setting knownHelpersOnly to false
+    // Add/overwrite the 'eq' helper
+    promptObject.handlebarsOptions.helpers = {
+      ...(promptObject.handlebarsOptions.helpers), // Spread existing helpers first
+      eq: function (a: string, b: string) { // Define 'eq' helper
+        return a === b;
+      },
+    };
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
-
     return promptObject;
   },
   config: {
@@ -107,8 +103,7 @@ const aiTutorFlow = ai.defineFlow(
     }
 
     try {
-      // Call the prompt object directly
-      const { output } = await tutorPrompt(input); 
+      const { output } = await tutorPrompt(input); // Call the prompt object directly
 
       if (!output || !output.response) {
         console.error("AI Tutor generation failed: No output or response content received from the AI model. Input:", JSON.stringify(input));
@@ -119,8 +114,6 @@ const aiTutorFlow = ai.defineFlow(
       return output;
     } catch (error: any) {
       console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
-      // For now, re-throwing to let the frontend handle it via toast.
-      // Could also return: return { response: "Sorry, I encountered an internal error and couldn't process your request." };
       throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
   }
