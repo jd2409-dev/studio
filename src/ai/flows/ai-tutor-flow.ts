@@ -12,15 +12,7 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-// import Handlebars from 'handlebars'; // Global Handlebars instance
- 
-// Global Handlebars registration might not be picked up by Genkit's internal instance for prompts.
-// It's safer and more explicit to define helpers directly within the prompt's `customize` function
-// or ensure `knownHelpersOnly: false` is respected for globally registered helpers.
-// Handlebars.registerHelper('eq', function(a, b) {
-//   return a === b;
-// });
-
+// import Handlebars from 'handlebars'; // Global Handlebars instance is not reliably picked up by Genkit prompt
 
 // Define the schema for a single message in the history
 const MessageSchema = z.object({
@@ -43,14 +35,14 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
-  model: gemini15Flash, 
+  model: gemini15Flash,
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
 Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
 
-Strive to answer all student questions comprehensively, drawing connections to academic subjects whenever relevant. 
+Strive to answer all student questions comprehensively, drawing connections to academic subjects whenever relevant.
 If a question is genuinely and completely unrelated to educational topics or seeks inappropriate content, politely decline to answer that specific query and offer to help with academic subjects instead.
 If a question is unclear or ambiguous, ask for clarification before attempting to answer.
 Utilize the provided conversation history to maintain context and provide relevant follow-up responses.
@@ -70,19 +62,20 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
+    // Ensure handlebarsOptions and its helpers property exist
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
     if (!promptObject.handlebarsOptions.helpers) {
-      promptObject.handlebarsOptions.helpers = {};
+        promptObject.handlebarsOptions.helpers = {};
     }
     // Define the 'eq' helper directly within the prompt's Handlebars options
     // This is more robust than relying on global registration for Genkit prompts.
     promptObject.handlebarsOptions.helpers = {
-      ...promptObject.handlebarsOptions.helpers,
-      eq: function(a: any, b: any) { 
-        return a === b;
-      },
+        ...promptObject.handlebarsOptions.helpers,
+        eq: function(a: any, b: any) {
+            return a === b;
+        },
     };
     // Crucially, also ensure knownHelpersOnly is false
     promptObject.handlebarsOptions.knownHelpersOnly = false;
@@ -105,7 +98,7 @@ const aiTutorFlow = ai.defineFlow(
     if (input.history.length > 0) {
         console.log("AI Tutor Flow: Last user message:", input.history[input.history.length-1].content);
     }
-    
+
     try {
       // Call the prompt object directly
       const { output } = await tutorPrompt(input);
@@ -139,6 +132,6 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
             throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
         }
         // Re-throw the error so the calling page can handle it (e.g., show a toast)
-        throw error; 
+        throw error;
     }
 }
