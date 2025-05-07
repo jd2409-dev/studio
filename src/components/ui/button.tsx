@@ -9,13 +9,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80", // Adjusted hover/active
+        default: "bg-primary text-primary-foreground hover:bg-primary/80 active:bg-primary/70", // Darken more on hover/active
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80", // Adjusted hover/active
+          "bg-destructive text-destructive-foreground hover:bg-destructive/80 active:bg-destructive/70", // Darken more
         outline:
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground active:bg-accent/80",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70", // Adjusted hover/active
+          "bg-secondary text-secondary-foreground hover:bg-secondary/70 active:bg-secondary/60", // Darken more
         ghost: "hover:bg-accent hover:text-accent-foreground active:bg-accent/80",
         link: "text-primary underline-offset-4 hover:underline active:opacity-80",
       },
@@ -57,4 +57,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
-
