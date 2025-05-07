@@ -12,7 +12,7 @@ import { getTutorResponse, type AiTutorInput, type AiTutorOutput } from '@/ai/fl
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, type DocumentData } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, type DocumentData, FirestoreError } from 'firebase/firestore';
 
 interface ChatMessage {
   id?: string; // Firestore document ID
@@ -68,11 +68,15 @@ export default function AiTutorPage() {
       });
       setMessages(fetchedMessages);
       setIsLoadingHistory(false);
-    }, (error) => {
+    }, (error: FirestoreError) => {
       console.error("Error fetching chat history:", error);
+      let errorDesc = "Could not load previous chat messages. " + error.message;
+      if (error.code === 'permission-denied') {
+        errorDesc = "Could not load chat history due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). This often involves running `firebase deploy --only firestore:rules`.";
+      }
       toast({
         title: "Error Loading History",
-        description: "Could not load previous chat messages. " + error.message,
+        description: errorDesc,
         variant: "destructive",
       });
       setIsLoadingHistory(false);
@@ -121,14 +125,18 @@ export default function AiTutorPage() {
       });
       // UI will update via onSnapshot listener
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error during chat interaction:", error);
       let errorDesc = "An unexpected error occurred. Please try again.";
       if (error instanceof Error) {
         if (error.message.startsWith("AI Tutor encountered an error:") || error.message.includes("No output received from the AI model")) {
           errorDesc = "I'm having a little trouble right now. Could you try asking again in a moment?";
-        } else if (error.message.includes("Firestore")) {
-            errorDesc = "There was an issue saving your message. Please try again.";
+        } else if (error.message.includes("Firestore") || (error.code && error.code.startsWith('permission-denied'))) { // Check for FirestoreError codes
+            if(error.code === 'permission-denied'){
+                 errorDesc = "Could not save message due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). This often involves running `firebase deploy --only firestore:rules`.";
+            } else {
+                errorDesc = "There was an issue saving your message to the database. Please try again.";
+            }
         } else {
           errorDesc = error.message;
         }
