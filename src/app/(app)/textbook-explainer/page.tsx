@@ -1,18 +1,18 @@
-
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react'; // Added useEffect, useRef
+import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, Lightbulb, Play, Pause, StopCircle } from 'lucide-react'; // Added Play, Pause, StopCircle
+import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, Lightbulb, Play, Pause, StopCircle, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { explainTextbookPdf, type ExplainTextbookPdfOutput } from '@/ai/flows/textbook-explainer-flow';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // Increased max file size to 15MB for PDFs
+const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB for PDFs
 const ALLOWED_FILE_TYPE = 'application/pdf';
 
 export default function TextbookExplainerPage() {
@@ -20,37 +20,48 @@ export default function TextbookExplainerPage() {
   const [explanation, setExplanation] = useState<ExplainTextbookPdfOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false); // Kept for potential future API use
+  const { user, loading: authLoading } = useAuth(); // Get user auth state
 
   // State for Web Speech API control
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null); // Store speech errors
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
 
-  // Cleanup speech synthesis on unmount or when explanation changes
+  // Function to safely cancel speech synthesis
+  const cancelSpeech = () => {
+       if (typeof window !== 'undefined' && 'speechSynthesis' in window && speechSynthesis.speaking) {
+           speechSynthesis.cancel();
+       }
+       utteranceRef.current = null;
+       setIsSpeaking(false);
+       setIsPaused(false);
+       setSpeechError(null);
+   };
+
+  // Cleanup speech synthesis on unmount or when explanation/user changes
   useEffect(() => {
     return () => {
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
-      utteranceRef.current = null; // Clear ref on cleanup
-      setIsSpeaking(false);
-      setIsPaused(false);
+      cancelSpeech();
     };
-  }, [explanation]); // Re-run cleanup if explanation changes
+  }, []); // Run only once on unmount
 
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
+    setFile(null); // Reset file state first
+    setExplanation(null); // Clear previous explanation
+    cancelSpeech(); // Stop any ongoing speech
+
     if (selectedFile) {
       // Validate file type
       if (selectedFile.type !== ALLOWED_FILE_TYPE) {
           toast({
               title: "Invalid File Type",
-              description: `Please select a PDF file.`,
+              description: `Please select a PDF file. Type detected: ${selectedFile.type}`,
               variant: "destructive",
           });
-          setFile(null);
           event.target.value = ''; // Clear the input
           return;
       }
@@ -59,154 +70,174 @@ export default function TextbookExplainerPage() {
       if (selectedFile.size > MAX_FILE_SIZE) {
           toast({
               title: "File Too Large",
-              description: `Please select a file smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+              description: `PDF file must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
               variant: "destructive",
           });
-          setFile(null);
           event.target.value = ''; // Clear the input
           return;
       }
 
       setFile(selectedFile);
-      setExplanation(null); // Clear previous explanation
-      // Cancel any ongoing speech
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
-      utteranceRef.current = null;
-      setIsSpeaking(false);
-      setIsPaused(false);
     }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) {
+        toast({ title: "Error", description: "Please log in to use the explainer.", variant: "destructive" });
+        return;
+    }
     if (!file) {
-      toast({
-        title: "Error",
-        description: "Please select a PDF file first.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please select a PDF file first.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
     setExplanation(null);
-    // Cancel any ongoing speech
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
-      utteranceRef.current = null;
-      setIsSpeaking(false);
-      setIsPaused(false);
+    cancelSpeech(); // Stop any previous speech
 
     // Read file as Data URI to pass to the flow
     const reader = new FileReader();
     reader.readAsDataURL(file);
+
     reader.onload = async () => {
         const fileDataUri = reader.result as string;
+        if (!fileDataUri || !fileDataUri.startsWith(`data:${ALLOWED_FILE_TYPE};base64,`)) {
+            toast({ title: "File Read Error", description: "Failed to read the PDF file correctly.", variant: "destructive" });
+            setIsLoading(false);
+            return;
+        }
         try {
             const input = { fileDataUri };
+            console.log("Sending PDF to explanation flow...");
             const result = await explainTextbookPdf(input);
+             console.log("Explanation received:", { textLen: result?.textExplanation?.length, audioLen: result?.audioExplanationScript?.length, mindMapLen: result?.mindMapExplanation?.length });
+
+             // Check if AI indicated inability to explain
+              if (result.textExplanation.startsWith("Cannot explain:")) {
+                  toast({
+                      title: "Explanation Not Possible",
+                      description: result.textExplanation, // Show reason from AI
+                      variant: "default",
+                      duration: 5000,
+                  });
+              } else {
+                 toast({ title: "Success", description: "Explanation generated!" });
+              }
             setExplanation(result);
-            toast({
-                title: "Success",
-                description: "Explanation generated successfully!",
-            });
         } catch (error: any) {
             console.error("Error generating explanation:", error);
             let errorDesc = "Failed to generate explanation. Please try again.";
-            // Use the potentially more specific error message from the flow
-            if (error instanceof Error && error.message) {
-                errorDesc = error.message;
+            if (error instanceof Error) {
+                 if (error.message.includes("blocked")) {
+                     errorDesc = "Explanation generation was blocked, possibly due to content safety filters or the PDF content itself.";
+                 } else if (error.message.includes("unexpected format")) {
+                      errorDesc = "The AI returned the explanation in an unexpected format. Please try again or with a different file.";
+                 } else if (error.message.includes("valid Base64 encoded PDF")) {
+                     errorDesc = "Invalid PDF file format provided.";
+                 } else {
+                    errorDesc = error.message; // Use specific error from flow if available
+                 }
             }
-            toast({
-                title: "Error Generating Explanation",
-                description: errorDesc,
-                variant: "destructive",
-            });
+            toast({ title: "Error Generating Explanation", description: errorDesc, variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
     };
     reader.onerror = (error) => {
         console.error("Error reading file:", error);
-        toast({
-            title: "File Read Error",
-            description: "Could not read the selected file.",
-            variant: "destructive",
-        });
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
         setIsLoading(false);
     };
   };
 
   const handlePlayPause = () => {
-      if (!explanation?.audioExplanationScript || !('speechSynthesis' in window)) return;
+      if (!explanation?.audioExplanationScript || !('speechSynthesis' in window)) {
+          setSpeechError("Speech synthesis is not supported by your browser.");
+          return;
+      }
+      setSpeechError(null); // Clear previous errors
 
       if (isSpeaking && !isPaused) {
           // Pause
           speechSynthesis.pause();
           setIsPaused(true);
-          toast({ title: "Audio Paused" });
+          // toast({ title: "Audio Paused" }); // Optional: less intrusive feedback
       } else {
           // Play or Resume
           if (isPaused && utteranceRef.current) {
               speechSynthesis.resume();
+              setIsPaused(false); // Explicitly set paused to false on resume
+              // toast({ title: "Audio Resumed" }); // Optional
           } else {
                // Start new speech
-               if (speechSynthesis.speaking) { // Cancel previous if any
-                   speechSynthesis.cancel();
-                   setIsSpeaking(false);
-                   setIsPaused(false);
-                   utteranceRef.current = null;
-               }
+               cancelSpeech(); // Ensure any previous utterance is stopped/cleared
 
               const utterance = new SpeechSynthesisUtterance(explanation.audioExplanationScript);
               utteranceRef.current = utterance; // Store the reference
 
               utterance.onstart = () => {
+                  console.log("Speech started");
                   setIsSpeaking(true);
                   setIsPaused(false);
-                  console.log("Speech started");
               };
               utterance.onend = () => {
+                  console.log("Speech ended naturally");
                   setIsSpeaking(false);
                   setIsPaused(false);
                   utteranceRef.current = null; // Clear ref on end
-                  console.log("Speech ended");
-                  toast({ title: "Audio Finished" });
+                  // toast({ title: "Audio Finished" }); // Optional
               };
-              utterance.onpause = () => {
-                  setIsPaused(true); // Ensure state consistency
-                  console.log("Speech paused");
+              utterance.onpause = () => { // This gets triggered when speech is paused
+                  console.log("Speech paused via API");
+                  // State is already set by handlePlayPause logic
               };
-              utterance.onresume = () => {
-                  setIsPaused(false); // Ensure state consistency
-                  console.log("Speech resumed");
+              utterance.onresume = () => { // This gets triggered when speech is resumed
+                  console.log("Speech resumed via API");
+                  setIsPaused(false); // Ensure consistency
               };
                utterance.onerror = (event) => {
-                  console.error("Speech synthesis error:", event.error);
-                  toast({ title: "Audio Error", description: `Speech synthesis failed: ${event.error}`, variant: "destructive" });
+                  console.error("Speech synthesis error:", event.error, event);
+                  let errorMsg = `Speech synthesis failed: ${event.error}`;
+                  if (event.error === 'synthesis-failed' || event.error === 'network') {
+                      errorMsg += ". Please check your internet connection or try a different voice/browser.";
+                  } else if (event.error === 'language-unavailable') {
+                       errorMsg += ". The selected language for speech is unavailable.";
+                  }
+                  setSpeechError(errorMsg);
+                  toast({ title: "Audio Error", description: errorMsg, variant: "destructive" });
                   setIsSpeaking(false);
                   setIsPaused(false);
                   utteranceRef.current = null;
               };
-              speechSynthesis.speak(utterance);
+
+              // Attempt to speak
+              try {
+                   speechSynthesis.speak(utterance);
+                   // Toasting here might be premature if speech fails immediately
+              } catch (speakError: any) {
+                  console.error("Error calling speechSynthesis.speak:", speakError);
+                   setSpeechError(`Could not start speech: ${speakError.message}`);
+                    toast({ title: "Audio Error", description: `Could not start speech: ${speakError.message}`, variant: "destructive" });
+                   setIsSpeaking(false);
+                   setIsPaused(false);
+                   utteranceRef.current = null;
+              }
           }
-          setIsPaused(false); // Always ensure paused is false when playing/resuming
-           if (!isSpeaking) { // Only toast 'playing' if it wasn't already paused
-               toast({ title: "Audio Playing" });
-           }
       }
   };
 
   const handleStop = () => {
-      if ('speechSynthesis' in window) {
-          speechSynthesis.cancel(); // Stops speaking immediately
-          setIsSpeaking(false);
-          setIsPaused(false);
-          utteranceRef.current = null; // Clear ref on stop
-          toast({ title: "Audio Stopped" });
+      cancelSpeech(); // Use the centralized cancel function
+      // toast({ title: "Audio Stopped" }); // Optional
+  };
+
+   const handleClear = () => {
+      setFile(null);
+      setExplanation(null);
+      cancelSpeech();
+      if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Reset the file input visually
       }
   };
 
@@ -218,48 +249,55 @@ export default function TextbookExplainerPage() {
       <p className="text-muted-foreground mb-8">
         Upload a textbook PDF (max {MAX_FILE_SIZE / 1024 / 1024}MB). The AI will explain the content in text, audio, and mind map formats.
       </p>
-        <Alert className="mb-6 bg-accent/10 border-accent/30 text-accent-foreground [&>svg]:text-accent">
+        <Alert className="mb-6 bg-primary/5 border-primary/20 text-primary-foreground [&>svg]:text-primary">
             <Lightbulb className="h-4 w-4" />
             <AlertTitle>How it works</AlertTitle>
             <AlertDescription>
-            The AI analyzes the PDF content you upload and generates comprehensive explanations to help you understand the material better. Audio uses your browser's text-to-speech.
+            The AI analyzes the PDF content you upload and generates comprehensive explanations to help you understand the material better. Audio playback uses your browser's built-in text-to-speech capability.
             </AlertDescription>
         </Alert>
 
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Upload Section */}
-        <Card>
+        <Card className="shadow-md rounded-lg">
           <CardHeader>
             <CardTitle>Upload Textbook PDF</CardTitle>
             <CardDescription>Select a PDF file to explain.</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              <div className="grid w-full max-w-sm items-center gap-1.5">
+              <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="textbook-pdf">PDF File</Label>
                 <Input
+                  ref={fileInputRef}
                   id="textbook-pdf"
                   type="file"
                   accept={ALLOWED_FILE_TYPE}
                   onChange={handleFileChange}
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading} // Also disable if auth is loading
                   required
                 />
               </div>
               {/* Display file info */}
               {file && (
-                <div className="mt-4 border rounded-md overflow-hidden flex items-center gap-3 p-3 bg-muted">
+                <div className="mt-4 border rounded-md overflow-hidden flex items-center gap-3 p-3 bg-muted text-left">
                     <FileTextIcon className="h-8 w-8 text-muted-foreground flex-shrink-0" />
-                    <div className="text-left overflow-hidden">
-                        <p className="text-sm font-medium truncate">{file.name}</p>
+                    <div className="overflow-hidden">
+                        <p className="text-sm font-medium truncate" title={file.name}>{file.name}</p>
                         <p className="text-xs text-muted-foreground">{file.type} - {(file.size / 1024 / 1024).toFixed(2)} MB</p>
                     </div>
                 </div>
               )}
+              {!user && !authLoading && (
+                 <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>Please log in to use the explainer.</AlertDescription>
+                 </Alert>
+              )}
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={isLoading || !file}>
+              <Button type="submit" disabled={isLoading || !file || authLoading || !user}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -276,38 +314,48 @@ export default function TextbookExplainerPage() {
         </Card>
 
         {/* Explanation Section */}
-        <Card>
+        <Card className="shadow-md rounded-lg">
           <CardHeader>
             <CardTitle>Generated Explanation</CardTitle>
             <CardDescription>View the AI-generated explanation below.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-h-[300px]"> {/* Ensure minimum height */}
             {isLoading && (
-              <div className="flex flex-col items-center justify-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+              <div className="flex flex-col items-center justify-center h-full py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground">Generating explanation...</p>
+                 <p className="text-xs text-muted-foreground mt-1">(This may take a moment for larger PDFs)</p>
               </div>
             )}
             {explanation ? (
               <Tabs defaultValue="text" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-3 mb-4">
                   <TabsTrigger value="text"><Text className="mr-1 h-4 w-4" /> Text</TabsTrigger>
                   <TabsTrigger value="audio"><AudioLines className="mr-1 h-4 w-4" /> Audio</TabsTrigger>
                   <TabsTrigger value="mindmap"><BrainCircuit className="mr-1 h-4 w-4" /> Mind Map</TabsTrigger>
                 </TabsList>
-                <TabsContent value="text" className="mt-4 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto">
-                  <h3 className="font-semibold mb-2">Text Explanation</h3>
-                   <p className="text-sm whitespace-pre-wrap">{explanation.textExplanation}</p>
+                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                  <h3 className="font-semibold mb-2 text-base">Text Explanation</h3>
+                   {/* Use dangerouslySetInnerHTML ONLY if markdown/HTML formatting is intended and trusted */}
+                   {/* For plain text with potential markdown, pre-wrap is safer */}
+                   <p className="whitespace-pre-wrap">{explanation.textExplanation}</p>
+                   {/* If using markdown-to-html library: <div dangerouslySetInnerHTML={{ __html: formattedHtml }} /> */}
                 </TabsContent>
-                 <TabsContent value="audio" className="mt-4 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto space-y-4">
-                   <h3 className="font-semibold mb-2">Audio Explanation</h3>
-                    <div className="flex gap-2">
+                 <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] flex flex-col">
+                   <h3 className="font-semibold mb-2 text-base">Audio Explanation</h3>
+                   {speechError && (
+                      <Alert variant="destructive" className="mb-3">
+                         <AlertTriangle className="h-4 w-4" />
+                         <AlertDescription>{speechError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="flex gap-2 mb-3 flex-shrink-0">
                        <Button
                            onClick={handlePlayPause}
                            disabled={isGeneratingAudio || !explanation.audioExplanationScript || !('speechSynthesis' in window)}
                            variant={isSpeaking && !isPaused ? "secondary" : "default"}
                            size="icon"
-                           aria-label={isSpeaking && !isPaused ? "Pause" : "Play"}
+                           aria-label={isSpeaking && !isPaused ? "Pause" : "Play/Resume"}
                        >
                            {isSpeaking && !isPaused ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                        </Button>
@@ -322,37 +370,28 @@ export default function TextbookExplainerPage() {
                        </Button>
                    </div>
                    {!('speechSynthesis' in window) && (
-                       <p className="text-xs text-destructive">Your browser does not support speech synthesis.</p>
+                       <p className="text-xs text-destructive mb-3">Your browser does not support speech synthesis.</p>
                    )}
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Use the controls above to play, pause, or stop the explanation using your browser's text-to-speech.
+                    <p className="text-xs text-muted-foreground mb-3 flex-shrink-0">
+                        Use the controls above to play the explanation using your browser's text-to-speech.
                     </p>
-                   <h4 className="font-medium text-xs pt-4 border-t">Audio Script:</h4>
-                   <p className="text-xs whitespace-pre-wrap">{explanation.audioExplanationScript}</p>
+                   <h4 className="font-medium text-sm pt-3 border-t flex-shrink-0">Audio Script:</h4>
+                   <div className="overflow-y-auto flex-grow mt-2">
+                       <p className="text-sm whitespace-pre-wrap">{explanation.audioExplanationScript}</p>
+                   </div>
                  </TabsContent>
-                <TabsContent value="mindmap" className="mt-4 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto">
-                  <h3 className="font-semibold mb-2">Mind Map (Markdown)</h3>
-                     <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-2 rounded">{explanation.mindMapExplanation}</pre>
-                     <p className="text-xs text-muted-foreground mt-2">Mind map content generated by AI in Markdown format.</p>
+                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto">
+                  <h3 className="font-semibold mb-2 text-base">Mind Map (Markdown)</h3>
+                     <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-md border">{explanation.mindMapExplanation}</pre>
+                     <p className="text-xs text-muted-foreground mt-2">Mind map structure in Markdown format.</p>
                 </TabsContent>
               </Tabs>
             ) : (
-               !isLoading && <p className="text-muted-foreground text-center h-40 flex items-center justify-center">Upload a PDF and click "Generate Explanation" to see the results.</p>
+               !isLoading && <p className="text-muted-foreground text-center h-full flex items-center justify-center py-10">Upload a PDF and click "Generate Explanation" to see the results.</p>
             )}
           </CardContent>
-           <CardFooter>
-              {explanation && <Button variant="outline" size="sm" onClick={() => {
-                  setExplanation(null);
-                  setFile(null);
-                  if (speechSynthesis.speaking) { // Stop speech if clearing
-                      speechSynthesis.cancel();
-                  }
-                  utteranceRef.current = null;
-                  setIsSpeaking(false);
-                  setIsPaused(false);
-                  const input = document.getElementById('textbook-pdf') as HTMLInputElement;
-                  if(input) input.value = '';
-              }}>Clear</Button>}
+           <CardFooter className="pt-4 border-t">
+              {explanation && <Button variant="outline" size="sm" onClick={handleClear}>Clear Explanation</Button>}
            </CardFooter>
         </Card>
       </div>

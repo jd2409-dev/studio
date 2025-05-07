@@ -11,6 +11,7 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
+// Handlebars is imported and helpers are registered globally in ai-tutor-flow.ts
 
 const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']).describe('The desired difficulty level for the quiz.');
 type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
@@ -19,37 +20,71 @@ const GenerateQuizInputSchema = z.object({
   textbookContent: z
     .string()
     .min(50, { message: "Textbook content must be at least 50 characters." }) // Add min length for content
-    .describe('The content of the textbook chapter to generate a quiz from.'),
+    .describe('The content of the textbook chapter or section to generate a quiz from.'),
   questionCount: z
     .number()
-    .min(1)
-    .max(20)
+    .int({ message: "Number of questions must be an integer."})
+    .min(1, { message: "Must generate at least 1 question."})
+    .max(20, { message: "Cannot generate more than 20 questions."})
     .default(5)
-    .describe('The number of questions to generate for the quiz.'),
+    .describe('The number of questions to generate for the quiz (1-20).'),
   difficulty: DifficultyLevelSchema.default('medium'),
-  grade: z.string().optional().describe('The target grade level for the quiz (e.g., "9", "12").'),
+  grade: z.string().refine(val => !val || /^(?:[1-9]|1[0-2])$/.test(val), {
+    message: "Grade must be between 1 and 12, or empty.", // Validation for grade format
+  }).optional().describe('The target grade level for the quiz (e.g., "9", "12", or empty for general).'),
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
 
+// Stricter validation for the output question structure
+const QuizQuestionSchema = z.object({
+    question: z.string().min(1, { message: "Question text cannot be empty."}).describe('The quiz question.'),
+    type: z
+      .enum(['multiple-choice', 'fill-in-the-blanks', 'true/false', 'short-answer'])
+      .describe('The type of the quiz question.'),
+    answers: z.array(z.string()).optional().describe('The possible answers for the question. Required for multiple-choice.'),
+    correctAnswer: z.string().min(1, { message: "Correct answer cannot be empty."}).describe('The correct answer to the question.'),
+  }).refine(data => {
+      // Validation specific to multiple-choice questions
+      if (data.type === 'multiple-choice') {
+          // Must have answers array
+          if (!data.answers || data.answers.length === 0) return false;
+          // Correct answer must be one of the options
+          if (!data.answers.includes(data.correctAnswer)) return false;
+          // Must have at least 2 options
+          if (data.answers.length < 2) return false;
+      }
+      return true;
+  }, {
+      message: "Multiple-choice questions must have at least two 'answers' options, and the 'correctAnswer' must be one of those options.",
+      // Specify path if needed, e.g., path: ['answers', 'correctAnswer']
+  });
+
+
 const GenerateQuizOutputSchema = z.object({
-  quiz: z.array(
-    z.object({
-      question: z.string().describe('The quiz question.'),
-      type: z
-        .enum(['multiple-choice', 'fill-in-the-blanks', 'true/false', 'short-answer'])
-        .describe('The type of the quiz question.'),
-      answers: z.array(z.string()).optional().describe('The possible answers for the question, if applicable (especially for multiple-choice). Required for multiple-choice.'),
-      correctAnswer: z.string().describe('The correct answer to the question.'),
-    })
-  )
+  quiz: z.array(QuizQuestionSchema)
   .min(1, { message: "Generated quiz must have at least one question."}) // Ensure quiz is not empty
   .describe('The generated quiz questions.'),
 });
 export type GenerateQuizOutput = z.infer<typeof GenerateQuizOutputSchema>;
 
+
 export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQuizOutput> {
-  const validatedInput = GenerateQuizInputSchema.parse(input); // Validate input before calling flow
-  return generateQuizFlow(validatedInput);
+   console.log("generateQuiz: Validating input...");
+   try {
+       // Use safeParse for better error handling potential, though parse throws on error which is fine here
+       const validatedInput = GenerateQuizInputSchema.parse(input);
+       console.log("generateQuiz: Input validated successfully. Calling generateQuizFlow...");
+       return await generateQuizFlow(validatedInput);
+   } catch (error: any) {
+        console.error(`Error in generateQuiz (wrapper):`, error.message, error.stack, "Input:", JSON.stringify(input));
+        if (error instanceof z.ZodError) {
+            const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            console.error("generateQuiz: Zod validation failed:", validationErrors);
+            throw new Error(`Invalid input for quiz generation: ${validationErrors}`);
+        }
+        // Re-throw other errors
+        throw error;
+   }
 }
 
 const prompt = ai.definePrompt({
@@ -59,7 +94,7 @@ const prompt = ai.definePrompt({
     schema: GenerateQuizInputSchema,
   },
   output: {
-    schema: GenerateQuizOutputSchema,
+    schema: GenerateQuizOutputSchema, // Use the stricter output schema here
   },
   prompt: `You are an AI quiz generator that creates quizzes from textbook content.
 
@@ -68,23 +103,20 @@ const prompt = ai.definePrompt({
   Ensure the answers are correct, and adjust the questions to match the requested difficulty level: **{{difficulty}}**.
   {{#if grade}}The quiz should be appropriate for **Grade {{grade}}**.{{else}}The quiz should be appropriate for a general high school level.{{/if}}
 
-  For multiple-choice questions, ensure you provide an 'answers' array with distinct options, and one of them must be the 'correctAnswer'.
-  For other question types, 'answers' array is optional.
+  For multiple-choice questions, ensure you provide an 'answers' array with at least two distinct options, and one of them must be the 'correctAnswer'. The correct answer must EXACTLY match one of the provided options.
+  For other question types ('fill-in-the-blanks', 'true/false', 'short-answer'), the 'answers' array is optional and should usually be omitted.
 
-  - **Easy:** Focus on basic definitions, simple recall, and straightforward facts.
-  - **Medium:** Include application of concepts, interpretation, and slightly more complex recall.
-  - **Hard:** Require analysis, synthesis, evaluation, or solving multi-step problems based on the content.
+  - **Easy:** Focus on basic definitions, simple recall, and straightforward facts clearly stated in the text.
+  - **Medium:** Include application of concepts, interpretation of information presented, and slightly more complex recall requiring understanding.
+  - **Hard:** Require analysis, synthesis of information from different parts of the text, evaluation, or solving multi-step problems based on the content.
 
-  Textbook Content: {{{textbookContent}}}
+  Textbook Content:
+  {{{textbookContent}}}
   `,
-  customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false to allow custom helpers like 'if' and any future dynamic helpers
-    if (!promptObject.handlebarsOptions) {
-        promptObject.handlebarsOptions = {};
-    }
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
-    return promptObject;
-  },
+   // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow global helpers.
+   handlebarsOptions: {
+      knownHelpersOnly: false,
+   },
    config: {
     temperature: 0.6, // Slightly lower temperature for more factual quiz generation
   }
@@ -94,47 +126,53 @@ const generateQuizFlow = ai.defineFlow(
   {
     name: 'generateQuizFlow',
     inputSchema: GenerateQuizInputSchema,
-    outputSchema: GenerateQuizOutputSchema,
+    outputSchema: GenerateQuizOutputSchema, // Use the stricter output schema here
   },
   async input => {
-    try {
-        const {output} = await prompt(input);
+      console.log("generateQuizFlow: Starting quiz generation with input:", JSON.stringify(input));
+      try {
+          const {output} = await prompt(input);
 
-        if (!output || !output.quiz || output.quiz.length === 0) {
-            console.error("Quiz generation failed: No output or empty quiz array received from AI model. Input:", JSON.stringify(input));
-            throw new Error("Quiz generation failed: The AI model did not return any questions.");
-        }
+          // Basic check for output existence
+          if (!output) {
+              console.error("Quiz generation failed: No output received from AI model. Input:", JSON.stringify(input));
+              throw new Error("Quiz generation failed: The AI model did not return any output.");
+          }
 
-        // Further validation for multiple-choice questions
-        output.quiz.forEach((q, index) => {
-            if (q.type === 'multiple-choice' && (!q.answers || q.answers.length === 0)) {
-                 console.warn(`Question ${index + 1} is multiple-choice but missing 'answers'. Input: ${JSON.stringify(input)}`);
-                 // Attempt to self-correct or throw specific error
-                 // For now, let's throw to highlight the issue
-                 throw new Error(`Generated multiple-choice question #${index + 1} is missing answer options.`);
+          // Validate the received output against the Zod schema.
+          // This will throw a ZodError if validation fails, which will be caught below.
+          console.log("generateQuizFlow: Received output from AI. Validating against schema...");
+          const validatedOutput = GenerateQuizOutputSchema.parse(output);
+          console.log("generateQuizFlow: Output validated successfully.");
+
+          // Additional runtime check (optional, as Zod schema should cover this)
+          if (!validatedOutput.quiz || validatedOutput.quiz.length === 0) {
+              console.error("Quiz generation failed: Validated output has empty quiz array. Input:", JSON.stringify(input), "Output:", JSON.stringify(output));
+              throw new Error("Quiz generation failed: The AI model returned an empty list of questions after validation.");
+          }
+
+          console.log(`generateQuizFlow: Successfully generated ${validatedOutput.quiz.length} questions.`);
+          return validatedOutput;
+
+      } catch (error: any) {
+          console.error("Error in generateQuizFlow:", error.message, error.stack, "Input:", JSON.stringify(input));
+
+           if (error instanceof z.ZodError) {
+               // Log the specific validation errors
+                const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+                console.error("Quiz generation output failed Zod validation:", validationErrors, "Raw Output:", JSON.stringify(error.input)); // Log raw output if available in error
+                // Provide a user-friendly error message indicating format issues
+                throw new Error(`Quiz generation failed: The AI returned data in an unexpected format. (${validationErrors})`);
             }
-             if (q.type === 'multiple-choice' && q.answers && !q.answers.includes(q.correctAnswer)) {
-                 console.warn(`Question ${index + 1} (multiple-choice) has a correct answer that is not in its 'answers' array. Correct: "${q.correctAnswer}", Options: ${q.answers.join(', ')}`);
-                 // Attempt to self-correct or throw
-                 throw new Error(`Generated multiple-choice question #${index + 1}'s correct answer is not among the options.`);
-             }
-        });
 
-        // Attempt to parse with output schema again to catch inconsistencies post-generation (though definePrompt should handle this)
-        try {
-            return GenerateQuizOutputSchema.parse(output);
-        } catch (parseError: any) {
-            console.error("Failed to validate AI output against schema:", parseError.errors, "Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
-            throw new Error(`Quiz generation resulted in an invalid format: ${parseError.message}`);
-        }
+           if (error.message?.includes("Generation blocked")) {
+               console.error("Quiz Generation Flow: Generation blocked due to safety settings or potentially harmful content.");
+               throw new Error("Quiz generation was blocked, possibly due to safety filters or the content provided.");
+           }
 
-    } catch (error: any) {
-        console.error("Error in generateQuizFlow:", error.message, error.stack, "Input:", JSON.stringify(input));
-        // Re-throw a more user-friendly or specific error
-        if (error.message.includes("model did not return any questions") || error.message.includes("invalid format")) {
-            throw error; // Re-throw specific errors
-        }
-        throw new Error(`Quiz generation encountered an unexpected error: ${error.message}`);
-    }
+          // Re-throw other errors with potentially more context
+          throw new Error(`Quiz generation encountered an unexpected error: ${error.message}`);
+      }
   }
 );
+

@@ -1,22 +1,22 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, Sparkles, GraduationCap } from 'lucide-react'; // Removed BrainCircuit
+import { Loader2, ListChecks, Calendar, CheckCircle, XCircle, Sparkles, GraduationCap, AlertTriangle } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // Keep Button for potential future use, but remove specific feedback button usage
+// Button might be used later for re-generating feedback if added back
+// import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { UserProgress, QuizResult, QuizQuestion } from '@/types/user';
-// Removed import for generateQuizReflection flow
-import { format } from 'date-fns';
+// Import specific date-fns functions
+import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-// Removed ReflectionState interface and related state
 
 export default function ReflectionPage() {
   const { toast } = useToast();
@@ -24,85 +24,103 @@ export default function ReflectionPage() {
 
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // Removed reflectionStates state
+  const [fetchError, setFetchError] = useState<string | null>(null); // Store fetch error
 
   // Fetch user progress data (specifically quiz history)
   useEffect(() => {
     if (user) {
       const fetchData = async () => {
         setIsLoading(true);
-        ensureFirebaseInitialized();
-        const progressDocRef = doc(db!, 'userProgress', user.uid);
+        setFetchError(null); // Reset error on new fetch
         try {
+          ensureFirebaseInitialized();
+          const progressDocRef = doc(db!, 'userProgress', user.uid);
           const progressSnap = await getDoc(progressDocRef);
+
           if (progressSnap.exists()) {
             const data = progressSnap.data() as UserProgress;
-            const sortedHistory = (data.quizHistory || []).sort((a, b) => {
-                // Handle potential Date/Timestamp/string variations
-                const dateA = a.generatedDate ? (typeof a.generatedDate === 'string' ? new Date(a.generatedDate) : (a.generatedDate as any)?.toDate ? (a.generatedDate as any).toDate() : a.generatedDate) : new Date(0);
-                const dateB = b.generatedDate ? (typeof b.generatedDate === 'string' ? new Date(b.generatedDate) : (b.generatedDate as any)?.toDate ? (b.generatedDate as any).toDate() : b.generatedDate) : new Date(0);
-                // Ensure we have valid Date objects for comparison
-                const timeA = dateA instanceof Date ? dateA.getTime() : 0;
-                const timeB = dateB instanceof Date ? dateB.getTime() : 0;
-                return timeB - timeA; // Sort descending (newest first)
-            });
-            setQuizHistory(sortedHistory);
-            // Removed initialization of reflection states
-          } else {
-            setQuizHistory([]);
-          }
+                const history = data.quizHistory || [];
+                // Sort history reliably, handling different date types
+                const sortedHistory = history.sort((a, b) => {
+                    const timeA = convertToTimestamp(a.generatedDate);
+                    const timeB = convertToTimestamp(b.generatedDate);
+                    return timeB - timeA; // Sort descending (newest first)
+                });
+                setQuizHistory(sortedHistory);
+            } else {
+                console.log("No progress data found for reflection.");
+                setQuizHistory([]); // Set empty array if no data
+            }
         } catch (error: any) {
-          console.error("Error fetching reflection data:", error);
-           let errorDesc = "Could not load quiz history.";
-           if (error.code === 'permission-denied') {
-                errorDesc = "Permission denied. Check Firestore rules.";
-           }
-          toast({ title: "Error", description: errorDesc, variant: "destructive" });
+            console.error("Error fetching reflection data:", error);
+            let errorDesc = "Could not load quiz history.";
+            if (error.code === 'permission-denied') {
+                errorDesc = "Permission denied fetching reflection data. Check Firestore rules.";
+            } else if (error.code === 'unavailable') {
+                 errorDesc = "Network error fetching reflection data. Please check your connection.";
+            }
+            setFetchError(errorDesc);
+            toast({ title: "Error", description: errorDesc, variant: "destructive" });
         } finally {
           setIsLoading(false);
         }
       };
       fetchData();
     } else if (!authLoading) {
-      setIsLoading(false);
+        // If auth is done loading and there's no user
+        setIsLoading(false);
+        setFetchError("Please log in to view your reflections.");
     }
-  }, [user, authLoading, toast]);
+  }, [user, authLoading, toast]); // Add toast to dependencies
+
+
+   // Helper function to convert various date formats to a comparable timestamp
+   const convertToTimestamp = (dateInput: Date | string | { seconds: number, nanoseconds: number } | undefined): number => {
+       if (!dateInput) return 0; // Treat missing dates as oldest
+       try {
+           if (dateInput instanceof Date) return dateInput.getTime();
+           if (typeof dateInput === 'string') {
+               const parsed = parseISO(dateInput);
+               return isValid(parsed) ? parsed.getTime() : 0;
+           }
+           if (typeof dateInput === 'object' && 'seconds' in dateInput) {
+               return dateInput.seconds * 1000;
+           }
+           return 0; // Fallback for unexpected types
+       } catch {
+           return 0; // Fallback on parsing error
+       }
+   };
+
 
    const formatQuizDate = (dateInput: Date | string | { seconds: number, nanoseconds: number } | undefined) => {
         if (!dateInput) return 'Unknown Date';
         try {
-            let date: Date;
-            if (typeof dateInput === 'string') {
-                date = new Date(dateInput);
-            } else if (dateInput instanceof Date) {
+            let date: Date | null = null;
+            if (dateInput instanceof Date) {
                 date = dateInput;
+            } else if (typeof dateInput === 'string') {
+                date = parseISO(dateInput); // Handles ISO strings directly
             } else if (typeof dateInput === 'object' && dateInput !== null && 'seconds' in dateInput) {
-                date = new Date(dateInput.seconds * 1000);
-            } else {
-                return 'Invalid Date';
+                date = new Date(dateInput.seconds * 1000); // Handles Firestore Timestamps
             }
-            return !isNaN(date.getTime()) ? format(date, 'PPP p') : 'Invalid Date';
+
+            // Check if the resulting date is valid before formatting
+            return date && isValid(date) ? format(date, 'PPP p') : 'Invalid Date';
         } catch (e) {
-            console.error("Error formatting date:", e);
-            return 'Invalid Date';
+            console.error("Error formatting date:", dateInput, e);
+            return 'Error Formatting Date';
         }
     };
 
     const getQuestionStatusIcon = (question: QuizQuestion, userAnswer: string | undefined) => {
-        // Case-insensitive comparison for strings, direct comparison otherwise
+        // Case-insensitive comparison for strings, strict comparison otherwise
          const isCorrect = typeof userAnswer === 'string' && typeof question.correctAnswer === 'string'
             ? userAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
-            : userAnswer === question.correctAnswer; // Fallback for non-string or undefined
-
-        // More robust check for correctness if types might be inconsistent
-        // const correctAnswerStr = String(question.correctAnswer ?? '').trim().toLowerCase();
-        // const userAnswerStr = String(userAnswer ?? '').trim().toLowerCase();
-        // const isCorrect = correctAnswerStr === userAnswerStr;
+            : userAnswer === question.correctAnswer;
 
         return isCorrect ? <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" /> : <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />;
     };
-
-    // Removed handleGenerateReflection function
 
   if (authLoading || isLoading) {
     return (
@@ -112,17 +130,32 @@ export default function ReflectionPage() {
     );
   }
 
+  // Handle fetch error state
+   if (fetchError) {
+       return (
+          <div className="container mx-auto py-8 text-center">
+             <h1 className="text-3xl font-bold mb-6">Reflection: Quiz History</h1>
+             <Alert variant="destructive" className="max-w-md mx-auto">
+               <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+               <AlertDescription>{fetchError}</AlertDescription>
+             </Alert>
+          </div>
+       );
+   }
+
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Reflection: Quiz History</h1>
       <p className="text-muted-foreground mb-8">
-        Review your past quiz attempts, scores, and answers. {/* Removed mention of feedback */}
+        Review your past quiz attempts, scores, and answers to identify areas for improvement.
       </p>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ListChecks className="text-secondary" /> Your Quiz Attempts</CardTitle>
-          <CardDescription>Expand each entry to see detailed results.</CardDescription> {/* Adjusted description */}
+          <CardDescription>Expand each entry to see detailed results.</CardDescription>
         </CardHeader>
         <CardContent>
           {quizHistory.length > 0 ? (
@@ -130,52 +163,55 @@ export default function ReflectionPage() {
               {quizHistory.map((quiz) => (
                  // Ensure quiz.quizId exists before rendering the item
                  quiz.quizId ? (
-                    <AccordionItem value={`quiz-${quiz.quizId}`} key={quiz.quizId} className="border rounded-md px-4 bg-background hover:bg-muted/30 transition-colors">
-                    <AccordionTrigger className="py-4 text-left hover:no-underline">
+                    <AccordionItem value={`quiz-${quiz.quizId}`} key={quiz.quizId} className="border border-border rounded-md px-4 bg-card hover:bg-muted/50 transition-colors shadow-sm">
+                    <AccordionTrigger className="py-4 text-left hover:no-underline group">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <div className="flex items-center gap-1.5 text-sm">
                                 <Calendar className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-medium">{formatQuizDate(quiz.generatedDate)}</span>
                             </div>
-                            {quiz.sourceContent && (
-                                <Badge variant="outline" className="hidden md:inline-flex text-xs">
-                                    Based on: "{quiz.sourceContent.substring(0, 30)}..."
+                            {/* Badge section */}
+                             <div className="flex items-center gap-1.5 flex-wrap">
+                                {quiz.difficulty && <Badge variant="secondary" className="capitalize text-xs">{quiz.difficulty}</Badge>}
+                                {quiz.grade && (
+                                    <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                        <GraduationCap className="h-3 w-3"/> Grade {quiz.grade}
+                                    </Badge>
+                                )}
+                                <Badge variant={quiz.score / quiz.totalQuestions >= 0.7 ? "default" : "destructive"} className="text-xs w-fit">
+                                    Score: {quiz.score} / {quiz.totalQuestions} ({quiz.totalQuestions > 0 ? Math.round((quiz.score / quiz.totalQuestions) * 100) : 0}%)
                                 </Badge>
-                            )}
-                            {quiz.grade && (
-                                <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                                    <GraduationCap className="h-3 w-3"/> Grade {quiz.grade}
-                                </Badge>
-                            )}
+                             </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                            {quiz.difficulty && <Badge variant="secondary" className="capitalize">{quiz.difficulty}</Badge>}
-                            <Badge variant={quiz.score / quiz.totalQuestions >= 0.7 ? "default" : "destructive"} className="w-fit">
-                                Score: {quiz.score} / {quiz.totalQuestions} ({quiz.totalQuestions > 0 ? Math.round((quiz.score / quiz.totalQuestions) * 100) : 0}%)
-                            </Badge>
-                        </div>
+                        {/* Removed chevron duplication, AccordionTrigger provides one */}
                         </div>
                     </AccordionTrigger>
                     <AccordionContent className="pt-2 pb-4 space-y-4">
+                        {/* Quiz Source Context */}
+                         {quiz.sourceContent && (
+                             <div className="text-xs text-muted-foreground border-t pt-2">
+                                 Quiz based on: "{quiz.sourceContent}"
+                             </div>
+                         )}
                         {/* Quiz Questions Details */}
-                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                        <h4 className="font-semibold text-sm mb-2">Questions & Answers:</h4>
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2 border rounded-md p-3 bg-muted/20">
+                        <h4 className="font-semibold text-sm mb-2 sticky top-0 bg-muted/20 py-1">Questions & Answers:</h4>
                         {quiz.questions.map((q, qIndex) => (
-                            <div key={qIndex} className="p-3 border rounded bg-muted/50 text-xs">
+                            <div key={qIndex} className="p-3 border-b border-border/50 last:border-b-0 text-xs space-y-1">
                             <div className="flex justify-between items-start gap-2">
                                 <p className="font-medium flex-1">{qIndex + 1}. {q.question}</p>
                                 {getQuestionStatusIcon(q, quiz.userAnswers[qIndex])}
                             </div>
-                            <p className="mt-1">
-                                <span className="text-muted-foreground">Your Answer:</span> {quiz.userAnswers[qIndex] !== undefined && quiz.userAnswers[qIndex] !== null && quiz.userAnswers[qIndex] !== '' ? quiz.userAnswers[qIndex] : <span className="italic">Not Answered</span>}
+                            <p>
+                                <span className="text-muted-foreground">Your Answer:</span> {quiz.userAnswers[qIndex] !== undefined && quiz.userAnswers[qIndex] !== null && String(quiz.userAnswers[qIndex]).trim() !== '' ? String(quiz.userAnswers[qIndex]) : <span className="italic text-muted-foreground/80">Not Answered</span>}
                             </p>
                             {/* Check if the answer was incorrect before showing the correct one */}
-                            {!(typeof quiz.userAnswers[qIndex] === 'string' && typeof q.correctAnswer === 'string'
-                                ? quiz.userAnswers[qIndex]?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()
+                             {! (typeof quiz.userAnswers[qIndex] === 'string' && typeof q.correctAnswer === 'string'
+                                ? String(quiz.userAnswers[qIndex]).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()
                                 : quiz.userAnswers[qIndex] === q.correctAnswer
-                            ) && (
-                                <p className="mt-1 text-green-600 dark:text-green-400">
+                               ) && (
+                                <p className="text-green-600 dark:text-green-400">
                                     Correct Answer: {q.correctAnswer}
                                 </p>
                             )}
@@ -185,11 +221,13 @@ export default function ReflectionPage() {
                                     {q.answers.map((ans, ansIdx) => (
                                         <Badge
                                             key={ansIdx}
-                                            variant={ans === q.correctAnswer ? 'secondary' : 'outline'}
+                                            variant={'outline'} // Use outline for all options initially
                                             className={cn(
-                                                "text-[10px] px-1.5 py-0",
-                                                // Highlight the user's incorrect selection red
-                                                quiz.userAnswers[qIndex] === ans && ans !== q.correctAnswer && "bg-destructive/20 border-destructive text-destructive"
+                                                "text-[10px] px-1.5 py-0 font-normal",
+                                                // Highlight correct answer green
+                                                ans === q.correctAnswer && "border-green-500 text-green-700 dark:border-green-600 dark:text-green-400",
+                                                // Highlight user's incorrect selection red
+                                                quiz.userAnswers[qIndex] === ans && ans !== q.correctAnswer && "bg-destructive/10 border-destructive text-destructive dark:bg-destructive/20"
                                             )}
                                         >
                                             {ans}
@@ -200,12 +238,9 @@ export default function ReflectionPage() {
                             </div>
                         ))}
                         </div>
-
-                        {/* Removed AI Reflection Section */}
-
                     </AccordionContent>
                     </AccordionItem>
-                ) : null // Skip rendering if quizId is missing
+                ) : null // Skip rendering if quizId is missing (shouldn't happen with proper data)
               ))}
             </Accordion>
           ) : (
@@ -218,3 +253,4 @@ export default function ReflectionPage() {
     </div>
   );
 }
+

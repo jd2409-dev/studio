@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -16,10 +15,12 @@ import { gemini15Flash } from '@genkit-ai/googleai';
 import Handlebars from 'handlebars'; // Keep Handlebars import for potential global registration
 
 // Global helper registration (Attempting this route as customize isn't consistently working)
+// Registering 'eq' helper globally
 Handlebars.registerHelper('eq', function(a, b) {
+    // Simple strict equality check
     return a === b;
 });
-// Add other global helpers if needed for other flows, e.g., for quiz reflection
+// Add other global helpers if needed for other flows
 Handlebars.registerHelper("sum", function(a, b) {
   const numA = typeof a === 'number' ? a : 0;
   const numB = typeof b === 'number' ? b : 0;
@@ -30,6 +31,7 @@ Handlebars.registerHelper("join", function(arr, sep) {
 });
 Handlebars.registerHelper("isCorrect", function(userAnswer, correctAnswer) {
   if (userAnswer === undefined || userAnswer === null) return false;
+  // Ensure comparison is case-insensitive and trims whitespace
   return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
 });
 Handlebars.registerHelper("lookup", function(arr, index) {
@@ -84,27 +86,11 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
 `,
- // REMOVED customize block: Let's rely on global helper registration or default behavior.
-  // customize: (promptObject) => {
-  //   // Ensure handlebarsOptions exists
-  //   if (!promptObject.handlebarsOptions) {
-  //       promptObject.handlebarsOptions = {};
-  //   }
-  //   // Ensure helpers object exists
-  //   if (!promptObject.handlebarsOptions.helpers) {
-  //       promptObject.handlebarsOptions.helpers = {};
-  //   }
-  //   // Define the 'eq' helper directly within this prompt's Handlebars options
-  //   promptObject.handlebarsOptions.helpers = {
-  //       ...promptObject.handlebarsOptions.helpers,
-  //       eq: function(a: any, b: any) {
-  //           return a === b;
-  //       },
-  //   };
-  //   // Crucially, also ensure knownHelpersOnly is false to allow built-in helpers (#if, #each) AND this custom 'eq' helper.
-  //   promptObject.handlebarsOptions.knownHelpersOnly = false; // Explicitly set to false
-  //   return promptObject;
-  // },
+  // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow global helpers.
+  // Genkit's definePrompt merges options; setting it here ensures it's applied.
+  handlebarsOptions: {
+     knownHelpersOnly: false,
+  },
   config: {
     temperature: 0.7,
   },
@@ -138,8 +124,13 @@ const aiTutorFlow = ai.defineFlow(
       console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
       if (error.message?.includes("unknown helper")) {
           // This specific check helps identify if the Handlebars helper issue persists.
+          // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
       }
+       if (error.message?.includes("Generation blocked")) {
+          console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
+          throw new Error("I cannot respond to this request due to safety guidelines.");
+       }
       throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
   }
@@ -147,15 +138,21 @@ const aiTutorFlow = ai.defineFlow(
 
 // Exported wrapper function to be called by the frontend
 export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
+    console.log("getTutorResponse: Validating input...");
     try {
+        // Validate the input against the Zod schema before passing to the flow
         const validatedInput = AiTutorInputSchema.parse(input);
+        console.log("getTutorResponse: Input validated successfully. Calling aiTutorFlow...");
         return await aiTutorFlow(validatedInput);
     } catch (error: any) {
         console.error(`Error in getTutorResponse (wrapper):`, error.message, error.stack, "Input:", JSON.stringify(input));
         if (error instanceof z.ZodError) {
-            throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
+            // Provide specific validation error details
+            const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            console.error("getTutorResponse: Zod validation failed:", validationErrors);
+            throw new Error(`Invalid input for AI Tutor: ${validationErrors}`);
         }
-        // Re-throw the error so the calling page can handle it (e.g., show a toast)
+        // Re-throw other errors (including those from the flow) so the calling page can handle them
         throw error;
     }
 }

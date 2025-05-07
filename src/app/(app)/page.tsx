@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,19 +10,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized, firebaseInitializationError, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled flag
-import { doc, getDoc, setDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore'; // Import Firestore getDoc variants
+import { doc, getDoc, setDoc } from 'firebase/firestore'; // Import Firestore getDoc variants
 import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, StudyRecommendation } from '@/types/user'; // Import types
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const router = useRouter(); 
+  const router = useRouter();
   const { user, loading: authLoading, authError } = useAuth(); // Get authError as well
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true); // For dashboard-specific data
   const [userName, setUserName] = useState<string>('Student');
-  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error' | 'nodata'>('server'); 
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error' | 'nodata'>('server');
   const [fetchError, setFetchError] = useState<string | null>(null); // Store specific fetch error message
 
 
@@ -83,12 +82,13 @@ export default function DashboardPage() {
 
           // Fetch user progress
           const progressSnap = await getDoc(progressDocRef);
+          setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
 
           if (progressSnap.exists()) {
             const fetchedData = progressSnap.data();
             // Basic validation
             if (fetchedData && typeof fetchedData === 'object' && Array.isArray(fetchedData.subjectMastery)) {
-                const validatedProgress: UserProgress = { /* ... (validation logic as before, ensure defaults for all fields if missing) ... */ 
+                const validatedProgress: UserProgress = {
                     uid: user.uid,
                     subjectMastery: (fetchedData.subjectMastery || []).map((sm: any): SubjectMastery => ({
                         subjectId: sm?.subjectId || `unknown-${Math.random()}`,
@@ -124,7 +124,6 @@ export default function DashboardPage() {
                     lastUpdated: fetchedData.lastUpdated || defaultProgress.lastUpdated,
                 };
                 setUserProgress(validatedProgress);
-                setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
                 console.log(`DashboardPage: Data fetched from ${progressSnap.metadata.fromCache ? 'cache' : 'server'}.`);
             } else {
                  console.warn("DashboardPage: Fetched userProgress data has invalid structure. Initializing with default.", fetchedData);
@@ -149,10 +148,15 @@ export default function DashboardPage() {
           if (error.message?.includes("Firebase failed to initialize") || error.message?.includes("Firebase services are not available")) {
               errorTitle = "Application Error";
               errorDesc = "Core application services are not available. Please refresh or contact support.";
+              setDataFetchSource('error');
           } else if (error.code === 'unavailable') {
               errorTitle = "Offline";
               errorDesc = "Could not reach server. Displaying cached or default data if available.";
               console.warn("DashboardPage: Firestore data fetch failed: Network unavailable.");
+              // If data was fetched from cache before the error, keep source as cache
+              if(dataFetchSource !== 'cache'){
+                  setDataFetchSource('error'); // Set to error only if not already showing cached data
+              }
           } else if (error.code === 'permission-denied') {
               errorTitle = "Permissions Error";
               errorDesc = "Could not load dashboard data due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
@@ -161,14 +165,15 @@ export default function DashboardPage() {
           } else {
               // Generic error
               errorDesc = `Could not load dashboard data: ${error.message || 'Unknown error'}. Please try again later.`;
+               setDataFetchSource('error');
           }
-          
+
           setFetchError(errorDesc); // Store the specific error message
-          
-          // If it's a permission error or a general error where we are not sure if data can be shown,
-          // we still try to set a fallback defaultProgress so UI doesn't break.
-          // DataFetchSource 'error' will be used to display an error message.
-          setUserProgress({ ...defaultProgress, uid: user.uid }); 
+
+          // Attempt to show default data even on error to prevent UI breaks
+          if (!userProgress) { // Only set default if no progress data (including cached) is loaded
+              setUserProgress({ ...defaultProgress, uid: user.uid });
+          }
           toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
         } finally {
           setIsLoadingData(false);
@@ -184,11 +189,8 @@ export default function DashboardPage() {
        setDataFetchSource('nodata'); // Indicate no data to fetch because no user
        setFetchError("User not authenticated.");
     }
-  }, [user, authLoading, authError, toast]); // Removed router from deps as navigateTo is used
+  }, [user, authLoading, authError, toast]); // Dependencies for the effect
 
-   const navigateTo = (path: string) => {
-     router.push(path);
-   };
 
    // Combined loading state
    if (authLoading || isLoadingData) {
@@ -200,7 +202,7 @@ export default function DashboardPage() {
      );
    }
 
-   // If there was a fetch error after loading, display it
+   // If there was a fetch error after loading, display it (unless showing cached data)
     if (dataFetchSource === 'error' && fetchError) {
         console.log("DashboardPage: Rendering error message due to fetchError:", fetchError);
         return (
@@ -211,15 +213,17 @@ export default function DashboardPage() {
                     <AlertDescription>
                         {fetchError}
                         <p className="mt-2">Please try refreshing the page. If the issue persists, check your internet connection or contact support.</p>
-                        {fetchError.includes("permission-denied") && 
+                        {fetchError.includes("permission-denied") &&
                             <p className="mt-1 text-xs">Ensure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code>. Refer to the README for more details.</p>
                         }
                     </AlertDescription>
                 </Alert>
+                 {/* Show default cards on error */}
+                 {renderDashboardCards(defaultProgress)}
             </div>
         );
     }
-    
+
     // If auth is loaded, no user, and no data to fetch (e.g. redirected but component hasn't unmounted)
     if (dataFetchSource === 'nodata' && !user) {
         console.log("DashboardPage: No user and 'nodata' source. Rendering minimal or null.");
@@ -229,13 +233,127 @@ export default function DashboardPage() {
 
 
    // Ensure userProgress is not null before rendering components that depend on it
+   // Use the loaded progress or fall back to default if still null (e.g., during initial setup)
    const currentProgress = userProgress || { ...defaultProgress, uid: user?.uid || 'fallback_uid' };
-   const {
-       subjectMastery,
-       upcomingHomework,
-       upcomingExams,
-       studyRecommendations
-   } = currentProgress;
+
+   // Helper function to render dashboard cards to avoid repetition
+   const renderDashboardCards = (progressData: UserProgress) => {
+       const {
+           subjectMastery = [],
+           upcomingHomework = [],
+           upcomingExams = [],
+           studyRecommendations = []
+       } = progressData;
+
+       return (
+        <>
+          {/* Upcoming Homework */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><FileText className="text-secondary" /> Upcoming Homework</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 min-h-[150px]">
+              {upcomingHomework.length > 0 ? (
+                upcomingHomework.map((hw) => (
+                  <div key={hw.id} className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{hw.title}</p>
+                      <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-accent">
+                      {hw.dueDate ? new Date(hw.dueDate as string).toLocaleDateString() : 'No due date'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center pt-8">No upcoming homework!</p>
+              )}
+            </CardContent>
+             <CardFooter>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/study-planner')}>View Planner</Button>
+            </CardFooter>
+          </Card>
+
+           {/* Upcoming Exams */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Calendar className="text-secondary" /> Upcoming Exams</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 min-h-[150px]">
+              {upcomingExams.length > 0 ? (
+                upcomingExams.map((exam) => (
+                  <div key={exam.id} className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{exam.title}</p>
+                      <p className="text-sm text-muted-foreground">{exam.subjectName}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-accent">
+                        {exam.date ? new Date(exam.date as string).toLocaleDateString() : 'No date'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                 <p className="text-muted-foreground text-center pt-8">No upcoming exams scheduled.</p>
+              )}
+            </CardContent>
+             <CardFooter>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/study-planner')}>View Planner</Button>
+            </CardFooter>
+          </Card>
+
+           {/* Subject Mastery */}
+          <Card className="md:col-span-2 lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Target className="text-secondary" /> Subject Mastery</CardTitle>
+              <CardDescription>Your progress in different subjects.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {subjectMastery.length > 0 ? (
+                subjectMastery.map((subject) => (
+                  <div key={subject.subjectId}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium">{subject.subjectName}</span>
+                      <span className="text-sm font-medium text-primary">{subject.progress}%</span>
+                    </div>
+                    <Progress value={subject.progress} className="h-2" />
+                  </div>
+                ))
+              ) : (
+                 <p className="text-muted-foreground text-center pt-8">No subject progress tracked yet.</p>
+              )}
+            </CardContent>
+             <CardFooter>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/performance')}>View Performance</Button>
+            </CardFooter>
+          </Card>
+
+           {/* Quick Study Recommendations */}
+          <Card className="md:col-span-2 lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> Quick Study Recommendations</CardTitle>
+              <CardDescription>AI-powered suggestions for your next study session.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 min-h-[100px]">
+              {studyRecommendations.length > 0 ? (
+                 studyRecommendations.slice(0, 3).map((rec) => (
+                  <div key={rec.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
+                     <p className="font-medium text-sm">{rec.title}</p>
+                     <p className="text-xs text-muted-foreground">{rec.reason} - <span className="capitalize">{rec.priority} priority</span></p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center pt-8">No study recommendations available right now.</p>
+              )}
+            </CardContent>
+             <CardFooter>
+                <Button variant="outline" size="sm" onClick={() => router.push('/performance')}>
+                    View All Recommendations
+                </Button>
+            </CardFooter>
+          </Card>
+       </>
+       );
+   }
 
 
   return (
@@ -248,7 +366,7 @@ export default function DashboardPage() {
                <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
                <CardDescription>Here's your personalized study dashboard.</CardDescription>
              </div>
-               {/* Display data fetch status (optional) */}
+               {/* Display data fetch status */}
                {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Data from Offline Cache)</span>}
                {dataFetchSource === 'default' && <span className="text-xs text-muted-foreground">(Default Data Loaded)</span>}
                {/* Error state is handled by the block above now */}
@@ -258,113 +376,27 @@ export default function DashboardPage() {
           <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
         </CardContent>
        <CardFooter className="flex flex-wrap gap-2">
-          <Button onClick={() => navigateTo('/upload-textbook')}>
+          <Button onClick={() => router.push('/upload-textbook')}>
             <FileText className="mr-2 h-4 w-4" /> Upload Textbook
           </Button>
-          <Button variant="secondary" onClick={() => navigateTo('/quiz')}>
+          <Button variant="secondary" onClick={() => router.push('/quiz')}>
             <Activity className="mr-2 h-4 w-4" /> Generate Quiz
           </Button>
-         <Button variant="outline" onClick={() => navigateTo('/ai-tutor')}>
+         <Button variant="outline" onClick={() => router.push('/ai-tutor')}>
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
+          </Button>
+          <Button variant="outline" onClick={() => router.push('/textbook-summary')}>
+            <BookOpen className="mr-2 h-4 w-4"/> Textbook Summary
+          </Button>
+          <Button variant="outline" onClick={() => router.push('/textbook-explainer')}>
+            <MessageSquareQuote className="mr-2 h-4 w-4"/> Textbook Explainer
           </Button>
        </CardFooter>
       </Card>
 
-      {/* Upcoming Homework */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText className="text-secondary" /> Upcoming Homework</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 min-h-[150px]">
-          {upcomingHomework && upcomingHomework.length > 0 ? (
-            upcomingHomework.map((hw) => (
-              <div key={hw.id} className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">{hw.title}</p>
-                  <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
-                </div>
-                <span className="text-sm font-semibold text-accent">
-                  {hw.dueDate ? new Date(hw.dueDate as string).toLocaleDateString() : 'No due date'}
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="text-muted-foreground text-center pt-8">No upcoming homework!</p>
-          )}
-        </CardContent>
-      </Card>
+       {/* Render the dashboard cards using the helper function */}
+       {renderDashboardCards(currentProgress)}
 
-       {/* Upcoming Exams */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Calendar className="text-secondary" /> Upcoming Exams</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 min-h-[150px]">
-          {upcomingExams && upcomingExams.length > 0 ? (
-            upcomingExams.map((exam) => (
-              <div key={exam.id} className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">{exam.title}</p>
-                  <p className="text-sm text-muted-foreground">{exam.subjectName}</p>
-                </div>
-                <span className="text-sm font-semibold text-accent">
-                    {exam.date ? new Date(exam.date as string).toLocaleDateString() : 'No date'}
-                </span>
-              </div>
-            ))
-          ) : (
-             <p className="text-muted-foreground text-center pt-8">No upcoming exams scheduled.</p>
-          )}
-        </CardContent>
-      </Card>
-
-       {/* Subject Mastery */}
-      <Card className="md:col-span-2 lg:col-span-1">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Target className="text-secondary" /> Subject Mastery</CardTitle>
-          <CardDescription>Your progress in different subjects.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {subjectMastery && subjectMastery.length > 0 ? (
-            subjectMastery.map((subject) => (
-              <div key={subject.subjectId}>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium">{subject.subjectName}</span>
-                  <span className="text-sm font-medium text-primary">{subject.progress}%</span>
-                </div>
-                <Progress value={subject.progress} className="h-2" />
-              </div>
-            ))
-          ) : (
-             <p className="text-muted-foreground text-center pt-8">No subject progress tracked yet.</p>
-          )}
-        </CardContent>
-      </Card>
-
-       {/* Quick Study Recommendations */}
-      <Card className="md:col-span-2 lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> Quick Study Recommendations</CardTitle>
-          <CardDescription>AI-powered suggestions for your next study session.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 min-h-[100px]">
-          {studyRecommendations && studyRecommendations.length > 0 ? (
-             studyRecommendations.slice(0, 3).map((rec) => ( 
-              <div key={rec.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-                 <p className="font-medium text-sm">{rec.title}</p>
-                 <p className="text-xs text-muted-foreground">{rec.reason} - <span className="capitalize">{rec.priority} priority</span></p>
-              </div>
-            ))
-          ) : (
-            <p className="text-muted-foreground text-center pt-8">No study recommendations available right now.</p>
-          )}
-        </CardContent>
-         <CardFooter>
-            <Button variant="outline" size="sm" onClick={() => navigateTo('/performance')}>
-                View All Recommendations
-            </Button>
-        </CardFooter>
-      </Card>
     </div>
   );
 }

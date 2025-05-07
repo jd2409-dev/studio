@@ -1,10 +1,9 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
-import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react';
+import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote } from 'lucide-react'; // Use MessageSquareQuote
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -22,10 +21,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading: authLoading, authError } = useAuth(); // Get user, loading state, and authError
 
   useEffect(() => {
-    console.log("AppLayout: useEffect triggered. AuthLoading:", authLoading, "User:", !!user, "AuthError:", !!authError);
     // Redirect to login if auth check is complete, no user, and no auth error (auth error handled by AuthProvider)
     if (!authLoading && !user && !authError) {
-      console.log("AppLayout: Not loading, no user, no auth error. Redirecting to /login.");
+      console.log("AppLayout: Auth complete, no user, no critical error. Redirecting to /login.");
       router.push('/login');
     }
   }, [user, authLoading, authError, router]);
@@ -50,17 +48,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
   };
 
-   // If there's a firebaseInitializationError, AuthProvider will show an error screen.
-   // AppLayout shouldn't render its UI in this case.
+   // If there's a firebaseInitializationError, AuthProvider handles the error screen.
    if (firebaseInitializationError) {
-       console.log("AppLayout: Firebase initialization error detected by config. Returning null.");
-       return null; // AuthProvider handles the error display
+       console.log("AppLayout: Firebase initialization error detected. AuthProvider handles display.");
+       return null;
    }
 
    // If there's an authError from AuthContext, AuthProvider also handles its display.
    if (authError) {
-       console.log("AppLayout: AuthContext error detected. Returning null.");
-       return null; // AuthProvider handles the error display
+       console.log("AppLayout: AuthContext error detected. AuthProvider handles display.");
+       return null;
    }
 
    // Show loading spinner while auth state is being determined by AuthProvider
@@ -81,7 +78,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   // If we reach here, auth is loaded, user exists, and no critical errors.
-  console.log("AppLayout: Auth loaded, user exists. Rendering layout for user:", user.uid);
+  console.log("AppLayout: Auth loaded, user exists. Rendering layout.");
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar>
@@ -98,6 +95,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
+             {/* Use Link directly inside SidebarMenuButton with asChild */}
              <SidebarMenuItem>
                  <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
                    <Link href="/">
@@ -117,7 +115,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuItem>
                  <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
                      <Link href="/textbook-explainer">
-                        <MessageSquareQuote />
+                        <MessageSquareQuote /> {/* Corrected Icon */}
                         <span>Textbook Explainer</span>
                      </Link>
                  </SidebarMenuButton>
@@ -211,7 +209,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
            </Link>
           <SidebarTrigger />
         </header>
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 bg-background"> {/* Ensure background color */}
           {children}
         </main>
       </SidebarInset>

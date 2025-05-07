@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react'; // Added useEffect
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,14 +8,15 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
-import { Loader2, Wand2, Check, X } from 'lucide-react';
+import { Loader2, Wand2, Check, X, AlertTriangle } from 'lucide-react';
 import { generateQuiz, type GenerateQuizInput, type GenerateQuizOutput } from '@/ai/flows/quiz-generation';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import db and helper
-import { doc, updateDoc, arrayUnion, Timestamp, setDoc, getDoc, runTransaction } from 'firebase/firestore'; // Import Firestore functions including setDoc, getDoc, and runTransaction
-import type { QuizResult, QuizQuestion } from '@/types/user'; // Import QuizResult type
+import { doc, updateDoc, arrayUnion, Timestamp, runTransaction, getDoc } from 'firebase/firestore'; // Correct import for runTransaction and getDoc
+import type { QuizResult, QuizQuestion, UserProgress } from '@/types/user'; // Import QuizResult type and UserProgress
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type QuizState = {
     quizId: string; // Unique ID for this quiz instance
@@ -32,30 +32,37 @@ export default function QuizGenerationPage() {
   const [textbookContent, setTextbookContent] = useState('');
   const [questionCount, setQuestionCount] = useState<number>(5); // Ensure state is number
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium'); // State for difficulty
-  const [grade, setGrade] = useState<string>(''); // State for grade level (use '' or 'none')
+  const [grade, setGrade] = useState<string>('none'); // State for grade level (use 'none' for default/empty)
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // State for submission process
   const { toast } = useToast();
-  const { user } = useAuth(); // Get user
+  const { user, loading: authLoading } = useAuth(); // Get user and loading status
+
+  // Reset quiz if user logs out while quiz is active
+   useEffect(() => {
+       if (!authLoading && !user && quizState) {
+           setQuizData(null);
+           setQuizState(null);
+           setTextbookContent(''); // Optionally clear content
+           toast({ title: "Session Ended", description: "You have been logged out. The active quiz was cancelled." });
+       }
+   }, [user, authLoading, quizState, toast]);
+
 
   const handleGenerateQuiz = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) {
+        toast({ title: "Error", description: "Please log in to generate a quiz.", variant: "destructive" });
+        return;
+    }
     if (!textbookContent.trim()) {
-      toast({
-        title: "Error",
-        description: "Please paste some textbook content first.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please paste some textbook content first.", variant: "destructive" });
       return;
     }
     if (isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
-       toast({
-         title: "Invalid Input",
-         description: "Please enter a valid number of questions between 1 and 20.",
-         variant: "destructive",
-       });
+       toast({ title: "Invalid Input", description: "Please enter a valid number of questions between 1 and 20.", variant: "destructive" });
        return;
      }
 
@@ -68,22 +75,24 @@ export default function QuizGenerationPage() {
           textbookContent,
           questionCount,
           difficulty,
-          // Pass grade only if it's selected (not empty or 'none')
+          // Pass grade only if it's selected (not 'none')
           grade: grade && grade !== 'none' ? grade : undefined,
       };
+      console.log("Generating quiz with input:", input);
       const result = await generateQuiz(input);
 
       // Ensure questions array is valid
       const questionsWithPossibleSubject = result.quiz?.map(q => ({ ...q })) || [];
 
       if (!result.quiz || questionsWithPossibleSubject.length === 0) {
-         throw new Error("Quiz generation returned no questions.");
+         console.error("Quiz generation returned no questions. Result:", result);
+         throw new Error("Quiz generation failed: The AI model did not return any questions.");
       }
 
-
+      console.log(`Quiz generated with ${questionsWithPossibleSubject.length} questions.`);
       setQuizData({ quiz: questionsWithPossibleSubject });
       setQuizState({
-        quizId: `quiz-${Date.now()}-${user?.uid || 'anon'}`,
+        quizId: `quiz-${Date.now()}-${user.uid.substring(0, 5)}`, // More robust ID
         questionIndex: 0,
         selectedAnswers: new Array(questionsWithPossibleSubject.length).fill(undefined),
         submitted: false,
@@ -93,17 +102,20 @@ export default function QuizGenerationPage() {
         title: "Success",
         description: `Quiz generated successfully (Difficulty: ${difficulty}${grade && grade !== 'none' ? `, Grade: ${grade}` : ''})!`,
       });
-    } catch (error) {
-      console.error("Error generating quiz:", error);
-       let errorDesc = "Failed to generate quiz. Please try again.";
-       if (error instanceof Error && error.message) {
-           errorDesc = error.message;
-       }
-      toast({
-        title: "Error Generating Quiz",
-        description: errorDesc,
-        variant: "destructive",
-      });
+    } catch (error: any) {
+        console.error("Error generating quiz:", error.message, error.stack);
+        let errorDesc = "Failed to generate quiz. Please try again.";
+        if (error instanceof Error && error.message) {
+           // Extract user-friendly message if possible
+           if (error.message.startsWith("Quiz generation failed:") || error.message.startsWith("Invalid input")) {
+                errorDesc = error.message;
+           } else if (error.message.includes("blocked")) {
+               errorDesc = "Quiz generation was blocked, possibly due to the content provided or safety filters.";
+           } else {
+                errorDesc = `An unexpected error occurred: ${error.message.substring(0, 100)}${error.message.length > 100 ? '...' : ''}`;
+           }
+        }
+        toast({ title: "Error Generating Quiz", description: errorDesc, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -139,10 +151,11 @@ export default function QuizGenerationPage() {
 
   const handleSubmitQuiz = async () => {
       if (!quizState || !quizData || !user || quizState.submitted) { // Prevent re-submission
+          console.warn("Submit quiz aborted:", { quizState, quizData, userExists: !!user, submitted: quizState?.submitted });
           toast({ title: "Error", description: "Cannot submit quiz. User not logged in, quiz data missing, or already submitted.", variant: "destructive" });
           return;
       }
-      const allAnswered = quizState.selectedAnswers.every(answer => answer !== undefined && answer.trim() !== '');
+      const allAnswered = quizState.selectedAnswers.every(answer => answer !== undefined && String(answer).trim() !== '');
       if(!allAnswered && !window.confirm("You haven't answered all questions. Submit anyway?")) {
           return;
       }
@@ -166,48 +179,56 @@ export default function QuizGenerationPage() {
           ensureFirebaseInitialized(); // Ensure Firebase is initialized
           const progressDocRef = doc(db!, 'userProgress', user.uid);
 
-          // Transactionally check existence and update/set
-          await runTransaction(db!, async (transaction) => { // Use runTransaction correctly
+          // Use Firestore transaction to handle potential race conditions or document creation
+          await runTransaction(db!, async (transaction) => {
+             console.log("Running Firestore transaction for quiz submission...");
              const progressSnap = await transaction.get(progressDocRef);
+
              if (progressSnap.exists()) {
+                 console.log("UserProgress document exists. Updating quizHistory.");
                  // Document exists, update the array
+                 const currentData = progressSnap.data() as UserProgress;
+                 const updatedHistory = [...(currentData.quizHistory || []), quizResult];
                  transaction.update(progressDocRef, {
-                     quizHistory: arrayUnion(quizResult),
+                     quizHistory: updatedHistory,
                      lastUpdated: Timestamp.now() // Update lastUpdated time
                  });
              } else {
-                 // Document doesn't exist, create it with the quizHistory array
-                 transaction.set(progressDocRef, {
-                     uid: user.uid, // Make sure to include uid
-                     quizHistory: [quizResult],
-                     // Initialize other fields with defaults to avoid partial data
-                     subjectMastery: [],
-                     upcomingHomework: [],
-                     upcomingExams: [],
-                     studyRecommendations: [],
-                     studyPlanner: [],
-                     lastUpdated: Timestamp.now(),
-                 });
+                 console.log("UserProgress document does not exist. Creating with quizHistory.");
+                 // Document doesn't exist, create it with the quizHistory array and default fields
+                  const defaultProgress: UserProgress = {
+                       uid: user.uid,
+                       subjectMastery: [],
+                       upcomingHomework: [],
+                       upcomingExams: [],
+                       studyRecommendations: [],
+                       quizHistory: [quizResult], // Initialize with the current result
+                       studyPlanner: [],
+                       lastUpdated: Timestamp.now(),
+                  };
+                 transaction.set(progressDocRef, defaultProgress);
              }
+             console.log("Firestore transaction committed successfully.");
           });
 
           // Update client state *after* successful Firestore operation
-          setQuizState({ ...quizState, submitted: true });
+          setQuizState(prev => prev ? { ...prev, submitted: true } : null); // Ensure prev exists before spreading
           toast({ title: "Quiz Submitted", description: `Your score: ${finalScore} / ${quizData.quiz.length}. Results saved to Reflection.` });
 
       } catch (error: any) {
           console.error("Error saving quiz result:", error);
-          let errorDesc = "Could not save quiz results.";
+          let errorDesc = "Could not save quiz results. Please try again.";
             if (error.code === 'permission-denied') {
-                errorDesc = "Permission denied. Check Firestore rules. You might need to deploy `firestore.rules`.";
+                errorDesc = "Permission denied saving quiz results. Check Firestore rules.";
             } else if (error.code === 'unavailable') {
                  errorDesc = "Network error. Could not save quiz results. Please check your connection.";
-            } else if (error instanceof Error && error.message) {
+            } else if (error.message?.includes('transaction')) {
+                 errorDesc = `Database transaction failed: ${error.message}. Please try again.`;
+            } else if (error instanceof Error) {
                  errorDesc = error.message;
             }
           toast({ title: "Submission Error", description: errorDesc, variant: "destructive" });
-          // Optional: Revert client state or allow retry? For now, keep submitting state false
-          // setQuizState({ ...quizState, submitted: false }); // Or handle retry differently
+          // Don't revert client state, let user see their score but know it wasn't saved.
       } finally {
           setIsSubmitting(false);
       }
@@ -219,6 +240,7 @@ export default function QuizGenerationPage() {
     return quizState.selectedAnswers.reduce((score, selectedAnswer, index) => {
         const question = quizData.quiz[index];
          // Handle cases where correctAnswer might not be a string (though schema says it is)
+         // Perform case-insensitive comparison for strings
          const correctAnswerStr = String(question.correctAnswer ?? '').trim().toLowerCase();
          const selectedAnswerStr = String(selectedAnswer ?? '').trim().toLowerCase();
         const isCorrect = selectedAnswerStr === correctAnswerStr;
@@ -228,15 +250,17 @@ export default function QuizGenerationPage() {
 
   const handleQuestionCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
        const value = e.target.value;
-       // Allow empty string, otherwise parse and validate
+       // Allow empty string temporarily, handle validation on submit/generate
        if (value === '') {
-           setQuestionCount(0); // Or handle as you prefer, maybe keep previous valid value?
+           setQuestionCount(0); // Represent empty state, maybe show placeholder differently
        } else {
            const num = parseInt(value, 10);
+           // Allow numbers within range, prevent invalid input
            if (!isNaN(num)) {
-                if (num < 1) setQuestionCount(1);
-                else if (num > 20) setQuestionCount(20);
-                else setQuestionCount(num);
+                setQuestionCount(Math.max(1, Math.min(20, num)));
+           } else {
+               // If input becomes non-numeric, maybe revert or keep last valid number
+               setQuestionCount(1); // Or keep previous valid state if preferred
            }
        }
   };
@@ -269,14 +293,14 @@ export default function QuizGenerationPage() {
                   value={textbookContent}
                   onChange={(e) => setTextbookContent(e.target.value)}
                   rows={10}
-                  disabled={isLoading || !!quizState}
+                  disabled={isLoading || !!quizState || authLoading || !user} // Disable if loading, quiz active, or not logged in
                   required
                   className="mt-1"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                  <div className="sm:col-span-1">
-                   <Label htmlFor="question-count">Number of Questions (1-20)</Label>
+                   <Label htmlFor="question-count">Questions (1-20)</Label>
                    <Input
                      id="question-count"
                      type="number"
@@ -286,7 +310,7 @@ export default function QuizGenerationPage() {
                      value={questionCount > 0 ? String(questionCount) : ''}
                      onChange={handleQuestionCountChange}
                      placeholder="e.g., 5"
-                     disabled={isLoading || !!quizState}
+                     disabled={isLoading || !!quizState || authLoading || !user}
                      required
                      className="mt-1 w-full"
                    />
@@ -296,7 +320,7 @@ export default function QuizGenerationPage() {
                     <Select
                         value={difficulty}
                         onValueChange={(value) => setDifficulty(value as DifficultyLevel)}
-                        disabled={isLoading || !!quizState}
+                        disabled={isLoading || !!quizState || authLoading || !user}
                     >
                         <SelectTrigger id="difficulty" className="mt-1 w-full">
                             <SelectValue placeholder="Select difficulty..." />
@@ -311,26 +335,35 @@ export default function QuizGenerationPage() {
                  <div className="sm:col-span-1">
                     <Label htmlFor="grade-level">Grade Level (Optional)</Label>
                     <Select
-                        value={grade || 'none'} // Use 'none' for empty selection
+                        value={grade} // Use 'none' for default/empty selection
                         onValueChange={setGrade}
-                        disabled={isLoading || !!quizState}
+                        disabled={isLoading || !!quizState || authLoading || !user}
                     >
                         <SelectTrigger id="grade-level" className="mt-1 w-full">
                             <SelectValue placeholder="Select grade..." />
                         </SelectTrigger>
                         <SelectContent>
-                             {/* Change value from "" to "none" */}
+                             {/* Changed value from "" to "none" */}
                              <SelectItem value="none">Any Grade</SelectItem>
                             {[...Array(12)].map((_, i) => (
                                 <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
                             ))}
+                             <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                     </Select>
                  </div>
               </div>
+               {!user && !authLoading && (
+                 <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                       Please log in to generate quizzes.
+                   </AlertDescription>
+                 </Alert>
+               )}
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={isLoading || !!quizState}>
+              <Button type="submit" disabled={isLoading || !!quizState || authLoading || !user || !textbookContent.trim() || questionCount < 1}>
                 {isLoading ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
                 ) : !!quizState ? (
@@ -350,16 +383,16 @@ export default function QuizGenerationPage() {
              {quizState?.submitted && score !== null && quizData && (
                <CardDescription>
                  Quiz Finished! Your Score: <span className="font-bold text-primary">{score} / {quizData.quiz.length}</span>
-               </CardDescription>
+                 . View details in <Link href="/reflection" className="underline hover:text-primary">Reflection</Link>.</CardDescription>
              )}
              {!quizState?.submitted && quizData && quizState && (
-                <CardDescription>Answer the questions below. Question {quizState.questionIndex + 1} of {quizData.quiz.length}.</CardDescription>
+                <CardDescription>Question {quizState.questionIndex + 1} of {quizData.quiz.length}.</CardDescription>
              )}
               {!quizData && !isLoading && (
                  <CardDescription>Generate a quiz to start.</CardDescription>
               )}
               {isLoading && (
-                  <CardDescription>Generating quiz...</CardDescription>
+                  <CardDescription>Generating quiz, please wait...</CardDescription>
               )}
           </CardHeader>
           <CardContent className="min-h-[300px] flex flex-col justify-between">
@@ -377,17 +410,18 @@ export default function QuizGenerationPage() {
                       value={quizState.selectedAnswers[quizState.questionIndex] || ''} // Ensure value is string
                       onValueChange={handleAnswerChange}
                       disabled={quizState.submitted || isSubmitting}
+                      className="space-y-2" // Add spacing between radio items
                     >
                       {currentQuestion.answers.map((answer, idx) => (
                         <div key={idx} className={cn(
-                            "flex items-center space-x-2 p-2 rounded-md border border-border transition-colors", // Use border-border for default
-                            quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-green-100 border-green-300 dark:bg-green-900/50 dark:border-green-700",
-                            quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700"
+                            "flex items-center space-x-3 p-3 rounded-md border border-input transition-colors cursor-pointer hover:bg-muted/50", // Base styles
+                            quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-green-100 border-green-400 dark:bg-green-900/30 dark:border-green-700", // Correct answer style
+                            quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-red-100 border-red-400 dark:bg-red-900/30 dark:border-red-700" // Incorrect user selection style
                         )}>
                           <RadioGroupItem value={answer} id={`q${quizState.questionIndex}-a${idx}`} />
-                          <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer flex-1">{answer}</Label>
-                           {quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && <Check className="h-4 w-4 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
-                           {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && <X className="h-4 w-4 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
+                          <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer flex-1 text-sm">{answer}</Label>
+                           {quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && <Check className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                           {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && <X className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                         </div>
                       ))}
                     </RadioGroup>
@@ -397,17 +431,18 @@ export default function QuizGenerationPage() {
                         value={quizState.selectedAnswers[quizState.questionIndex] || ''} // Ensure value is string
                         onValueChange={handleAnswerChange}
                         disabled={quizState.submitted || isSubmitting}
+                        className="space-y-2"
                       >
                        {['True', 'False'].map((answer, idx) => (
                            <div key={idx} className={cn(
-                               "flex items-center space-x-2 p-2 rounded-md border border-border transition-colors", // Use border-border
-                               quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-green-100 border-green-300 dark:bg-green-900/50 dark:border-green-700",
-                               quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700"
+                               "flex items-center space-x-3 p-3 rounded-md border border-input transition-colors cursor-pointer hover:bg-muted/50",
+                               quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-green-100 border-green-400 dark:bg-green-900/30 dark:border-green-700",
+                               quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && "bg-red-100 border-red-400 dark:bg-red-900/30 dark:border-red-700"
                            )}>
                              <RadioGroupItem value={answer} id={`q${quizState.questionIndex}-a${idx}`} />
-                             <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer flex-1">{answer}</Label>
-                              {quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && <Check className="h-4 w-4 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
-                           {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && <X className="h-4 w-4 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
+                             <Label htmlFor={`q${quizState.questionIndex}-a${idx}`} className="cursor-pointer flex-1 text-sm">{answer}</Label>
+                              {quizState.submitted && String(answer).trim().toLowerCase() === String(currentQuestion.correctAnswer).trim().toLowerCase() && <Check className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                           {quizState.submitted && quizState.selectedAnswers[quizState.questionIndex] === answer && String(answer).trim().toLowerCase() !== String(currentQuestion.correctAnswer).trim().toLowerCase() && <X className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                            </div>
                        ))}
                      </RadioGroup>
@@ -421,7 +456,7 @@ export default function QuizGenerationPage() {
                            onChange={handleShortAnswerChange}
                            disabled={quizState.submitted || isSubmitting}
                            className={cn(
-                               quizState.submitted && (String(quizState.selectedAnswers[quizState.questionIndex] ?? '').trim().toLowerCase() === String(currentQuestion.correctAnswer ?? '').trim().toLowerCase() ? "border-green-500 focus-visible:ring-green-500" : "border-red-500 focus-visible:ring-red-500")
+                               quizState.submitted && (String(quizState.selectedAnswers[quizState.questionIndex] ?? '').trim().toLowerCase() === String(currentQuestion.correctAnswer ?? '').trim().toLowerCase() ? "border-green-500 focus-visible:ring-green-500 dark:border-green-600" : "border-red-500 focus-visible:ring-red-500 dark:border-red-600")
                            )}
                          />
                          {quizState.submitted && (
@@ -464,10 +499,22 @@ export default function QuizGenerationPage() {
               !isLoading && <p className="text-muted-foreground text-center h-full flex items-center justify-center">Generate a quiz using the panel on the left.</p>
             )}
           </CardContent>
-           <CardFooter>
+           <CardFooter className="pt-6 border-t">
                {quizData && (
-                  <Button variant="outline" size="sm" onClick={() => {setQuizData(null); setQuizState(null); /* Optionally reset textbook content? */}} disabled={isLoading || isSubmitting}>
-                      {quizState?.submitted ? 'Start New Quiz' : 'Cancel Quiz'}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        setQuizData(null);
+                        setQuizState(null);
+                        setTextbookContent(''); // Optionally reset content
+                        setQuestionCount(5);
+                        setDifficulty('medium');
+                        setGrade('none');
+                    }}
+                    disabled={isLoading || isSubmitting}
+                    >
+                      {quizState?.submitted ? 'Start New Quiz' : 'Cancel Current Quiz'}
                   </Button>
                )}
            </CardFooter>

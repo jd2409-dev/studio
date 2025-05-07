@@ -1,18 +1,21 @@
-
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent, useEffect } from 'react';
+import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react'; // Added useRef
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Upload, CheckCircle, AlertCircle, WifiOff } from 'lucide-react';
+import { Loader2, Upload, CheckCircle, AlertCircle, WifiOff, FileText } from 'lucide-react'; // Added FileText
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import { storage, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled (though not directly used here, good practice)
 import { ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from "firebase/storage"; // Import storage functions
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // Import Alert components
+
+// Define allowed file types for validation
+const ALLOWED_UPLOAD_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50MB limit for uploads
 
 export default function UploadTextbookPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -21,15 +24,19 @@ export default function UploadTextbookPage() {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [isOnline, setIsOnline] = useState(true); // Track online status
   const { toast } = useToast();
-  const { user } = useAuth(); // Get user for organizing uploads
+  const { user, loading: authLoading } = useAuth(); // Get user for organizing uploads
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref to reset file input
+
 
   // Monitor online status
   useEffect(() => {
+    // Set initial status
+     if (typeof navigator !== 'undefined') {
+        setIsOnline(navigator.onLine);
+     }
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-
-    // Check initial status
-    setIsOnline(navigator.onLine);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -42,23 +49,32 @@ export default function UploadTextbookPage() {
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
+    setFile(null); // Reset file state first
+    setUploadStatus('idle');
+    setUploadProgress(null);
+
     if (selectedFile) {
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
-      if (!allowedTypes.includes(selectedFile.type)) {
+      // Validate file type
+      if (!ALLOWED_UPLOAD_TYPES.includes(selectedFile.type)) {
           toast({
               title: "Invalid File Type",
-              description: "Please upload a PDF, DOC, DOCX, or TXT file.",
+              description: `Please upload a PDF, DOC, DOCX, or TXT file. Detected: ${selectedFile.type || 'unknown'}`,
               variant: "destructive",
           });
-          setFile(null);
-          event.target.value = '';
+          event.target.value = ''; // Clear the input
           return;
       }
+       // Validate file size
+       if (selectedFile.size > MAX_UPLOAD_SIZE) {
+           toast({
+               title: "File Too Large",
+               description: `File must be smaller than ${MAX_UPLOAD_SIZE / 1024 / 1024}MB.`,
+               variant: "destructive",
+           });
+           event.target.value = ''; // Clear the input
+           return;
+       }
       setFile(selectedFile);
-      setUploadStatus('idle');
-      setUploadProgress(null);
-    } else {
-      setFile(null);
     }
   };
 
@@ -66,20 +82,15 @@ export default function UploadTextbookPage() {
     event.preventDefault();
 
     if (!isOnline) {
-        toast({
-            title: "Offline",
-            description: "Cannot upload files while offline. Please check your connection.",
-            variant: "destructive",
-        });
+        toast({ title: "Offline", description: "Cannot upload files while offline.", variant: "destructive" });
         return;
     }
-
-    if (!file || !user) {
-      toast({
-        title: "Error",
-        description: !user ? "You must be logged in to upload." : "Please select a file to upload.",
-        variant: "destructive",
-      });
+     if (!user) {
+        toast({ title: "Error", description: "You must be logged in to upload.", variant: "destructive" });
+        return;
+    }
+    if (!file) {
+      toast({ title: "Error", description: "Please select a file to upload.", variant: "destructive" });
       return;
     }
 
@@ -90,7 +101,10 @@ export default function UploadTextbookPage() {
     try {
         ensureFirebaseInitialized(); // Check Firebase init
 
-        const storageRef = ref(storage!, `user_uploads/${user.uid}/textbooks/${Date.now()}_${file.name}`);
+        // Construct a more organized path
+        const filePath = `user_uploads/${user.uid}/textbooks/${file.name}`;
+        const storageRef = ref(storage!, filePath);
+        console.log(`Attempting to upload to: ${filePath}`);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         uploadTask.on('state_changed',
@@ -100,42 +114,58 @@ export default function UploadTextbookPage() {
                 console.log('Upload is ' + progress + '% done');
             },
             (error) => {
-                 console.error("Upload Error:", error);
+                 console.error("Upload Error:", error.code, error.message, error);
                  let errorMessage = "An unknown error occurred during upload.";
+                 // More specific error handling based on Firebase Storage error codes
                  switch (error.code) {
-                     case 'storage/unauthorized': errorMessage = "Permission denied."; break;
+                     case 'storage/unauthorized':
+                        errorMessage = "Permission denied. Check your Firebase Storage security rules to allow uploads to this path.";
+                        console.error("Check Storage Rules: Ensure rules allow write access for authenticated users to `user_uploads/{userId}/textbooks/{fileName}`");
+                        break;
                      case 'storage/canceled':
                         errorMessage = "Upload cancelled.";
-                        toast({ title: "Upload Cancelled", description: errorMessage });
-                        setUploadStatus('idle'); setIsLoading(false); setUploadProgress(null); return;
-                     case 'storage/unknown': errorMessage = "Unknown storage error."; break;
-                     case 'storage/object-not-found': errorMessage = "File not found (internal error)."; break;
-                     case 'storage/bucket-not-found': errorMessage = "Storage bucket not configured correctly."; break;
-                     case 'storage/project-not-found': errorMessage = "Firebase project not found."; break;
-                     case 'storage/quota-exceeded': errorMessage = "Storage quota exceeded."; break;
-                     case 'storage/unauthenticated': errorMessage = "User not authenticated."; break;
-                     case 'storage/retry-limit-exceeded': errorMessage = "Network error during upload. Please try again."; break;
+                        // No need for error toast if intentionally cancelled, reset state silently or with info toast
+                         console.log("Upload cancelled by user or system.");
+                         setUploadStatus('idle'); setIsLoading(false); setUploadProgress(null);
+                         return; // Stop further processing
+                     case 'storage/unknown': errorMessage = "Unknown storage error occurred."; break;
+                     case 'storage/object-not-found': errorMessage = "File path issue (internal error)."; break; // Should not happen on upload
+                     case 'storage/bucket-not-found': errorMessage = "Storage bucket not found. Check Firebase project config."; break;
+                     case 'storage/project-not-found': errorMessage = "Firebase project not found. Check config."; break;
+                     case 'storage/quota-exceeded': errorMessage = "Storage space quota exceeded."; break;
+                     case 'storage/unauthenticated': errorMessage = "User is not authenticated. Please log in."; break;
+                     case 'storage/retry-limit-exceeded': errorMessage = "Network error during upload. Please check connection and try again."; break;
+                     default: errorMessage = `Upload failed: ${error.message}`; // Default to Firebase message
                  }
                 toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
                 setUploadStatus('error'); setIsLoading(false);
             },
             async () => {
+                // Upload completed successfully
                 console.log('Upload successful');
                 setUploadStatus('success'); setIsLoading(false); setUploadProgress(100);
                  try {
                      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                      console.log('File available at', downloadURL);
-                     // TODO: Save downloadURL to Firestore if needed
+                     // TODO: Implement logic to save this downloadURL to Firestore
+                     // Example (needs a user document structure update):
+                     // const userDocRef = doc(db!, 'users', user.uid);
+                     // await updateDoc(userDocRef, {
+                     //     uploadedTextbooks: arrayUnion({ name: file.name, url: downloadURL, uploadedAt: Timestamp.now() })
+                     // });
                      toast({ title: "Upload Complete", description: `${file.name} uploaded successfully.` });
+                      // Reset form after a short delay
                       setTimeout(() => {
-                         setFile(null); setUploadStatus('idle'); setUploadProgress(null);
-                         const fileInput = document.getElementById('textbook-upload') as HTMLInputElement;
-                         if (fileInput) fileInput.value = '';
-                      }, 2000);
+                         setFile(null);
+                         setUploadStatus('idle');
+                         setUploadProgress(null);
+                         if (fileInputRef.current) fileInputRef.current.value = ''; // Clear file input
+                      }, 2500); // 2.5 seconds delay
                  } catch (urlError: any) {
                       console.error("Error getting download URL:", urlError);
-                      toast({ title: "Upload Complete (URL Error)", description: "File uploaded, but failed to get download URL.", variant: "destructive" });
-                      // Keep success status, but maybe indicate URL issue?
+                      toast({ title: "Upload Warning", description: "File uploaded, but failed to get download URL. It might be processing.", variant: "default" });
+                      // Keep success status, maybe indicate URL issue?
+                      setUploadStatus('success'); // Still success, but URL failed
                  }
             }
         );
@@ -144,7 +174,9 @@ export default function UploadTextbookPage() {
         console.error("Upload Initialization Error:", error);
          let errorMessage = "Could not start upload. Please try again.";
          if (error.message?.includes("Firebase is not initialized")) {
-             errorMessage = "Application configuration error. Cannot access storage.";
+             errorMessage = "Application configuration error. Cannot access storage service.";
+         } else if (error.message?.includes("storage is null")) {
+             errorMessage = "Storage service not available. Check Firebase configuration.";
          }
         toast({ title: "Upload Error", description: errorMessage, variant: "destructive" });
         setUploadStatus('error'); setIsLoading(false); setUploadProgress(null);
@@ -155,7 +187,7 @@ export default function UploadTextbookPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Upload Textbook Chapter</h1>
       <p className="text-muted-foreground mb-8">
-        Upload chapters or sections of your textbooks (PDF, DOCX, TXT, etc.). These can be used later for AI features.
+        Upload chapters or sections (PDF, DOCX, TXT). Files are stored securely and can be used later for AI features. Max size: {MAX_UPLOAD_SIZE / 1024 / 1024}MB.
       </p>
 
       {!isOnline && (
@@ -163,53 +195,73 @@ export default function UploadTextbookPage() {
               <WifiOff className="h-4 w-4" />
              <AlertTitle>You are currently offline</AlertTitle>
              <AlertDescription>
-               File uploading requires an active internet connection. Please reconnect to upload your textbook chapter.
+               File uploading requires an active internet connection. Please reconnect.
              </AlertDescription>
            </Alert>
       )}
 
-      <Card className="max-w-lg mx-auto">
+      <Card className="max-w-lg mx-auto shadow-md rounded-lg">
         <CardHeader>
           <CardTitle>Upload File</CardTitle>
-          <CardDescription>Select a document file (PDF, DOCX, TXT) to upload to your personal storage.</CardDescription>
+           <CardDescription>
+               Select a document file ({ALLOWED_UPLOAD_TYPES.map(t => t.split('/')[1].toUpperCase()).join(', ')}) to upload.
+           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="textbook-upload">Textbook File</Label>
+              <Label htmlFor="textbook-upload" className={cn(!isOnline || isLoading || authLoading || !user ? 'text-muted-foreground' : '')}>Textbook File</Label>
               <Input
+                ref={fileInputRef}
                 id="textbook-upload"
                 type="file"
-                accept=".pdf,.doc,.docx,text/plain,.txt" // Match validation
+                accept={ALLOWED_UPLOAD_TYPES.join(',')} // Match validation
                 onChange={handleFileChange}
-                disabled={isLoading || !isOnline} // Disable if loading or offline
+                disabled={isLoading || !isOnline || authLoading || !user} // Disable if loading, offline, or not logged in
                 required
+                className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
               />
-               {file && <p className="text-sm text-muted-foreground mt-1">Selected: {file.name} ({ (file.size / 1024 / 1024).toFixed(2)} MB)</p>}
+               {file && (
+                   <div className="mt-2 text-sm text-muted-foreground flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                       <FileText className="h-4 w-4 flex-shrink-0"/>
+                       <span className="truncate" title={file.name}>{file.name}</span>
+                       <span className="ml-auto flex-shrink-0">({ (file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                   </div>
+                )}
             </div>
              {uploadStatus === 'uploading' && uploadProgress !== null && (
-                <div className="space-y-2">
-                    <Progress value={uploadProgress} className="w-full h-2" indicatorClassName="bg-secondary"/>
+                <div className="space-y-2 pt-2">
+                    <Progress value={uploadProgress} className="w-full h-2" />
                     <p className="text-sm text-center text-muted-foreground">{Math.round(uploadProgress)}% Uploaded</p>
                 </div>
              )}
              {uploadStatus === 'success' && (
-                <div className="flex items-center justify-center text-green-600 dark:text-green-400 space-x-2">
-                    <CheckCircle className="h-5 w-5" />
-                    <p className="text-sm font-medium">Upload Successful!</p>
-                </div>
+                <Alert variant="default" className="bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                     <AlertDescription className="text-green-700 dark:text-green-300">
+                         Upload Successful! File is processing.
+                     </AlertDescription>
+                 </Alert>
              )}
               {uploadStatus === 'error' && (
-                 <div className="flex items-center justify-center text-destructive space-x-2">
-                     <AlertCircle className="h-5 w-5" />
-                     <p className="text-sm font-medium">Upload Failed. Please try again.</p>
-                 </div>
+                 <Alert variant="destructive">
+                     <AlertCircle className="h-4 w-4" />
+                     <AlertDescription>
+                         Upload Failed. Please check the error message and try again.
+                     </AlertDescription>
+                 </Alert>
               )}
+               {!user && !authLoading && (
+                 <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>Please log in to upload files.</AlertDescription>
+                 </Alert>
+               )}
           </CardContent>
           <CardFooter>
             <Button
               type="submit"
-              disabled={isLoading || !file || uploadStatus === 'success' || !isOnline} // Disable if loading, no file, success, or offline
+              disabled={isLoading || !file || uploadStatus === 'success' || !isOnline || authLoading || !user} // Comprehensive disable check
               className="w-full"
             >
               {isLoading ? (
@@ -221,7 +273,11 @@ export default function UploadTextbookPage() {
                  <>
                     <WifiOff className="mr-2 h-4 w-4" /> Offline
                  </>
-              ) : (
+              ) : uploadStatus === 'success' ? (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Uploaded
+                  </>
+               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" /> Upload Chapter
                 </>
