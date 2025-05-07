@@ -201,17 +201,31 @@ export default function TextbookExplainerPage() {
                   setIsPaused(false); // Ensure consistency
               };
                utterance.onerror = (event) => {
-                  console.error("Speech synthesis error:", event.error, event);
-                  let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
-                  if (event.error === 'synthesis-failed' || event.error === 'network') {
-                      errorMsg += ". Check connection or try a different voice/browser.";
-                  } else if (event.error === 'language-unavailable') {
-                       errorMsg += ". The selected language is unavailable.";
-                  } else if (event.error === 'not-allowed') {
-                        errorMsg = "Speech synthesis permission denied by the browser.";
-                  }
-                  setSpeechError(errorMsg);
-                  toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
+                  // Handle 'interrupted' gracefully (often user action or navigation)
+                   if (event.error === 'interrupted') {
+                       console.warn("Speech synthesis interrupted.", event);
+                       // Optionally show a less severe message or just log it
+                       // setSpeechError("Speech playback was interrupted.");
+                       // toast({ title: "Playback Interrupted", description: "Audio playback stopped.", variant: "default" });
+                   } else {
+                       // Handle other errors more severely
+                       console.error("Speech synthesis error:", event.error, event);
+                       let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
+                       if (event.error === 'synthesis-failed' || event.error === 'network') {
+                           errorMsg += ". Check connection or try a different voice/browser.";
+                       } else if (event.error === 'language-unavailable') {
+                           errorMsg += ". The selected language is unavailable.";
+                       } else if (event.error === 'not-allowed') {
+                           errorMsg = "Speech synthesis permission denied by the browser.";
+                       } else if (event.error === 'audio-busy') {
+                            errorMsg = "Audio output is busy. Please wait or try again.";
+                       } else if (event.error === 'invalid-argument') {
+                           errorMsg = "Invalid argument provided to speech synthesis.";
+                       }
+                       setSpeechError(errorMsg);
+                       toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
+                   }
+                  // Reset state regardless of error type
                   setIsSpeaking(false);
                   setIsPaused(false);
                   utteranceRef.current = null;
@@ -409,3 +423,4 @@ export default function TextbookExplainerPage() {
     </div>
   );
 }
+
