@@ -63,10 +63,11 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
-    // Ensure handlebarsOptions and its helpers property exist
+    // Ensure handlebarsOptions exists
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    // Ensure helpers object exists
     if (!promptObject.handlebarsOptions.helpers) {
         promptObject.handlebarsOptions.helpers = {};
     }
@@ -78,7 +79,7 @@ Tutor, provide your response:
         },
     };
     // Crucially, also ensure knownHelpersOnly is false to allow built-in helpers (#if, #each) AND this custom 'eq' helper.
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    promptObject.handlebarsOptions.knownHelpersOnly = false; // Explicitly set to false
     return promptObject;
   },
   config: {
