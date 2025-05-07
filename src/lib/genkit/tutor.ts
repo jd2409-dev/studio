@@ -1,3 +1,4 @@
+
 // No "use server" here
 
 import { z } from 'genkit';
@@ -42,7 +43,7 @@ Unknown: {{{content}}}
 
 Tutor, provide your response:
   `,
-  // Specify handlebarsOptions to enable the 'eq' helper if needed
+  // Specify handlebarsOptions to enable the 'eq' helper
   handlebarsOptions: {
       knownHelpersOnly: false, // IMPORTANT: Allow custom helpers like 'eq'
       helpers: {
