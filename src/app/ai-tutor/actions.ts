@@ -6,7 +6,7 @@
  */
 
 import { z } from 'genkit'; // Import Zod from genkit or the config file
-import { AiTutorInput, AiTutorOutput, AiTutorInputSchema, aiTutorFlow } from '@/ai/flows/tutor-flow'; // Import from the new flow definition file
+import { AiTutorInput, AiTutorOutput, AiTutorInputSchema, aiTutorFlow } from '@/ai/flows/tutor-flow'; // Import from the flow definition file
 
 // Wrapper function exposed to the frontend
 export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
@@ -19,10 +19,18 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
     // Call the underlying Genkit flow
     const result = await aiTutorFlow(validatedInput);
 
-    // Basic check on the result structure (though the flow itself should handle errors)
+    // Check if the flow itself returned an error message (like safety block or invalid response)
+     if (result?.response?.startsWith("Sorry,") || result?.response?.startsWith("I cannot provide a response")) {
+         console.warn("getTutorResponse Server Action: Flow returned a handled error state:", result.response);
+         // Return the error message from the flow directly
+          return result;
+     }
+
+    // Double-check the result structure just in case the flow error handling failed
     if (!result || typeof result.response !== 'string') {
-        console.error("getTutorResponse Server Action: Flow returned unexpected result structure.", result);
-        return { response: "Sorry, an internal error occurred." };
+        console.error("getTutorResponse Server Action: Flow returned unexpected result structure after internal checks.", result);
+        // Throw a new error for the frontend to catch
+        throw new Error("AI Tutor returned an invalid response structure.");
     }
 
     console.log("getTutorResponse Server Action: Flow executed successfully.");
@@ -30,22 +38,18 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
 
   } catch (err: any) {
     console.error("getTutorResponse Server Action: Error during execution or validation:", err.message, err.stack);
+
     if (err instanceof z.ZodError) {
       // Handle validation errors specifically
       const validationErrors = err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
       console.error("getTutorResponse Server Action: Input validation failed:", validationErrors);
-       // Re-throw a more user-friendly validation error or return an error response
-       // Throwing might be better for the frontend to catch specific validation issues
+       // Re-throw a user-friendly validation error
        throw new Error(`Invalid input for AI Tutor: ${validationErrors}`);
-       // Alternatively, return an error object:
-       // return { response: `Invalid input: ${validationErrors}` };
     }
-    // Re-throw other errors (like flow execution errors caught and re-thrown)
-    // Or return a generic error response
-    return { response: `An error occurred: ${err.message}` };
-    // Or re-throw: throw err;
+
+    // Re-throw other errors (like flow execution errors caught and re-thrown by the flow, or unexpected action errors)
+     // Prepend a clear indicator that this is an AI Tutor specific error for the frontend toast
+     throw new Error(`AI Tutor Error: ${err.message}`);
   }
 }
-
-// Ensure no other non-async values (like schemas or the flow itself) are exported here.
-// export { AiTutorInputSchema, AiTutorOutputSchema }; // DO NOT EXPORT THESE FROM HERE
+```

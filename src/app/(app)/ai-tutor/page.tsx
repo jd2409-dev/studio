@@ -15,6 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, type DocumentData, FirestoreError } from 'firebase/firestore';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
 
 interface ChatMessage {
   id?: string; // Firestore document ID
@@ -23,7 +24,7 @@ interface ChatMessage {
   timestamp?: Timestamp | Date; // Firestore Timestamp or Date object for optimistic updates
 }
 
-// Ensure the page is dynamically rendered as it uses server actions
+// Ensure the page is dynamically rendered as it uses server actions and fetches data dynamically
 export const dynamic = 'force-dynamic';
 
 export default function AiTutorPage() {
@@ -35,6 +36,7 @@ export default function AiTutorPage() {
   const { user } = useAuth();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     if (scrollAreaRef.current) {
       requestAnimationFrame(() => {
@@ -46,6 +48,7 @@ export default function AiTutorPage() {
     }
   }, [messages]);
 
+  // Fetch/subscribe to chat history
   useEffect(() => {
     if (!user) {
       setMessages([]); // Clear messages if user logs out
@@ -53,39 +56,59 @@ export default function AiTutorPage() {
       return;
     }
 
-    ensureFirebaseInitialized();
-    const messagesColRef = collection(db!, 'users', user.uid, 'tutorMessages');
-    const q = query(messagesColRef, orderBy('timestamp', 'asc'));
+    let unsubscribe: () => void = () => {};
+    try {
+        ensureFirebaseInitialized();
+        const messagesColRef = collection(db!, 'users', user.uid, 'tutorMessages');
+        const q = query(messagesColRef, orderBy('timestamp', 'asc'));
 
-    setIsLoadingHistory(true);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMessages: ChatMessage[] = snapshot.docs.map(doc => {
-        const data = doc.data() as DocumentData;
-        return {
-          id: doc.id,
-          role: data.role,
-          content: data.content,
-          timestamp: data.timestamp, // Keep as Firestore Timestamp or Date
-        };
-      });
-      setMessages(fetchedMessages);
-      setIsLoadingHistory(false);
-    }, (error: FirestoreError) => {
-      console.error("Error fetching chat history:", error);
-      let errorDesc = "Could not load previous chat messages. " + error.message;
-      if (error.code === 'permission-denied') {
-        errorDesc = "Could not load chat history due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). This often involves running `firebase deploy --only firestore:rules`.";
-      }
-      toast({
-        title: "Error Loading History",
-        description: errorDesc,
-        variant: "destructive",
-      });
-      setIsLoadingHistory(false);
-    });
+        setIsLoadingHistory(true);
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedMessages: ChatMessage[] = snapshot.docs.map(doc => {
+            const data = doc.data() as DocumentData;
+            return {
+              id: doc.id,
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp, // Keep as Firestore Timestamp or Date
+            };
+          });
+          setMessages(fetchedMessages);
+          setIsLoadingHistory(false);
+        }, (error: FirestoreError) => {
+          console.error("Error fetching chat history:", error);
+          let errorDesc = "Could not load previous chat messages. " + error.message;
+          if (error.code === 'permission-denied') {
+            errorDesc = "Could not load chat history due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README). Command: `firebase deploy --only firestore:rules`.";
+          } else if (error.code === 'unauthenticated') {
+            errorDesc = "You must be logged in to view chat history.";
+          } else if (error.code === 'unavailable') {
+            errorDesc = "Could not reach the database. Please check your connection.";
+          }
+          toast({
+            title: "Error Loading History",
+            description: errorDesc,
+            variant: "destructive",
+          });
+          setIsLoadingHistory(false);
+        });
+    } catch (initError: any) {
+         console.error("Firestore initialization error in AI Tutor:", initError);
+         toast({
+           title: "Database Error",
+           description: "Could not connect to the chat history database. Please refresh.",
+           variant: "destructive",
+         });
+         setIsLoadingHistory(false);
+    }
 
-    return () => unsubscribe();
-  }, [user, toast]);
+
+    // Cleanup function
+    return () => {
+        // console.log("Unsubscribing from Firestore chat history.");
+        unsubscribe();
+    };
+  }, [user, toast]); // Dependency array includes user and toast
 
   const handleSendMessage = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -96,29 +119,41 @@ export default function AiTutorPage() {
     setInput('');
 
     // Optimistically create the user message for the flow input
+    // Note: We don't add this to the state directly anymore, relies on Firestore update
     const optimisticUserMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: new Date() };
     // Construct history for the flow using current messages + optimistic user message
     const historyForFlow: AiTutorInput = {
         history: [...messages, optimisticUserMessage].map(m => ({ role: m.role, content: m.content }))
     };
 
+    let userMessageDocId: string | null = null;
+
     try {
+      ensureFirebaseInitialized(); // Ensure firebase is ready
       // Save user message to Firestore
       const messagesColRef = collection(db!, 'users', user.uid, 'tutorMessages');
-      await addDoc(messagesColRef, {
+      const userMessageRef = await addDoc(messagesColRef, {
         role: 'user',
         content: userMessageContent,
         timestamp: serverTimestamp(),
       });
+      userMessageDocId = userMessageRef.id; // Store ID in case we need to show an error state later
 
       // --- Call the Server Action ---
       const result: AiTutorOutput = await getTutorResponse(historyForFlow);
       // --- Server Action Call End ---
 
-      if (!result?.response || result.response.startsWith("An error occurred:")) {
+      // Check if the result contains an error message from the flow/action itself
+      if (result?.response?.startsWith("Sorry,") || result?.response?.startsWith("I cannot provide a response") || result?.response?.startsWith("AI Tutor Error:")) {
+         console.error("AI Tutor Error Response Received:", result.response);
+         // Throw an error so it's caught by the catch block and displayed as a toast
+         throw new Error(result.response);
+      }
+
+      // Ensure we have a valid string response
+      if (!result?.response || typeof result.response !== 'string') {
         console.error("AI Tutor Error: No valid response content from AI action for input:", JSON.stringify(historyForFlow), "Result:", result);
-        // Show the error returned by the action if available
-        throw new Error(result?.response || "The AI tutor did not provide a valid response. Please try rephrasing your question.");
+        throw new Error("The AI tutor did not provide a valid response. Please try rephrasing your question.");
       }
 
       // Save AI message to Firestore
@@ -131,34 +166,38 @@ export default function AiTutorPage() {
 
     } catch (error: any) {
       console.error("Error during chat interaction:", error);
+      let errorTitle = "Chat Error";
       let errorDesc = "An unexpected error occurred. Please try again.";
+
       if (error instanceof Error) {
-        // Check for specific error messages coming from the action/flow
-        if (error.message.startsWith("AI Tutor encountered an error:") ||
-            error.message.startsWith("Invalid input:") ||
-            error.message.includes("No output received from the AI model") ||
-            error.message.includes("formulating a response") ||
-            error.message.includes("internal error occurred")) {
-          errorDesc = `AI Tutor: ${error.message.replace(/^AI Tutor encountered an error:/,'').trim()}`;
-        } else if (error.message.includes("Firestore") || (error.code && error.code.startsWith('permission-denied'))) { // Check for FirestoreError codes
-            if(error.code === 'permission-denied'){
-                 errorDesc = "Could not save message due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). This often involves running `firebase deploy --only firestore:rules`.";
-            } else {
-                errorDesc = "There was an issue saving your message to the database. Please try again.";
-            }
-        } else {
-          errorDesc = error.message; // Use the raw error message
-        }
+         // Use the specific error message thrown by the action or flow
+         errorDesc = error.message;
+
+         // Customize title based on error type if needed
+          if (error.message.startsWith("AI Tutor Error:")) {
+             errorTitle = "AI Tutor Error";
+             errorDesc = error.message.replace("AI Tutor Error:", "").trim(); // Clean up prefix
+          } else if (error.message.startsWith("Invalid input:")) {
+              errorTitle = "Input Error";
+               errorDesc = error.message.replace("Invalid input:", "").trim();
+          } else if (error.code && error.code.startsWith('permission-denied')) { // Check for FirestoreError codes during save
+              errorTitle = "Database Error";
+              errorDesc = "Could not save message due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). Command: `firebase deploy --only firestore:rules`.";
+          } else if (error.code === 'unavailable') {
+               errorTitle = "Network Error";
+               errorDesc = "Could not save message. Please check your connection and try again.";
+          }
       }
 
       toast({
-        title: "Chat Error",
+        title: errorTitle,
         description: errorDesc,
         variant: "destructive",
       });
-      // If AI response failed, we might want to add a temporary error message to UI
-      // For now, Firestore save errors for user message would also be caught here.
-      // The onSnapshot listener will keep the UI consistent with DB.
+      // Consider adding a temporary error indicator to the UI if needed,
+      // though the toast provides feedback.
+      // Example: could update the user message in Firestore with an error flag,
+      // but that adds complexity.
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +219,7 @@ export default function AiTutorPage() {
           <ScrollArea className="h-full p-6" ref={scrollAreaRef}>
             <div className="space-y-4">
               {isLoadingHistory && (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex items-center justify-center h-full py-10">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   <p className="ml-2 text-muted-foreground">Loading chat history...</p>
                 </div>
@@ -202,7 +241,7 @@ export default function AiTutorPage() {
                   {message.role === 'user' && <Avatar className="h-8 w-8 flex-shrink-0 mt-1"><AvatarImage src="https://picsum.photos/seed/nexuslearn-user/40/40" alt="User" data-ai-hint="user avatar" /><AvatarFallback>U</AvatarFallback></Avatar>}
                 </div>
               ))}
-              {isLoading && !isLoadingHistory && ( // Show AI thinking indicator only if not loading history
+              {isLoading && !isLoadingHistory && ( // Show AI thinking indicator only if not loading history and AI is processing
                 <div className="flex items-start gap-3">
                   <Avatar className="h-8 w-8 flex-shrink-0 mt-1"><AvatarImage src="https://picsum.photos/seed/nexuslearn-bot-loading/40/40" alt="AI Bot" data-ai-hint="bot avatar" /><AvatarFallback>AI</AvatarFallback></Avatar>
                   <div className="rounded-lg px-4 py-3 bg-muted shadow-md">
@@ -240,3 +279,4 @@ export default function AiTutorPage() {
     </div>
   );
 }
+```

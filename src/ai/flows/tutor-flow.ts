@@ -5,6 +5,15 @@
  */
 
 import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance';
+import Handlebars from 'handlebars';
+
+// Register Handlebars helper (this needs to be done once, maybe move to a central setup file if used elsewhere)
+// Ensure this runs before any prompt using 'eq' is defined or used.
+Handlebars.registerHelper('eq', function(a, b) {
+  // console.log(`Handlebars eq: comparing ${typeof a}"${a}" and ${typeof b}"${b}"`);
+  return a === b;
+});
+
 
 // Schema for messages in conversation history
 const MessageSchema = z.object({
@@ -44,16 +53,15 @@ Unknown: {{{content}}}
 
 Tutor, provide your response:
   `,
-  handlebarsOptions: {
-    helpers: {
-      eq: (a: any, b: any) => a === b,
-    },
-    knownHelpersOnly: false, // Allow custom helpers like 'eq'
-  },
+   handlebarsOptions: {
+      // knownHelpersOnly: false, // Setting to false allows unregistered helpers
+      // helpers are now registered globally via Handlebars.registerHelper
+   },
   config: {
     temperature: 0.7,
   },
 });
+
 
 // Define the AI Tutor Flow
 export const aiTutorFlow = ai.defineFlow(
@@ -66,6 +74,7 @@ export const aiTutorFlow = ai.defineFlow(
     // Add basic input handling/normalization
     if (!input.history || input.history.length === 0) {
       // Handle empty history - maybe provide a default greeting?
+      console.warn("AI Tutor Flow: Received empty history. Providing default initial input.");
       input.history = [{ role: 'user', content: 'Hi, I need help with a topic.' }]; // Example default
     }
 
@@ -83,23 +92,33 @@ export const aiTutorFlow = ai.defineFlow(
 
         // Validate the output structure and content
         if (!output || typeof output.response !== 'string' || output.response.trim() === '') {
-            console.error("Prompt returned invalid response or empty response:", result);
-            // Provide a generic error response if the AI fails to generate a valid one
-            return { response: "Sorry, I'm having trouble formulating a response right now. Could you please try asking again?" };
+            console.error("AI Tutor Flow: Prompt returned invalid or empty response object:", result);
+            // Provide a slightly more specific internal error message if possible
+            return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
         }
 
-        console.log("AI Tutor Flow: Response generated -", output.response.slice(0, 100) + "...");
+        console.log("AI Tutor Flow: Response generated successfully.");
         return output; // Return the validated output object { response: string }
 
     } catch (err: any) {
         // Catch errors during prompt execution (e.g., API errors, safety blocks)
-        console.error("Error during tutorPrompt execution:", err.message, err.stack);
-         if (err.message?.includes("Generation blocked")) {
+        console.error("AI Tutor Flow: Error during tutorPrompt execution:", err.message, err.stack);
+        // Provide more specific user-facing messages based on error type if possible
+        if (err.message?.includes("Generation blocked")) {
            console.error("AI Tutor Flow: Generation blocked due to safety settings.");
            return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
+        } else if (err.message?.includes("API key not valid")) {
+            console.error("AI Tutor Flow: Invalid API Key detected during prompt execution.");
+            return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
+        } else if (err.message?.includes("unknown helper")) {
+             // This specific check helps identify if the Handlebars helper issue persists.
+             // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
+             console.error("AI Tutor Flow: Handlebars template error detected:", err.message);
+             return { response: "Sorry, an internal error occurred while preparing the response. Please try again." };
         }
-        // Return a generic error response for other issues
+        // Fallback to the generic error message for other unexpected issues
         return { response: "Sorry, something went wrong while generating your answer. Please try again shortly." };
     }
   }
 );
+```
