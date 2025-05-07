@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BarChart, FileText, Calendar, AlertTriangle, Activity, Target, Clock, BrainCircuit, Loader2, BookOpen, MessageSquareQuote } from "lucide-react"; // Added BookOpen and MessageSquareQuote
+import { BarChart, FileText, Calendar, AlertTriangle, Activity, Target, Clock, BrainCircuit, Loader2, BookOpen, MessageSquareQuote, Upload, HelpCircle } from "lucide-react"; // Added Upload, HelpCircle
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -191,7 +191,7 @@ export default function DashboardPage() {
         console.log("DashboardPage: Auth is loading, data fetch deferred.");
         // Keep loading state until auth is resolved
     }
-  }, [user, authLoading, authError]); // Removed toast and defaultProgress from deps
+  }, [user, authLoading, authError, toast]); // Added toast dependency
 
 
    if (authLoading || isLoadingData) {
