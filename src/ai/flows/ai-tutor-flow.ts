@@ -1,52 +1,61 @@
-
-'use server';
+'use strict';
 
 /**
- * @fileOverview AI Tutor Flow for NexusLearn AI.
+ * @fileOverview AI Tutor for NexusLearn AI.
+ * This flow handles student interactions with the AI tutor, providing assistance and explanations.
+ *
+ * - getTutorResponse - A function that processes the chat history and generates a response from the AI tutor.
+ * - AiTutorInput - The input type for the getTutorResponse function.
+ * - AiTutorOutput - The return type for the getTutorResponse function.
  */
 
-import { ai } from '@/ai/ai-instance'; // Correctly import 'ai' instance
+import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
 
-// -----------------------------
-// Input / Output Schemas
-// -----------------------------
-const AiTutorInputSchema = z.object({
-  history: z.array(
-    z.object({
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-    })
-  ).describe("The conversation history between the user and the AI tutor."),
+// Define the schema for a single message in the history
+const MessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+});
+
+// Define the input schema for the AI Tutor flow
+export const AiTutorInputSchema = z.object({
+  history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
-const AiTutorOutputSchema = z.object({
-  response: z.string().describe("The AI tutor's response to the user."),
+// Define the output schema for the AI Tutor flow
+export const AiTutorOutputSchema = z.object({
+  response: z.string().describe('The AI tutor\'s response to the user.'),
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
-// -----------------------------
-// Public API for Tutor Response
-// -----------------------------
-export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
-  const validatedInput = AiTutorInputSchema.parse(input);
-  return aiTutorFlow(validatedInput);
-}
 
-// -----------------------------
-// Prompt Definition
-// -----------------------------
 const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
-  model: gemini15Flash,
+  model: gemini15Flash, // Ensure a model is specified here
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
+  customize: (promptObject) => {
+    if (!promptObject.handlebarsOptions) {
+        promptObject.handlebarsOptions = {};
+    }
+    if (!promptObject.handlebarsOptions.helpers) {
+        promptObject.handlebarsOptions.helpers = {};
+    }
+    promptObject.handlebarsOptions.helpers = {
+      ...(promptObject.handlebarsOptions.helpers || {}),
+      eq: (a: string, b: string) => a === b, // Keep the helper definition
+    };
+    // Explicitly set knownHelpersOnly to false to allow custom helpers. This is critical.
+    promptObject.handlebarsOptions.knownHelpersOnly = false;
+    return promptObject;
+  },
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
-Always be patient and break down complex topics into simple, digestible terms.
-If a student asks a question that is outside of an academic or educational context, politely steer the conversation back to educational topics.
+Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
+If a question is outside an academic context, politely steer the conversation back to educational topics.
 If a question is unclear or ambiguous, ask for clarification before attempting to answer.
 Utilize the provided conversation history to maintain context and provide relevant follow-up responses.
 Aim for comprehensive yet easy-to-understand explanations. Use examples, analogies, or step-by-step breakdowns where appropriate.
@@ -61,35 +70,15 @@ User: {{{content}}}
 Tutor: {{{content}}}
   {{/if}}
 {{/each}}
+
 Tutor, provide your response:
 `,
-  customize: (promptObject) => {
-    // Ensure handlebarsOptions and its helpers property exist
-    if (!promptObject.handlebarsOptions) {
-        promptObject.handlebarsOptions = {};
-    }
-    if (!promptObject.handlebarsOptions.helpers) {
-        promptObject.handlebarsOptions.helpers = {};
-    }
-    // Add/overwrite the 'eq' helper
-    promptObject.handlebarsOptions.helpers = {
-      ...(promptObject.handlebarsOptions.helpers), // Spread existing helpers first
-      eq: function (a: string, b: string) { // Define 'eq' helper
-        return a === b;
-      },
-    };
-    // Explicitly set knownHelpersOnly to false to allow custom helpers
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
-    return promptObject;
-  },
   config: {
     temperature: 0.7,
   },
 });
 
-// -----------------------------
-// AI Flow Definition
-// -----------------------------
+
 const aiTutorFlow = ai.defineFlow(
   {
     name: 'nexusLearnAiTutorFlow',
@@ -99,22 +88,36 @@ const aiTutorFlow = ai.defineFlow(
   async (input) => {
     console.log("AI Tutor Flow: Received input - History length:", input.history.length);
     if (input.history.length > 0) {
-      console.log("AI Tutor Flow: Last user message:", input.history[input.history.length - 1].content);
+        console.log("AI Tutor Flow: Last user message:", input.history[input.history.length-1].content);
     }
+    
+    // Call the prompt object directly
+    const { output } = await tutorPrompt(input); 
 
-    try {
-      const { output } = await tutorPrompt(input); // Call the prompt object directly
-
-      if (!output || !output.response) {
-        console.error("AI Tutor generation failed: No output or response content received from the AI model. Input:", JSON.stringify(input));
-        throw new Error("AI Tutor generation failed: No output received from the AI model.");
-      }
-
-      console.log("AI Tutor Flow: Response generated - ", output.response.substring(0, 100) + "...");
-      return output;
-    } catch (error: any) {
-      console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
-      throw new Error(`AI Tutor encountered an error: ${error.message}`);
+    // Ensure output is not null or undefined before returning
+    if (!output || !output.response) { // Check for output.response specifically
+      console.error("AI Tutor generation failed: No response text received from the AI model. Input:", JSON.stringify(input));
+      throw new Error("AI Tutor generation failed: No output received from the AI model.");
     }
+    console.log("AI Tutor Flow: Response generated - ", output.response.substring(0, 100) + "...");
+    return output;
   }
 );
+
+// Exported wrapper function to be called by the frontend
+export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutput> {
+    try {
+        // Validate input with Zod schema before calling the flow
+        const validatedInput = AiTutorInputSchema.parse(input);
+        return await aiTutorFlow(validatedInput);
+    } catch (error: any) {
+        console.error(`Error in getTutorResponse (wrapper):`, error.message, error.stack, "Input:", JSON.stringify(input));
+        // Re-throw a more specific error or handle it as needed
+        if (error instanceof z.ZodError) {
+            throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
+        }
+        // For errors from the flow itself, we'll let them propagate or re-wrap them
+        // The flow already throws a new Error with a message like "AI Tutor encountered an error: ..."
+        throw error; 
+    }
+}
