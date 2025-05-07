@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -13,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized, firebaseInitializationError, persistenceEnabled } from '@/lib/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, StudyRecommendation } from '@/types/user';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 export default function DashboardPage() {
@@ -67,6 +66,7 @@ export default function DashboardPage() {
           const progressDocRef = doc(db!, 'userProgress', user.uid);
           const userDocRef = doc(db!, 'users', user.uid);
 
+          // Fetch user name
           try {
             const userSnap = await getDoc(userDocRef);
             if (userSnap.exists() && userSnap.data()?.name) {
@@ -81,6 +81,7 @@ export default function DashboardPage() {
              setUserName(user.displayName || 'Student');
           }
 
+          // Fetch user progress data
           const progressSnap = await getDoc(progressDocRef);
           setDataFetchSource(progressSnap.metadata.fromCache ? 'cache' : 'server');
 
@@ -169,6 +170,7 @@ export default function DashboardPage() {
 
           setFetchError(errorDesc);
 
+          // Attempt to show default data even on error
           if (!userProgress) {
               setUserProgress({ ...defaultProgress, uid: user.uid });
           }
@@ -187,10 +189,9 @@ export default function DashboardPage() {
        setUserProgress({ ...defaultProgress, uid: 'fallback_uid_no_user' }); // Set default on no user
     } else if (authLoading) {
         console.log("DashboardPage: Auth is loading, data fetch deferred.");
-        // Optionally set a temporary loading state for userProgress or keep it null
-        // setUserProgress(null); // Or a specific loading state object
+        // Keep loading state until auth is resolved
     }
-  }, [user, authLoading, authError, toast]); // Removed defaultProgress from deps
+  }, [user, authLoading, authError]); // Removed toast and defaultProgress from deps
 
 
    if (authLoading || isLoadingData) {
@@ -202,44 +203,40 @@ export default function DashboardPage() {
      );
    }
 
-    if (dataFetchSource === 'error' && fetchError && !userProgress?.subjectMastery.length) { // Only show full error if no data at all
-        console.log("DashboardPage: Rendering error message due to fetchError:", fetchError);
+    // Handle critical errors that prevent data display
+    if ((dataFetchSource === 'error' && fetchError && !userProgress?.subjectMastery.length) || (dataFetchSource === 'nodata' && !user) || firebaseInitializationError || authError) {
+        console.log("DashboardPage: Rendering error or no user state.");
+        let title = "Error Loading Dashboard";
+        let description = fetchError || authError?.message || firebaseInitializationError?.message || "An unknown error occurred.";
+        if(dataFetchSource === 'nodata' && !user){
+            title = "Not Logged In";
+            description = "Please log in to view your dashboard.";
+        }
+
         return (
-            <div className="container mx-auto py-8">
+            <div className="container mx-auto py-8 space-y-6">
                 <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
-                    <CardTitle>Error Loading Dashboard</CardTitle>
+                    <AlertTitle>{title}</AlertTitle>
                     <AlertDescription>
-                        {fetchError}
-                        <p className="mt-2">Please try refreshing the page. If the issue persists, check your internet connection or contact support.</p>
-                        {fetchError.includes("permission-denied") &&
+                        {description}
+                        {(fetchError?.includes("permission-denied") || authError?.message.includes("permission-denied")) &&
                             <p className="mt-1 text-xs">Ensure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code>. Refer to the README for more details.</p>
                         }
+                         {title === "Not Logged In" && <Link href="/login" className="underline hover:text-primary">Log in here</Link>}
                     </AlertDescription>
                 </Alert>
-                 {renderDashboardCards(defaultProgress)}
-            </div>
-        );
-    }
-
-    if (dataFetchSource === 'nodata' && !user) {
-        console.log("DashboardPage: No user and 'nodata' source. Rendering minimal or null.");
-        return (
-            <div className="container mx-auto py-8">
-                 <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Not Logged In</AlertTitle>
-                    <AlertDescription>
-                        Please <Link href="/login" className="underline hover:text-primary">log in</Link> to view your dashboard.
-                    </AlertDescription>
-                </Alert>
-                {renderDashboardCards(defaultProgress)}
+                 {/* Optionally render placeholder cards or nothing */}
+                 {/* <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 opacity-50">
+                     {renderDashboardCards(defaultProgress)}
+                 </div> */}
             </div>
         );
     }
 
    const currentProgress = userProgress || { ...defaultProgress, uid: user?.uid || 'fallback_uid_render' };
 
+   // Helper function to render the dashboard cards
    const renderDashboardCards = (progressData: UserProgress) => {
        const {
            subjectMastery = [],
@@ -250,19 +247,20 @@ export default function DashboardPage() {
 
        return (
         <>
-          <Card>
+          {/* Upcoming Homework Card */}
+          <Card className="shadow-md hover:shadow-lg transition-shadow duration-200">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><FileText className="text-secondary" /> Upcoming Homework</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-lg"><FileText className="text-secondary h-5 w-5" /> Upcoming Homework</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 min-h-[150px]">
+            <CardContent className="space-y-3 min-h-[150px]">
               {upcomingHomework.length > 0 ? (
-                upcomingHomework.map((hw) => (
-                  <div key={hw.id} className="flex justify-between items-center">
+                upcomingHomework.slice(0, 4).map((hw) => ( // Limit displayed items
+                  <div key={hw.id} className="flex justify-between items-center text-sm">
                     <div>
-                      <p className="font-medium">{hw.title}</p>
-                      <p className="text-sm text-muted-foreground">{hw.subjectName}</p>
+                      <p className="font-medium truncate" title={hw.title}>{hw.title}</p>
+                      <p className="text-xs text-muted-foreground">{hw.subjectName}</p>
                     </div>
-                    <span className="text-sm font-semibold text-accent">
+                    <span className="font-semibold text-accent whitespace-nowrap">
                       {hw.dueDate ? new Date(hw.dueDate as string).toLocaleDateString() : 'No due date'}
                     </span>
                   </div>
@@ -271,24 +269,25 @@ export default function DashboardPage() {
                 <p className="text-muted-foreground text-center pt-8">No upcoming homework!</p>
               )}
             </CardContent>
-             <CardFooter>
+             <CardFooter className="pt-4 border-t">
                 <Button variant="ghost" size="sm" onClick={() => router.push('/study-planner')}>View Planner</Button>
             </CardFooter>
           </Card>
 
-          <Card>
+          {/* Upcoming Exams Card */}
+          <Card className="shadow-md hover:shadow-lg transition-shadow duration-200">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Calendar className="text-secondary" /> Upcoming Exams</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-lg"><Calendar className="text-secondary h-5 w-5" /> Upcoming Exams</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 min-h-[150px]">
+            <CardContent className="space-y-3 min-h-[150px]">
               {upcomingExams.length > 0 ? (
-                upcomingExams.map((exam) => (
-                  <div key={exam.id} className="flex justify-between items-center">
+                upcomingExams.slice(0, 4).map((exam) => ( // Limit displayed items
+                  <div key={exam.id} className="flex justify-between items-center text-sm">
                     <div>
-                      <p className="font-medium">{exam.title}</p>
-                      <p className="text-sm text-muted-foreground">{exam.subjectName}</p>
+                      <p className="font-medium truncate" title={exam.title}>{exam.title}</p>
+                      <p className="text-xs text-muted-foreground">{exam.subjectName}</p>
                     </div>
-                    <span className="text-sm font-semibold text-accent">
+                    <span className="font-semibold text-accent whitespace-nowrap">
                         {exam.date ? new Date(exam.date as string).toLocaleDateString() : 'No date'}
                     </span>
                   </div>
@@ -297,14 +296,15 @@ export default function DashboardPage() {
                  <p className="text-muted-foreground text-center pt-8">No upcoming exams scheduled.</p>
               )}
             </CardContent>
-             <CardFooter>
+             <CardFooter className="pt-4 border-t">
                 <Button variant="ghost" size="sm" onClick={() => router.push('/study-planner')}>View Planner</Button>
             </CardFooter>
           </Card>
 
-          <Card className="md:col-span-2 lg:col-span-1">
+          {/* Subject Mastery Card */}
+          <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 md:col-span-2 lg:col-span-1">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Target className="text-secondary" /> Subject Mastery</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-lg"><Target className="text-secondary h-5 w-5" /> Subject Mastery</CardTitle>
               <CardDescription>Your progress in different subjects.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -322,19 +322,20 @@ export default function DashboardPage() {
                  <p className="text-muted-foreground text-center pt-8">No subject progress tracked yet.</p>
               )}
             </CardContent>
-             <CardFooter>
+             <CardFooter className="pt-4 border-t">
                 <Button variant="ghost" size="sm" onClick={() => router.push('/performance')}>View Performance</Button>
             </CardFooter>
           </Card>
 
-          <Card className="md:col-span-2 lg:col-span-2">
+          {/* Quick Study Recommendations Card */}
+          <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 md:col-span-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> Quick Study Recommendations</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-lg"><BrainCircuit className="text-secondary h-5 w-5" /> Quick Study Recommendations</CardTitle>
               <CardDescription>AI-powered suggestions for your next study session.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 min-h-[100px]">
               {studyRecommendations.length > 0 ? (
-                 studyRecommendations.slice(0, 3).map((rec) => (
+                 studyRecommendations.slice(0, 3).map((rec) => ( // Limit displayed items
                   <div key={rec.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
                      <p className="font-medium text-sm">{rec.title}</p>
                      <p className="text-xs text-muted-foreground">{rec.reason} - <span className="capitalize">{rec.priority} priority</span></p>
@@ -344,7 +345,7 @@ export default function DashboardPage() {
                 <p className="text-muted-foreground text-center pt-8">No study recommendations available right now.</p>
               )}
             </CardContent>
-             <CardFooter>
+             <CardFooter className="pt-4 border-t">
                 <Button variant="outline" size="sm" onClick={() => router.push('/performance')}>
                     View All Recommendations
                 </Button>
@@ -355,29 +356,36 @@ export default function DashboardPage() {
    }
 
 
+  // Main Dashboard Render
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <Card className="lg:col-span-3">
+    <div className="space-y-6">
+      {/* Welcome Card */}
+      <Card className="shadow-md">
         <CardHeader>
-           <div className="flex justify-between items-center">
+           <div className="flex flex-wrap justify-between items-center gap-2">
              <div>
                <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
                <CardDescription>Here's your personalized study dashboard.</CardDescription>
              </div>
-               {dataFetchSource === 'cache' && <span className="text-xs text-muted-foreground">(Data from Offline Cache)</span>}
-               {dataFetchSource === 'default' && !fetchError && <span className="text-xs text-muted-foreground">(Default Data Loaded)</span>}
-               {dataFetchSource === 'error' && fetchError && <span className="text-xs text-destructive">({fetchError.length > 50 ? fetchError.substring(0,50) + '...' : fetchError})</span>}
+               {/* Data Fetch Status */}
+               <div className="text-xs">
+                    {dataFetchSource === 'cache' && <span className="text-blue-600">(Offline Cache)</span>}
+                    {dataFetchSource === 'default' && !fetchError && <span className="text-muted-foreground">(Default Data)</span>}
+                    {dataFetchSource === 'error' && fetchError && <span className="text-destructive">({fetchError.length > 50 ? fetchError.substring(0,50) + '...' : fetchError})</span>}
+                    {dataFetchSource === 'server' && !fetchError && <span className="text-green-600">(Online)</span>}
+               </div>
             </div>
         </CardHeader>
         <CardContent>
-          <p>Stay organized and focused on your academic goals. Let's make today productive!</p>
+          <p className="text-muted-foreground">Stay organized and focused on your academic goals. Let's make today productive!</p>
         </CardContent>
        <CardFooter className="flex flex-wrap gap-2">
+          {/* Action Buttons */}
           <Button onClick={() => router.push('/upload-textbook')}>
-            <FileText className="mr-2 h-4 w-4" /> Upload Textbook
+            <Upload className="mr-2 h-4 w-4" /> Upload Textbook
           </Button>
           <Button variant="secondary" onClick={() => router.push('/quiz')}>
-            <Activity className="mr-2 h-4 w-4" /> Generate Quiz
+            <HelpCircle className="mr-2 h-4 w-4" /> Generate Quiz
           </Button>
          <Button variant="outline" onClick={() => router.push('/ai-tutor')}>
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
@@ -391,9 +399,10 @@ export default function DashboardPage() {
        </CardFooter>
       </Card>
 
-       {renderDashboardCards(currentProgress)}
-
+      {/* Grid for other cards */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {renderDashboardCards(currentProgress)}
+      </div>
     </div>
   );
 }
-

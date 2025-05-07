@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react';
@@ -11,6 +12,7 @@ import { explainTextbookPdf, type ExplainTextbookPdfOutput } from '@/ai/flows/te
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { cn } from '@/lib/utils'; // Import cn
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB for PDFs
 const ALLOWED_FILE_TYPE = 'application/pdf';
@@ -25,14 +27,15 @@ export default function TextbookExplainerPage() {
   // State for Web Speech API control
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false); // State for potential future server-side audio generation
   const [speechError, setSpeechError] = useState<string | null>(null); // Store speech errors
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
 
   // Function to safely cancel speech synthesis
   const cancelSpeech = () => {
-       if (typeof window !== 'undefined' && 'speechSynthesis' in window && speechSynthesis.speaking) {
-           speechSynthesis.cancel();
+       if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+           window.speechSynthesis.cancel();
        }
        utteranceRef.current = null;
        setIsSpeaking(false);
@@ -60,9 +63,9 @@ export default function TextbookExplainerPage() {
           toast({
               title: "Invalid File Type",
               description: `Please select a PDF file. Type detected: ${selectedFile.type}`,
-              variant: "destructive",
+              variant: "destructive" // Corrected syntax: colon instead of equals
           });
-          event.target.value = ''; // Clear the input
+          if (event.target) event.target.value = ''; // Clear the input
           return;
       }
 
@@ -71,9 +74,9 @@ export default function TextbookExplainerPage() {
           toast({
               title: "File Too Large",
               description: `PDF file must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
-              variant: "destructive",
+              variant: "destructive"
           });
-          event.target.value = ''; // Clear the input
+          if (event.target) event.target.value = ''; // Clear the input
           return;
       }
 
@@ -84,11 +87,11 @@ export default function TextbookExplainerPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-        toast({ title: "Error", description: "Please log in to use the explainer.", variant: "destructive" });
+        toast({ title: "Authentication Required", description: "Please log in to use the explainer.", variant: "destructive" });
         return;
     }
     if (!file) {
-      toast({ title: "Error", description: "Please select a PDF file first.", variant: "destructive" });
+      toast({ title: "Input Required", description: "Please select a PDF file first.", variant: "destructive" });
       return;
     }
 
@@ -152,23 +155,25 @@ export default function TextbookExplainerPage() {
   };
 
   const handlePlayPause = () => {
-      if (!explanation?.audioExplanationScript || !('speechSynthesis' in window)) {
+      if (!explanation?.audioExplanationScript || typeof window === 'undefined' || !('speechSynthesis' in window)) {
           setSpeechError("Speech synthesis is not supported by your browser.");
           return;
       }
       setSpeechError(null); // Clear previous errors
 
+      const synth = window.speechSynthesis;
+
       if (isSpeaking && !isPaused) {
           // Pause
-          speechSynthesis.pause();
+          synth.pause();
           setIsPaused(true);
-          // toast({ title: "Audio Paused" }); // Optional: less intrusive feedback
+          console.log("Speech paused.");
       } else {
           // Play or Resume
           if (isPaused && utteranceRef.current) {
-              speechSynthesis.resume();
+              synth.resume();
               setIsPaused(false); // Explicitly set paused to false on resume
-              // toast({ title: "Audio Resumed" }); // Optional
+              console.log("Speech resumed.");
           } else {
                // Start new speech
                cancelSpeech(); // Ensure any previous utterance is stopped/cleared
@@ -186,11 +191,10 @@ export default function TextbookExplainerPage() {
                   setIsSpeaking(false);
                   setIsPaused(false);
                   utteranceRef.current = null; // Clear ref on end
-                  // toast({ title: "Audio Finished" }); // Optional
               };
               utterance.onpause = () => { // This gets triggered when speech is paused
                   console.log("Speech paused via API");
-                  // State is already set by handlePlayPause logic
+                  // State is handled by handlePlayPause logic
               };
               utterance.onresume = () => { // This gets triggered when speech is resumed
                   console.log("Speech resumed via API");
@@ -198,14 +202,16 @@ export default function TextbookExplainerPage() {
               };
                utterance.onerror = (event) => {
                   console.error("Speech synthesis error:", event.error, event);
-                  let errorMsg = `Speech synthesis failed: ${event.error}`;
+                  let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
                   if (event.error === 'synthesis-failed' || event.error === 'network') {
-                      errorMsg += ". Please check your internet connection or try a different voice/browser.";
+                      errorMsg += ". Check connection or try a different voice/browser.";
                   } else if (event.error === 'language-unavailable') {
-                       errorMsg += ". The selected language for speech is unavailable.";
+                       errorMsg += ". The selected language is unavailable.";
+                  } else if (event.error === 'not-allowed') {
+                        errorMsg = "Speech synthesis permission denied by the browser.";
                   }
                   setSpeechError(errorMsg);
-                  toast({ title: "Audio Error", description: errorMsg, variant: "destructive" });
+                  toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
                   setIsSpeaking(false);
                   setIsPaused(false);
                   utteranceRef.current = null;
@@ -213,12 +219,13 @@ export default function TextbookExplainerPage() {
 
               // Attempt to speak
               try {
-                   speechSynthesis.speak(utterance);
-                   // Toasting here might be premature if speech fails immediately
+                   synth.speak(utterance);
+                   console.log("Attempting to speak...");
               } catch (speakError: any) {
                   console.error("Error calling speechSynthesis.speak:", speakError);
-                   setSpeechError(`Could not start speech: ${speakError.message}`);
-                    toast({ title: "Audio Error", description: `Could not start speech: ${speakError.message}`, variant: "destructive" });
+                   const errorMsg = `Could not start speech: ${speakError.message}`;
+                   setSpeechError(errorMsg);
+                    toast({ title: "Audio Error", description: errorMsg, variant: "destructive" });
                    setIsSpeaking(false);
                    setIsPaused(false);
                    utteranceRef.current = null;
@@ -229,7 +236,7 @@ export default function TextbookExplainerPage() {
 
   const handleStop = () => {
       cancelSpeech(); // Use the centralized cancel function
-      // toast({ title: "Audio Stopped" }); // Optional
+      console.log("Speech stopped.");
   };
 
    const handleClear = () => {
@@ -243,32 +250,24 @@ export default function TextbookExplainerPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+      <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
           <Lightbulb className="text-primary h-7 w-7"/> AI Textbook Explainer
       </h1>
-      <p className="text-muted-foreground mb-8">
-        Upload a textbook PDF (max {MAX_FILE_SIZE / 1024 / 1024}MB). The AI will explain the content in text, audio, and mind map formats.
+      <p className="text-muted-foreground mb-8 max-w-2xl">
+        Upload a textbook PDF (max {MAX_FILE_SIZE / 1024 / 1024}MB). The AI analyzes the content and provides explanations in text, audio script, and mind map formats.
       </p>
-        <Alert className="mb-6 bg-primary/5 border-primary/20 text-primary-foreground [&>svg]:text-primary">
-            <Lightbulb className="h-4 w-4" />
-            <AlertTitle>How it works</AlertTitle>
-            <AlertDescription>
-            The AI analyzes the PDF content you upload and generates comprehensive explanations to help you understand the material better. Audio playback uses your browser's built-in text-to-speech capability.
-            </AlertDescription>
-        </Alert>
 
-
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid lg:grid-cols-2 gap-8 items-start">
         {/* Upload Section */}
-        <Card className="shadow-md rounded-lg">
+        <Card className="shadow-lg rounded-lg sticky top-8">
           <CardHeader>
-            <CardTitle>Upload Textbook PDF</CardTitle>
+            <CardTitle className="text-xl">Upload Textbook PDF</CardTitle>
             <CardDescription>Select a PDF file to explain.</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="textbook-pdf">PDF File</Label>
+                <Label htmlFor="textbook-pdf" className="font-semibold">PDF File</Label>
                 <Input
                   ref={fileInputRef}
                   id="textbook-pdf"
@@ -277,27 +276,27 @@ export default function TextbookExplainerPage() {
                   onChange={handleFileChange}
                   disabled={isLoading || authLoading} // Also disable if auth is loading
                   required
+                  className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                 />
               </div>
               {/* Display file info */}
               {file && (
-                <div className="mt-4 border rounded-md overflow-hidden flex items-center gap-3 p-3 bg-muted text-left">
-                    <FileTextIcon className="h-8 w-8 text-muted-foreground flex-shrink-0" />
-                    <div className="overflow-hidden">
-                        <p className="text-sm font-medium truncate" title={file.name}>{file.name}</p>
-                        <p className="text-xs text-muted-foreground">{file.type} - {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                    </div>
-                </div>
+                 <div className="mt-4 text-sm text-muted-foreground flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                     <FileTextIcon className="h-4 w-4 flex-shrink-0 text-primary"/>
+                     <span className="truncate font-medium text-foreground" title={file.name}>{file.name}</span>
+                     <span className="ml-auto flex-shrink-0">({ (file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                 </div>
               )}
               {!user && !authLoading && (
                  <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
+                     <AlertTitle>Login Required</AlertTitle>
                     <AlertDescription>Please log in to use the explainer.</AlertDescription>
                  </Alert>
               )}
             </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isLoading || !file || authLoading || !user}>
+            <CardFooter className="flex justify-between">
+              <Button type="submit" disabled={isLoading || !file || authLoading || !user} className="w-full sm:w-auto">
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -309,22 +308,27 @@ export default function TextbookExplainerPage() {
                   </>
                 )}
               </Button>
+               {file && (
+                 <Button variant="ghost" type="button" onClick={handleClear} disabled={isLoading} className="text-xs">
+                     Clear Selection
+                 </Button>
+               )}
             </CardFooter>
           </form>
         </Card>
 
         {/* Explanation Section */}
-        <Card className="shadow-md rounded-lg">
+        <Card className="shadow-lg rounded-lg min-h-[400px]"> {/* Ensure min height */}
           <CardHeader>
-            <CardTitle>Generated Explanation</CardTitle>
+            <CardTitle className="text-xl">Generated Explanation</CardTitle>
             <CardDescription>View the AI-generated explanation below.</CardDescription>
           </CardHeader>
-          <CardContent className="min-h-[300px]"> {/* Ensure minimum height */}
-            {isLoading && (
-              <div className="flex flex-col items-center justify-center h-full py-10">
+          <CardContent className="relative"> {/* Add relative for loader positioning */}
+             {isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-b-lg">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground">Generating explanation...</p>
-                 <p className="text-xs text-muted-foreground mt-1">(This may take a moment for larger PDFs)</p>
+                 <p className="text-xs text-muted-foreground mt-1">(This may take a moment)</p>
               </div>
             )}
             {explanation ? (
@@ -334,65 +338,72 @@ export default function TextbookExplainerPage() {
                   <TabsTrigger value="audio"><AudioLines className="mr-1 h-4 w-4" /> Audio</TabsTrigger>
                   <TabsTrigger value="mindmap"><BrainCircuit className="mr-1 h-4 w-4" /> Mind Map</TabsTrigger>
                 </TabsList>
-                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
-                  <h3 className="font-semibold mb-2 text-base">Text Explanation</h3>
-                   {/* Use dangerouslySetInnerHTML ONLY if markdown/HTML formatting is intended and trusted */}
-                   {/* For plain text with potential markdown, pre-wrap is safer */}
-                   <p className="whitespace-pre-wrap">{explanation.textExplanation}</p>
-                   {/* If using markdown-to-html library: <div dangerouslySetInnerHTML={{ __html: formattedHtml }} /> */}
+                {/* Text Content */}
+                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                  <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Text Explanation</h3>
+                   <p className="whitespace-pre-wrap mt-4">{explanation.textExplanation}</p>
                 </TabsContent>
-                 <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] flex flex-col">
-                   <h3 className="font-semibold mb-2 text-base">Audio Explanation</h3>
+                {/* Audio Content */}
+                 <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] flex flex-col">
+                   <h3 className="font-semibold mb-2 text-base flex-shrink-0">Audio Explanation</h3>
                    {speechError && (
-                      <Alert variant="destructive" className="mb-3">
+                      <Alert variant="destructive" className="mb-3 flex-shrink-0">
                          <AlertTriangle className="h-4 w-4" />
+                         <AlertTitle>Audio Error</AlertTitle>
                          <AlertDescription>{speechError}</AlertDescription>
                       </Alert>
                     )}
-                    <div className="flex gap-2 mb-3 flex-shrink-0">
+                    <div className="flex gap-2 mb-3 flex-shrink-0 items-center">
                        <Button
                            onClick={handlePlayPause}
-                           disabled={isGeneratingAudio || !explanation.audioExplanationScript || !('speechSynthesis' in window)}
-                           variant={isSpeaking && !isPaused ? "secondary" : "default"}
-                           size="icon"
+                           disabled={isGeneratingAudio || !explanation.audioExplanationScript || (typeof window !== 'undefined' && !('speechSynthesis' in window))}
+                           variant = {isSpeaking && !isPaused ? "secondary" : "default"}
+                           size="sm"
                            aria-label={isSpeaking && !isPaused ? "Pause" : "Play/Resume"}
+                           className="flex items-center gap-1"
                        >
                            {isSpeaking && !isPaused ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                           {isSpeaking && !isPaused ? 'Pause' : (isPaused ? 'Resume' : 'Play')}
                        </Button>
                        <Button
                            onClick={handleStop}
-                           disabled={!isSpeaking || !('speechSynthesis' in window)}
+                           disabled={!isSpeaking || (typeof window !== 'undefined' && !('speechSynthesis' in window))}
                            variant="outline"
-                           size="icon"
+                           size="sm"
                            aria-label="Stop"
+                            className="flex items-center gap-1"
                        >
-                           <StopCircle className="h-4 w-4" />
+                           <StopCircle className="h-4 w-4" /> Stop
                        </Button>
+                       {isSpeaking && <Loader2 className="h-4 w-4 animate-spin text-primary ml-2"/> /* Show spinner when speaking */}
                    </div>
-                   {!('speechSynthesis' in window) && (
-                       <p className="text-xs text-destructive mb-3">Your browser does not support speech synthesis.</p>
+                   {(typeof window !== 'undefined' && !('speechSynthesis' in window)) && (
+                       <p className="text-xs text-destructive mb-3 flex-shrink-0">Your browser does not support speech synthesis playback.</p>
                    )}
                     <p className="text-xs text-muted-foreground mb-3 flex-shrink-0">
-                        Use the controls above to play the explanation using your browser's text-to-speech.
+                        Playback uses your browser's text-to-speech engine. Quality may vary.
                     </p>
                    <h4 className="font-medium text-sm pt-3 border-t flex-shrink-0">Audio Script:</h4>
-                   <div className="overflow-y-auto flex-grow mt-2">
-                       <p className="text-sm whitespace-pre-wrap">{explanation.audioExplanationScript}</p>
+                   <div className="overflow-y-auto flex-grow mt-2 text-sm">
+                       <p className="whitespace-pre-wrap">{explanation.audioExplanationScript}</p>
                    </div>
                  </TabsContent>
-                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[200px] max-h-[500px] overflow-y-auto">
-                  <h3 className="font-semibold mb-2 text-base">Mind Map (Markdown)</h3>
-                     <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-md border">{explanation.mindMapExplanation}</pre>
-                     <p className="text-xs text-muted-foreground mt-2">Mind map structure in Markdown format.</p>
+                 {/* Mind Map Content */}
+                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto">
+                  <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Mind Map (Markdown)</h3>
+                     <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-md border mt-4">{explanation.mindMapExplanation}</pre>
+                     <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">This is a hierarchical representation of the key concepts.</p>
                 </TabsContent>
               </Tabs>
             ) : (
-               !isLoading && <p className="text-muted-foreground text-center h-full flex items-center justify-center py-10">Upload a PDF and click "Generate Explanation" to see the results.</p>
+               !isLoading && <p className="text-muted-foreground text-center py-20">Upload a PDF and click "Generate Explanation" to see the results here.</p>
             )}
           </CardContent>
-           <CardFooter className="pt-4 border-t">
-              {explanation && <Button variant="outline" size="sm" onClick={handleClear}>Clear Explanation</Button>}
-           </CardFooter>
+           {explanation && (
+             <CardFooter className="pt-4 border-t flex justify-end">
+                <Button variant="outline" size="sm" onClick={handleClear} disabled={isLoading}>Clear Results</Button>
+             </CardFooter>
+           )}
         </Card>
       </div>
     </div>
