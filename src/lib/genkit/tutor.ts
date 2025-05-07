@@ -20,34 +20,23 @@ export const AiTutorOutputSchema = z.object({
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
-// Prompt definition
+// Prompt definition - Simplified to avoid helpers
 const tutorPrompt = ai.definePrompt({
-  name: 'tutorPrompt', // Keep consistent name
+  name: 'tutorPrompt',
   model: gemini15Flash,
-  input: { schema: AiTutorInputSchema },
+  input: { schema: AiTutorInputSchema }, // Still use the original schema for the function input
   output: { schema: AiTutorOutputSchema },
   prompt: `
 You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor. Your goal is to help students understand academic concepts and guide them through learning processes. Use the provided conversation history for context. If the user asks non-academic questions, politely steer the conversation back to educational topics. If a question is unclear, ask for clarification. Avoid giving direct answers to homework/tests; instead, guide the student towards the answer. Use examples and analogies. Maintain a supportive and motivational tone. Address any question the user asks, even if non-academic, but always gently try to guide back to learning if the conversation strays too far.
 
 Conversation History:
 {{#each history}}
-  {{#if (roleIsUser this.role)}}
-User: {{{this.content}}}
-  {{else}}
-Tutor: {{{this.content}}}
-  {{/if}}
+{{this.role}}: {{{this.content}}}
 {{/each}}
 
 Tutor, provide your response:
   `,
-  // Ensure handlebarsOptions is correctly defined HERE
-  handlebarsOptions: {
-    knownHelpersOnly: false, // Keep false to allow custom helpers
-    helpers: {
-      // Define the 'roleIsUser' helper required by the updated template
-      roleIsUser: (role: string) => role === 'user',
-    }
-  },
+  // Removed handlebarsOptions entirely as no custom helpers or logic needed in the template
   config: {
     temperature: 0.7, // Keep configuration here
   },
@@ -66,26 +55,26 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
       throw new Error(`Invalid input for AI Tutor: ${validationError.errors.map((e:any) => e.message).join(', ')}`);
   }
 
+  console.log("runTutorPrompt: Input validated. Preparing history for prompt...");
 
-  console.log("runTutorPrompt: Input validated. Preparing history...");
   // Basic input handling/normalization
   if (!validatedInput.history || validatedInput.history.length === 0) {
     console.warn("runTutorPrompt: Received empty history. Providing default initial input.");
     validatedInput.history = [{ role: 'user', content: 'Hi, I need help with a topic.' }];
   }
 
-  // Ensure content exists and roles are correct (redundant if Zod validation is strict, but safe)
-  const cleanedHistory = validatedInput.history.map(msg => ({
-    role: msg.role,
-    content: msg.content?.trim() || '[No content provided]',
+  // **Pre-process history for the prompt template**
+  const historyForPrompt = validatedInput.history.map(msg => ({
+    role: msg.role === 'user' ? 'User' : 'Tutor', // Normalize role names
+    content: msg.content?.trim() || '[No content provided]', // Ensure content is non-empty string
   }));
 
-  const inputForPrompt = { history: cleanedHistory };
+  const inputForPrompt = { history: historyForPrompt };
 
   console.log("runTutorPrompt: Calling tutor prompt...");
 
   try {
-    // Call the prompt object directly with the validated input
+    // Call the prompt object directly with the pre-processed input
     const result = await tutorPrompt(inputForPrompt); // Use the prompt defined above
     const responseText = result?.output?.response;
 
@@ -102,23 +91,21 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
   } catch (error: any) {
     console.error(`Error in runTutorPrompt during prompt execution:`, error.message, error.stack, "Input:", JSON.stringify(validatedInput));
 
-    // Check if the error is the Handlebars helper issue SPECIFICALLY
-    if (error.message?.includes("unknown helper")) {
-      console.error("runTutorPrompt: Handlebars template error detected:", error.message);
-      // This specific check helps identify if the global registration wasn't effective or knownHelpersOnly was overridden.
-      throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`); // Keep this specific error for template issues
-    }
-     if (error.message?.includes("Generation blocked")) {
-        console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
+    // Check for specific error messages to provide clearer feedback
+    if (error.message?.includes("Generation blocked")) {
+        console.error("AI Tutor Flow: Generation blocked due to safety settings.");
         // Return a structured error response for safety blocks
         return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
      } else if (error.message?.includes("API key not valid")) {
          console.error("AI Tutor Flow: Invalid API Key detected.");
          // Return a structured error response for API key issues
          return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
+     } else if (error.message?.includes("unknown helper")) {
+         // This should technically not happen now, but catch just in case
+          console.error("runTutorPrompt: Handlebars template error detected (unexpected):", error.message);
+          throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
      }
     // Re-throw other unexpected errors, potentially wrapped
-    // Make this error distinct from the template error
     throw new Error(`AI Tutor encountered an unexpected execution error: ${error.message}`);
   }
 }
