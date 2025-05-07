@@ -1,11 +1,14 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai'; 
+// No "use server" here
 
-// Validate API Key existence
+import { genkit, z } from 'genkit';
+import { gemini15Flash, googleAI } from '@genkit-ai/googleai';
+import { firebase } from "@genkit-ai/firebase"; // Import firebase plugin if needed for other flows
+
+// Check for API Key validity (moved from old ai-instance.ts)
 const googleApiKey = process.env.GOOGLE_GENAI_API_KEY;
 
 if (!googleApiKey || googleApiKey === "YOUR_GOOGLE_GENAI_API_KEY_HERE" || googleApiKey.trim() === "") {
-  const errorMessage = 
+  const errorMessage =
 `!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! CRITICAL: MISSING OR INVALID GOOGLE_GENAI_API_KEY ERROR !!!
 The GOOGLE_GENAI_API_KEY environment variable is either not set, or set to a placeholder.
@@ -21,27 +24,25 @@ To fix this:
 If you've already done this, ensure the key is correct and has no extra spaces.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`;
   console.error(errorMessage);
-  // To make it more obvious during development, we can throw an error
-  // or let Genkit handle it when a call is made. For now, logging is clear.
-  // throw new Error("Missing or invalid GOOGLE_GENAI_API_KEY. See console for details.");
 }
 
 export const ai = genkit({
   plugins: [
-    googleAI({
-      // Pass the API key. Genkit's googleAI plugin will handle validation if the key is syntactically
-      // present but invalid when an API call is made.
-      // If googleApiKey is undefined (due to placeholder or missing), it will be passed as such.
-      apiKey: googleApiKey,
-    }),
+    googleAI({ apiKey: googleApiKey }),
+    // firebase() // Include if you need Firebase integration in other flows
   ],
+  model: gemini15Flash, // Default model if needed across flows
   logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
   enableTracing: process.env.NODE_ENV === 'development',
 });
 
-// Log successful initialization only if API key seems valid (not a placeholder)
+// Log successful initialization based on API key validity
 if (googleApiKey && googleApiKey !== "YOUR_GOOGLE_GENAI_API_KEY_HERE" && googleApiKey.trim() !== "") {
     console.log("Genkit initialized with Google AI plugin using provided API key.");
 } else {
-     console.warn("Genkit initialized, but Google AI plugin is likely non-functional due to missing or placeholder API key. AI features will fail.");
+     console.warn("Genkit initialized, but Google AI plugin is likely non-functional due to missing or placeholder API key. AI features may fail.");
 }
+
+
+// Export common utilities if needed by flows
+export { z, gemini15Flash };

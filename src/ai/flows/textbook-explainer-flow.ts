@@ -9,9 +9,7 @@
  * - ExplainTextbookPdfOutput - The return type for the explainTextbookPdf function.
  */
 
-import { ai } from '@/ai/ai-instance';
-import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
 
 const ExplainTextbookPdfInputSchema = z.object({
   fileDataUri: z

@@ -8,9 +8,7 @@
  * - QuizReflectionOutput - The return type for the generateQuizReflection function.
  */
 
-import { ai } from '@/ai/ai-instance';
-import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
 import type { QuizQuestion, QuizResult } from '@/types/user';
 
 // Define the schema for a single question within the reflection input
@@ -135,7 +133,7 @@ const quizReflectionFlow = ai.defineFlow(
         console.log("Quiz Reflection Flow: All answers correct. Returning standard congratulations.");
         return { feedback: "Excellent work! You answered all questions correctly. Keep up the fantastic effort!" };
     }
-    
+
     if (incorrectAnswersExist || input.score !== input.totalQuestions) {
         console.log("Quiz Reflection Flow: Incorrect answers found or score mismatch. Generating AI feedback...");
         try {

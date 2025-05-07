@@ -8,7 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send, Sparkles, User, Bot } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { getTutorResponse, type AiTutorInput, type AiTutorOutput } from '@/ai/flows/ai-tutor-flow';
+// Import the action function and types (types are safe to import)
+import { getTutorResponse } from '@/app/ai-tutor/actions';
+import type { AiTutorInput, AiTutorOutput } from '@/ai/flows/tutor-flow'; // Import types from the flow definition file
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
@@ -21,7 +23,7 @@ interface ChatMessage {
   timestamp?: Timestamp | Date; // Firestore Timestamp or Date object for optimistic updates
 }
 
-// Ensure the page is dynamically rendered
+// Ensure the page is dynamically rendered as it uses server actions
 export const dynamic = 'force-dynamic';
 
 export default function AiTutorPage() {
@@ -96,7 +98,7 @@ export default function AiTutorPage() {
     // Optimistically create the user message for the flow input
     const optimisticUserMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: new Date() };
     // Construct history for the flow using current messages + optimistic user message
-    const historyForFlow: AiTutorInput = { 
+    const historyForFlow: AiTutorInput = {
         history: [...messages, optimisticUserMessage].map(m => ({ role: m.role, content: m.content }))
     };
 
@@ -109,12 +111,14 @@ export default function AiTutorPage() {
         timestamp: serverTimestamp(),
       });
 
-      // Get AI response
+      // --- Call the Server Action ---
       const result: AiTutorOutput = await getTutorResponse(historyForFlow);
+      // --- Server Action Call End ---
 
-      if (!result?.response) {
-        console.error("AI Tutor Error: No response content from AI for input:", JSON.stringify(historyForFlow));
-        throw new Error("The AI tutor did not provide a response. Please try rephrasing your question.");
+      if (!result?.response || result.response.startsWith("An error occurred:")) {
+        console.error("AI Tutor Error: No valid response content from AI action for input:", JSON.stringify(historyForFlow), "Result:", result);
+        // Show the error returned by the action if available
+        throw new Error(result?.response || "The AI tutor did not provide a valid response. Please try rephrasing your question.");
       }
 
       // Save AI message to Firestore
@@ -129,8 +133,13 @@ export default function AiTutorPage() {
       console.error("Error during chat interaction:", error);
       let errorDesc = "An unexpected error occurred. Please try again.";
       if (error instanceof Error) {
-        if (error.message.startsWith("AI Tutor encountered an error:") || error.message.includes("No output received from the AI model")) {
-          errorDesc = "I'm having a little trouble right now. Could you try asking again in a moment?";
+        // Check for specific error messages coming from the action/flow
+        if (error.message.startsWith("AI Tutor encountered an error:") ||
+            error.message.startsWith("Invalid input:") ||
+            error.message.includes("No output received from the AI model") ||
+            error.message.includes("formulating a response") ||
+            error.message.includes("internal error occurred")) {
+          errorDesc = `AI Tutor: ${error.message.replace(/^AI Tutor encountered an error:/,'').trim()}`;
         } else if (error.message.includes("Firestore") || (error.code && error.code.startsWith('permission-denied'))) { // Check for FirestoreError codes
             if(error.code === 'permission-denied'){
                  errorDesc = "Could not save message due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). This often involves running `firebase deploy --only firestore:rules`.";
@@ -138,10 +147,10 @@ export default function AiTutorPage() {
                 errorDesc = "There was an issue saving your message to the database. Please try again.";
             }
         } else {
-          errorDesc = error.message;
+          errorDesc = error.message; // Use the raw error message
         }
       }
-      
+
       toast({
         title: "Chat Error",
         description: errorDesc,
@@ -231,4 +240,3 @@ export default function AiTutorPage() {
     </div>
   );
 }
-

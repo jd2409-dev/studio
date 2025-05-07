@@ -8,9 +8,7 @@
  * - GenerateQuizOutput - The return type for the generateQuiz function.
  */
 
-import {ai} from '@/ai/ai-instance';
-import {z} from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
 
 const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']).describe('The desired difficulty level for the quiz.');
 type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
@@ -146,7 +144,7 @@ const generateQuizFlow = ai.defineFlow(
 
            if (error instanceof z.ZodError) {
                 const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-                console.error("Quiz generation output failed Zod validation:", validationErrors, "Raw Output:", JSON.stringify(error.input)); 
+                console.error("Quiz generation output failed Zod validation:", validationErrors, "Raw Output:", JSON.stringify(error.input));
                 throw new Error(`Quiz generation failed: The AI returned data in an unexpected format. (${validationErrors})`);
             }
 
