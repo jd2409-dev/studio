@@ -199,9 +199,13 @@ const generateTextbookSummaryFlow = ai.defineFlow(
               console.error("Textbook Summary Flow: Summary generation blocked due to safety settings.");
               throw new Error("Summary generation was blocked, possibly due to safety filters or the content of the file.");
          }
+          if (error.message?.includes("unknown helper")) {
+             throw new Error(`Textbook summarization internal template error: ${error.message}. Please report this issue.`);
+         }
          // Re-throw other errors
         throw new Error(`Failed to generate textbook summary: ${error.message}`);
     }
   }
 );
+
 

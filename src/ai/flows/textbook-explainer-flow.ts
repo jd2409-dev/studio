@@ -125,9 +125,13 @@ const explainTextbookPdfFlow = ai.defineFlow(
              console.error("Textbook Explainer Flow: Explanation generation blocked due to safety settings or potentially harmful content.");
              throw new Error("Explanation generation was blocked, possibly due to safety filters or the content of the PDF. Please try a different document or section, or ensure the content is appropriate.");
         }
+         if (error.message?.includes("unknown helper")) {
+             throw new Error(`Textbook explanation internal template error: ${error.message}. Please report this issue.`);
+         }
         // Re-throw other errors
         throw new Error(`Failed to generate textbook explanation: ${error.message}`);
     }
   }
 );
+
 

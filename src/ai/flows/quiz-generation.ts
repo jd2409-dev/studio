@@ -169,10 +169,14 @@ const generateQuizFlow = ai.defineFlow(
                console.error("Quiz Generation Flow: Generation blocked due to safety settings or potentially harmful content.");
                throw new Error("Quiz generation was blocked, possibly due to safety filters or the content provided.");
            }
+            if (error.message?.includes("unknown helper")) {
+                 throw new Error(`Quiz generation internal template error: ${error.message}. Please report this issue.`);
+            }
 
           // Re-throw other errors with potentially more context
           throw new Error(`Quiz generation encountered an unexpected error: ${error.message}`);
       }
   }
 );
+
 
