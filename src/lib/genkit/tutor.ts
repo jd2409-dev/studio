@@ -1,4 +1,3 @@
-
 // No "use server" here
 
 import { z } from 'genkit';
@@ -23,7 +22,7 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
 // Prompt definition
 const tutorPrompt = ai.definePrompt({
-  name: 'aiTutorNexusLearnPrompt', // Keep a descriptive name
+  name: 'tutorPrompt', // Keep a descriptive name
   model: gemini15Flash, // Explicitly define the model here
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
@@ -34,18 +33,16 @@ Conversation History:
 {{#each history}}
   {{#if (eq role "user")}}
 User: {{{content}}}
-  {{else if (eq role "assistant")}}
-Tutor: {{{content}}}
   {{else}}
-Unknown: {{{content}}}
+Tutor: {{{content}}}
   {{/if}}
 {{/each}}
 
 Tutor, provide your response:
   `,
-  // Specify handlebarsOptions to enable the 'eq' helper
+  // Specify handlebarsOptions to enable the 'eq' helper AND allow custom helpers
   handlebarsOptions: {
-      knownHelpersOnly: false, // IMPORTANT: Allow custom helpers like 'eq'
+      knownHelpersOnly: false, // <-- Corrected: Allow custom helpers
       helpers: {
          // Define the 'eq' helper required by the template
          eq: function(a: any, b: any): boolean {
@@ -102,11 +99,13 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
   } catch (error: any) {
       console.error(`Error in runTutorPrompt during prompt execution:`, error.message, error.stack, "Input:", JSON.stringify(validatedInput));
 
+      // Check if the error is the Handlebars helper issue
       if (error.message?.includes("unknown helper")) {
           console.error("runTutorPrompt: Handlebars template error detected:", error.message);
           // Throw specific error type or message for frontend handling
            throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
       }
+       // Check for specific error codes or messages from the AI/Genkit
        if (error.message?.includes("Generation blocked")) {
           console.error("runTutorPrompt: Generation blocked due to safety settings.");
           // Return a specific error message or throw
