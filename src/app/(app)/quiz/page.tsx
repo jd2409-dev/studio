@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, type FormEvent, useEffect } from 'react'; // Added useEffect
@@ -18,6 +17,7 @@ import { doc, updateDoc, arrayUnion, Timestamp, runTransaction, getDoc } from 'f
 import type { QuizResult, QuizQuestion, UserProgress } from '@/types/user'; // Import QuizResult type and UserProgress
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link'; // Import Link
 
 type QuizState = {
     quizId: string; // Unique ID for this quiz instance
@@ -39,7 +39,7 @@ export default function QuizGenerationPage() {
   const [grade, setGrade] = useState<string>('none'); // State for grade level (use 'none' for default/empty)
   const [quizData, setQuizData] = useState<GenerateQuizOutput | null>(null);
   const [quizState, setQuizState] = useState<QuizState | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // State for generation loading
   const [isSubmitting, setIsSubmitting] = useState(false); // State for submission process
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth(); // Get user and loading status
@@ -61,7 +61,7 @@ export default function QuizGenerationPage() {
         toast({
             title: "Authentication Required",
             description: "Please log in to generate a quiz.",
-            variant: "destructive" // Corrected syntax
+            variant: "destructive",
         });
         return;
     }
@@ -74,7 +74,7 @@ export default function QuizGenerationPage() {
        return;
      }
 
-    setIsLoading(true);
+    setIsLoading(true); // Start loading indicator
     setQuizData(null);
     setQuizState(null);
 
@@ -125,7 +125,7 @@ export default function QuizGenerationPage() {
         }
         toast({ title: "Error Generating Quiz", description: errorDesc, variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Stop loading indicator
     }
   };
 
@@ -168,7 +168,7 @@ export default function QuizGenerationPage() {
           return;
       }
 
-      setIsSubmitting(true);
+      setIsSubmitting(true); // Start submitting indicator
 
       const finalScore = calculateScore();
       const quizResult: QuizResult = {
@@ -228,6 +228,7 @@ export default function QuizGenerationPage() {
           let errorDesc = "Could not save quiz results. Please try again.";
             if (error.code === 'permission-denied') {
                 errorDesc = "Permission denied saving quiz results. Check Firestore rules.";
+                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
             } else if (error.code === 'unavailable') {
                  errorDesc = "Network error. Could not save quiz results. Please check your connection.";
             } else if (error.message?.includes('transaction')) {
@@ -238,7 +239,7 @@ export default function QuizGenerationPage() {
           toast({ title: "Submission Error", description: errorDesc, variant: "destructive" });
           // Don't revert client state, let user see their score but know it wasn't saved.
       } finally {
-          setIsSubmitting(false);
+          setIsSubmitting(false); // Stop submitting indicator
       }
   };
 
@@ -508,7 +509,7 @@ export default function QuizGenerationPage() {
                             className="bg-green-600 hover:bg-green-700 text-white"
                           >
                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                             Submit Quiz
+                             {isSubmitting ? 'Submitting...' : 'Submit Quiz'}
                           </Button>
                         ) : (
                           <Button onClick={handleNextQuestion} disabled={isSubmitting || !quizState.selectedAnswers[quizState.questionIndex]} size="sm">Next</Button> // Disable if not answered
@@ -517,7 +518,14 @@ export default function QuizGenerationPage() {
                  )}
               </div>
             ) : (
-              !isLoading && <p className="text-muted-foreground text-center py-20">Generate a quiz using the panel on the left to begin.</p>
+              !isLoading && !authLoading && <p className="text-muted-foreground text-center py-20">Generate a quiz using the panel on the left to begin.</p>
+            )}
+             {/* Show loader if auth is still loading, even if not generating */}
+            {authLoading && !isLoading && (
+                 <div className="flex items-center justify-center h-full flex-1">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                     <p className="ml-2 text-muted-foreground">Checking authentication...</p>
+                 </div>
             )}
           </CardContent>
            {quizData && (
@@ -545,4 +553,3 @@ export default function QuizGenerationPage() {
     </div>
   );
 }
-

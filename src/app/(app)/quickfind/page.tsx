@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge'; // Added Badge import
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB for PDFs
 const ALLOWED_FILE_TYPE = 'application/pdf';
@@ -21,7 +22,7 @@ export default function QuickFindPage() {
   const [file, setFile] = useState<File | null>(null);
   const [question, setQuestion] = useState('');
   const [results, setResults] = useState<QuickFindOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // General loading state
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +70,7 @@ export default function QuickFindPage() {
         return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true); // Start loading indicator
     setResults(null);
 
     const reader = new FileReader();
@@ -89,14 +90,15 @@ export default function QuickFindPage() {
         const searchResult = await findInDocument(input);
         console.log("QuickFind results received:", searchResult);
 
-        if (searchResult.results && searchResult.results.length > 0) {
+        if (searchResult.status === 'success' && searchResult.results && searchResult.results.length > 0) {
              toast({ title: "Success", description: "Found potential answers in the document." });
         } else if (searchResult.status === 'not_found') {
              toast({ title: "Not Found", description: "Could not find a relevant answer in the document.", variant:"default"});
         } else if (searchResult.status === 'error') {
             toast({ title: "Search Error", description: searchResult.errorMessage || "An error occurred during the search.", variant:"destructive"});
         } else {
-            toast({ title: "No Results", description: "No specific answer snippets found, but the search completed.", variant:"default"});
+            // Handle success but no results specifically
+            toast({ title: "Search Complete", description: "No specific answer snippets found, but the search completed.", variant:"default"});
         }
 
         setResults(searchResult);
@@ -104,7 +106,10 @@ export default function QuickFindPage() {
         console.error("Error in QuickFind:", error);
          let errorDesc = "Failed to perform search. Please try again.";
          if (error instanceof Error) {
-            if (error.message.includes("blocked")) {
+             // Use startsWith for more robust matching
+            if (error.message.startsWith("QuickFind Error:")) {
+                 errorDesc = error.message.replace("QuickFind Error:", "").trim(); // Clean up prefix
+            } else if (error.message.includes("blocked")) {
                  errorDesc = "Search was blocked, possibly due to content safety filters.";
             } else if (error.message.includes("format")) {
                  errorDesc = "The AI returned results in an unexpected format.";
@@ -115,7 +120,7 @@ export default function QuickFindPage() {
         toast({ title: "Error Searching Document", description: errorDesc, variant: "destructive" });
         setResults({ status: 'error', errorMessage: errorDesc, results: [] }); // Set error state
       } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Stop loading indicator
       }
     };
 
@@ -216,16 +221,17 @@ export default function QuickFindPage() {
       </Card>
 
       {/* Results Section */}
-       {isLoading && (
+       {isLoading && ( // Show loading card specifically when searching
           <Card className="shadow-lg rounded-lg min-h-[200px]">
              <CardContent className="flex flex-col items-center justify-center h-full p-10">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                 <p className="text-muted-foreground">Searching document for "{question.substring(0, 50)}{question.length > 50 ? '...' : ''}"...</p>
+                <p className="text-xs text-muted-foreground mt-1">(This may take a few moments depending on the PDF size)</p>
              </CardContent>
           </Card>
        )}
 
-       {results && !isLoading && (
+       {results && !isLoading && ( // Only show results card if not loading
           <Card className="shadow-lg rounded-lg">
              <CardHeader>
                 <CardTitle className="text-xl">Search Results</CardTitle>

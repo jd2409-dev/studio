@@ -15,7 +15,7 @@ import type { UserProgress, QuizResult, QuizQuestion } from '@/types/user';
 // Import specific date-fns functions
 import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added AlertTitle
 
 
 export default function ReflectionPage() {
@@ -23,14 +23,20 @@ export default function ReflectionPage() {
   const { user, loading: authLoading } = useAuth();
 
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Use this for page loading
   const [fetchError, setFetchError] = useState<string | null>(null); // Store fetch error
 
   // Fetch user progress data (specifically quiz history)
   useEffect(() => {
-    if (user) {
+      // Start loading if auth is not finished or no user yet
+      if (authLoading || !user) {
+           setIsLoading(true);
+           return; // Wait for auth
+      }
+
+      // Proceed with fetch if user exists
       const fetchData = async () => {
-        setIsLoading(true);
+        // setIsLoading(true); // Already true or set above
         setFetchError(null); // Reset error on new fetch
         try {
           ensureFirebaseInitialized();
@@ -56,22 +62,18 @@ export default function ReflectionPage() {
             let errorDesc = "Could not load quiz history.";
             if (error.code === 'permission-denied') {
                 errorDesc = "Permission denied fetching reflection data. Check Firestore rules.";
+                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
             } else if (error.code === 'unavailable') {
                  errorDesc = "Network error fetching reflection data. Please check your connection.";
             }
             setFetchError(errorDesc);
             toast({ title: "Error", description: errorDesc, variant: "destructive" });
         } finally {
-          setIsLoading(false);
+          setIsLoading(false); // Stop loading after fetch attempt
         }
       };
       fetchData();
-    } else if (!authLoading) {
-        // If auth is done loading and there's no user
-        setIsLoading(false);
-        setFetchError("Please log in to view your reflections.");
-    }
-  }, [user, authLoading, toast]); // Add toast to dependencies
+  }, [user, authLoading, toast]); // Dependencies
 
 
    // Helper function to convert various date formats to a comparable timestamp
@@ -115,17 +117,19 @@ export default function ReflectionPage() {
 
     const getQuestionStatusIcon = (question: QuizQuestion, userAnswer: string | undefined) => {
         // Case-insensitive comparison for strings, strict comparison otherwise
-         const isCorrect = typeof userAnswer === 'string' && typeof question.correctAnswer === 'string'
-            ? userAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
-            : userAnswer === question.correctAnswer;
+         const correctAnswerStr = String(question.correctAnswer ?? '').trim().toLowerCase();
+         const selectedAnswerStr = String(userAnswer ?? '').trim().toLowerCase();
+         const isCorrect = selectedAnswerStr === correctAnswerStr;
 
         return isCorrect ? <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" /> : <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />;
     };
 
+  // Consolidated Loading State
   if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading reflections...</p>
       </div>
     );
   }
@@ -137,12 +141,26 @@ export default function ReflectionPage() {
              <h1 className="text-3xl font-bold mb-6">Reflection: Quiz History</h1>
              <Alert variant="destructive" className="max-w-md mx-auto">
                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>Error Loading Data</AlertTitle>
                <AlertDescription>{fetchError}</AlertDescription>
              </Alert>
           </div>
        );
    }
+
+    // Handle no user state (should be redirected, but handle defensively)
+    if (!user) {
+        return (
+            <div className="container mx-auto py-8 text-center">
+                <h1 className="text-3xl font-bold mb-6">Reflection: Quiz History</h1>
+                 <Alert variant="destructive" className="max-w-md mx-auto">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Authentication Required</AlertTitle>
+                    <AlertDescription>Please log in to view your reflections.</AlertDescription>
+                 </Alert>
+            </div>
+        );
+    }
 
 
   return (
@@ -207,10 +225,7 @@ export default function ReflectionPage() {
                                 <span className="text-muted-foreground">Your Answer:</span> {quiz.userAnswers[qIndex] !== undefined && quiz.userAnswers[qIndex] !== null && String(quiz.userAnswers[qIndex]).trim() !== '' ? String(quiz.userAnswers[qIndex]) : <span className="italic text-muted-foreground/80">Not Answered</span>}
                             </p>
                             {/* Check if the answer was incorrect before showing the correct one */}
-                             {! (typeof quiz.userAnswers[qIndex] === 'string' && typeof q.correctAnswer === 'string'
-                                ? String(quiz.userAnswers[qIndex]).trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()
-                                : quiz.userAnswers[qIndex] === q.correctAnswer
-                               ) && (
+                            {!(String(quiz.userAnswers[qIndex] ?? '').trim().toLowerCase() === String(q.correctAnswer ?? '').trim().toLowerCase()) && (
                                 <p className="text-green-600 dark:text-green-400">
                                     Correct Answer: {q.correctAnswer}
                                 </p>
@@ -253,4 +268,3 @@ export default function ReflectionPage() {
     </div>
   );
 }
-

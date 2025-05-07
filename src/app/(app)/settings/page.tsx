@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -31,7 +30,7 @@ export default function SettingsPage() {
 
   // State for settings - Initialize with defaults
    const [preferences, setPreferences] = useState<SettingsPreferences>(defaultPreferences);
-   const [isLoading, setIsLoading] = useState(true);
+   const [isLoading, setIsLoading] = useState(true); // Use this for page loading
    const [isSaving, setIsSaving] = useState(false);
    const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -66,68 +65,74 @@ export default function SettingsPage() {
 
   // Fetch user profile data (including preferences) on mount or when user changes
   useEffect(() => {
-    // Only fetch if user is loaded and exists
-    if (user && !authLoading) {
-      const fetchPreferences = async () => {
-        setIsLoading(true);
-        setFetchError(null); // Reset error
-        try {
-            ensureFirebaseInitialized();
-            const userDocRef = doc(db!, 'users', user.uid);
-            const docSnap = await getDoc(userDocRef);
+      // Wait for auth state to be resolved
+      if (authLoading) {
+           setIsLoading(true); // Keep loading true while auth is resolving
+           return;
+      }
+      // Only fetch if user is loaded and exists
+      if (user) {
+          const fetchPreferences = async () => {
+            setIsLoading(true); // Set loading true before fetch starts
+            setFetchError(null); // Reset error
+            try {
+                ensureFirebaseInitialized();
+                const userDocRef = doc(db!, 'users', user.uid);
+                const docSnap = await getDoc(userDocRef);
 
-            let loadedPreferences = defaultPreferences;
+                let loadedPreferences = defaultPreferences;
 
-            if (docSnap.exists()) {
-                const profile = docSnap.data() as UserProfile;
-                // Merge fetched preferences with defaults to ensure all keys exist
-                loadedPreferences = { ...defaultPreferences, ...(profile.preferences || {}) };
-                console.log("Fetched user preferences:", loadedPreferences);
-            } else {
-                 // User profile doc doesn't exist, maybe create it or just use defaults?
-                 // For settings, it's safer to just use defaults if profile doesn't exist yet.
-                 console.log("User profile not found for settings, using default preferences.");
-                 // Keep loadedPreferences as defaultPreferences
-                 // Optionally create the profile document with default preferences here if needed:
-                 // await setDoc(userDocRef, { preferences: defaultPreferences }, { merge: true });
+                if (docSnap.exists()) {
+                    const profile = docSnap.data() as UserProfile;
+                    // Merge fetched preferences with defaults to ensure all keys exist
+                    loadedPreferences = { ...defaultPreferences, ...(profile.preferences || {}) };
+                    console.log("Fetched user preferences:", loadedPreferences);
+                } else {
+                     // User profile doc doesn't exist, maybe create it or just use defaults?
+                     // For settings, it's safer to just use defaults if profile doesn't exist yet.
+                     console.log("User profile not found for settings, using default preferences.");
+                     // Keep loadedPreferences as defaultPreferences
+                     // Optionally create the profile document with default preferences here if needed:
+                     // await setDoc(userDocRef, { preferences: defaultPreferences }, { merge: true });
+                }
+                setPreferences(loadedPreferences);
+                // Apply the loaded (or default) dark mode setting
+                applyDarkMode(loadedPreferences.darkMode);
+
+            } catch (error: any) {
+              console.error("Failed to fetch user preferences:", error);
+               let errorDesc = "Could not load settings.";
+               if (error.code === 'permission-denied') {
+                    errorDesc = "Permission denied fetching settings. Check Firestore rules.";
+                     console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
+               } else if (error.code === 'unavailable') {
+                     errorDesc = "Network error fetching settings. Using defaults.";
+               }
+              setFetchError(errorDesc);
+              toast({
+                  title: "Error Loading Settings",
+                  description: errorDesc,
+                  variant: "destructive",
+              });
+              // Fallback to defaults on error
+              setPreferences(defaultPreferences);
+              applyDarkMode(defaultPreferences.darkMode); // Apply default dark mode on error
+            } finally {
+              setIsLoading(false); // Stop loading after fetch attempt
             }
-            setPreferences(loadedPreferences);
-            // Apply the loaded (or default) dark mode setting
-            applyDarkMode(loadedPreferences.darkMode);
-
-        } catch (error: any) {
-          console.error("Failed to fetch user preferences:", error);
-           let errorDesc = "Could not load settings.";
-           if (error.code === 'permission-denied') {
-                errorDesc = "Permission denied fetching settings. Check Firestore rules.";
-           } else if (error.code === 'unavailable') {
-                 errorDesc = "Network error fetching settings. Using defaults.";
-           }
-          setFetchError(errorDesc);
-          toast({
-              title: "Error Loading Settings",
-              description: errorDesc,
-              variant: "destructive" // Corrected syntax: colon instead of equals
-          });
-          // Fallback to defaults on error
-          setPreferences(defaultPreferences);
-          applyDarkMode(defaultPreferences.darkMode); // Apply default dark mode on error
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchPreferences();
-    } else if (!authLoading && !user) {
-         // If auth is done loading and there's no user
-         setIsLoading(false);
-         setFetchError("Please log in to manage your settings.");
-         // Use system preference for dark mode if not logged in
-          if (typeof window !== 'undefined') {
-              const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-              applyDarkMode(systemPrefersDark);
-              setPreferences(prev => ({...prev, darkMode: systemPrefersDark})); // Update state visually
-          }
-    }
+          };
+          fetchPreferences();
+      } else {
+           // If auth is done loading and there's no user
+           setIsLoading(false); // Stop loading if no user
+           setFetchError("Please log in to manage your settings.");
+           // Use system preference for dark mode if not logged in
+            if (typeof window !== 'undefined') {
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                applyDarkMode(systemPrefersDark);
+                setPreferences(prev => ({...prev, darkMode: systemPrefersDark})); // Update state visually
+            }
+      }
   }, [user, authLoading, toast]); // Rerun if user changes
 
 
@@ -156,6 +161,7 @@ export default function SettingsPage() {
           let errorDesc = "Could not save settings.";
          if (error.code === 'permission-denied') {
              errorDesc = "Permission denied saving settings. Check Firestore rules.";
+              console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
          } else if (error.code === 'unavailable') {
               errorDesc = "Network error saving settings. Changes might not be saved.";
          }
@@ -166,10 +172,12 @@ export default function SettingsPage() {
   };
 
 
+  // Consolidated Loading State
   if (authLoading || isLoading) {
      return (
         <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <p className="ml-3 text-muted-foreground">Loading settings...</p>
         </div>
      );
   }
@@ -187,13 +195,26 @@ export default function SettingsPage() {
           </div>
        );
    }
+    // Handle no user after loading, but no specific fetch error
+    if (!user) {
+         return (
+            <div className="container mx-auto py-8 text-center">
+                <h1 className="text-3xl font-bold mb-6">Settings</h1>
+                 <Alert variant="destructive" className="max-w-md mx-auto shadow">
+                     <AlertTriangle className="h-4 w-4" />
+                     <AlertTitle>Authentication Required</AlertTitle>
+                     <AlertDescription>Please log in to manage your settings.</AlertDescription>
+                 </Alert>
+            </div>
+         );
+    }
 
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-2">Settings</h1>
       <p className="text-muted-foreground mb-8 max-w-2xl">
-        Manage your account preferences and application settings. Changes are saved automatically when you toggle them.
+        Manage your account preferences and application settings.
         {fetchError && <span className="ml-2 text-xs text-destructive">({fetchError})</span>}
       </p>
 

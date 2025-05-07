@@ -20,7 +20,7 @@ const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50MB limit for uploads
 
 export default function UploadTextbookPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Use this for upload process loading
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [isOnline, setIsOnline] = useState(true); // Track online status
@@ -95,7 +95,7 @@ export default function UploadTextbookPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true); // Set loading state for the entire upload process
     setUploadStatus('uploading');
     setUploadProgress(0);
 
@@ -121,7 +121,7 @@ export default function UploadTextbookPage() {
                  switch (error.code) {
                      case 'storage/unauthorized':
                         errorMessage = "Permission denied. Check your Firebase Storage security rules to allow uploads to this path.";
-                        console.error("Check Storage Rules: Ensure rules allow write access for authenticated users to `user_uploads/{userId}/textbooks/{fileName}`");
+                        console.error("Check Storage Rules: Ensure rules allow write access for authenticated users to `user_uploads/{userId}/textbooks/{fileName}` and `quickfind_uploads/{userId}/{fileName}`. Command: `firebase deploy --only storage`");
                         break;
                      case 'storage/canceled':
                         errorMessage = "Upload cancelled.";
@@ -184,6 +184,16 @@ export default function UploadTextbookPage() {
         setUploadStatus('error'); setIsLoading(false); setUploadProgress(null);
     }
   };
+
+   // Show loader if auth is still loading
+   if (authLoading) {
+      return (
+         <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+           <Loader2 className="h-16 w-16 animate-spin text-primary" />
+         </div>
+      );
+   }
+
 
   return (
     <div className="container mx-auto py-8">
@@ -248,14 +258,16 @@ export default function UploadTextbookPage() {
               {uploadStatus === 'error' && (
                  <Alert variant="destructive">
                      <AlertCircle className="h-4 w-4" />
+                     <AlertTitle>Upload Failed</AlertTitle>
                      <AlertDescription>
-                         Upload Failed. Please check the error message and try again.
+                         Please check the error message in the console or toast notifications and try again.
                      </AlertDescription>
                  </Alert>
               )}
-               {!user && !authLoading && (
+               {!user && !authLoading && ( // Show login required message if not logged in
                  <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Login Required</AlertTitle>
                     <AlertDescription>Please log in to upload files.</AlertDescription>
                  </Alert>
                )}

@@ -28,7 +28,7 @@ export default function TextbookSummaryPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null); // Store Data URI for images
   const [isImageFile, setIsImageFile] = useState(false);
   const [summary, setSummary] = useState<GenerateTextbookSummaryOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // State for AI processing
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth(); // Get user auth state
   const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
@@ -91,7 +91,7 @@ export default function TextbookSummaryPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true); // Start loading indicator
     setSummary(null);
 
     // Read file as Data URI to pass to the flow
@@ -134,7 +134,7 @@ export default function TextbookSummaryPage() {
             }
             toast({ title: "Error Generating Summary", description: errorDesc, variant: "destructive" });
         } finally {
-            setIsLoading(false);
+            setIsLoading(false); // Stop loading indicator
         }
     };
     reader.onerror = (error) => {
@@ -209,6 +209,7 @@ export default function TextbookSummaryPage() {
                {!user && !authLoading && (
                  <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
+                     <AlertTitle>Login Required</AlertTitle>
                     <AlertDescription>Please log in to generate summaries.</AlertDescription>
                  </Alert>
                )}
@@ -236,30 +237,30 @@ export default function TextbookSummaryPage() {
         </Card>
 
         {/* Summary Section */}
-        <Card className="shadow-lg rounded-lg min-h-[400px]"> {/* Ensure min height */}
+        <Card className="shadow-lg rounded-lg min-h-[400px] flex flex-col"> {/* Ensure min height & flex */}
           <CardHeader>
             <CardTitle className="text-xl">Generated Summaries</CardTitle>
             <CardDescription>View the AI-generated summaries below.</CardDescription>
           </CardHeader>
-          <CardContent className="relative"> {/* Add relative for loader positioning */}
-            {isLoading && (
+          <CardContent className="relative flex-1"> {/* Add relative & flex-1 */}
+            {isLoading && ( // Show overlay loader
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-b-lg">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground">Generating summaries...</p>
               </div>
             )}
-            {summary ? (
-              <Tabs defaultValue="text" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-4">
+            {!isLoading && summary ? ( // Show content when not loading and summary exists
+              <Tabs defaultValue="text" className="w-full h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-3 mb-4 flex-shrink-0">
                   <TabsTrigger value="text"><Text className="mr-1 h-4 w-4" /> Text</TabsTrigger>
                   <TabsTrigger value="audio"><AudioLines className="mr-1 h-4 w-4" /> Audio Script</TabsTrigger>
                   <TabsTrigger value="mindmap"><BrainCircuit className="mr-1 h-4 w-4" /> Mind Map</TabsTrigger>
                 </TabsList>
-                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
                   <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Text Summary</h3>
                    <p className="whitespace-pre-wrap mt-4">{summary.textSummary}</p>
                 </TabsContent>
-                <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
                    <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Audio Summary (Script)</h3>
                       <>
                        <p className="whitespace-pre-wrap mt-4">{summary.audioSummary}</p>
@@ -268,7 +269,7 @@ export default function TextbookSummaryPage() {
                        </p>
                        </>
                  </TabsContent>
-                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto">
+                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto">
                   <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Mind Map (Markdown)</h3>
                      <>
                        <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-md border mt-4">{summary.mindMap}</pre>
@@ -277,11 +278,12 @@ export default function TextbookSummaryPage() {
                 </TabsContent>
               </Tabs>
             ) : (
-               !isLoading && <p className="text-muted-foreground text-center py-20">Upload a file and click "Generate Summaries" to see the results here.</p>
+                // Show placeholder only when not loading and no summary exists
+               !isLoading && <p className="text-muted-foreground text-center flex items-center justify-center h-full">Upload a file and click "Generate Summaries" to see the results here.</p>
             )}
           </CardContent>
-           {summary && (
-               <CardFooter className="pt-4 border-t flex justify-end">
+           {summary && ( // Footer only shows if there are results
+               <CardFooter className="pt-4 border-t flex justify-end flex-shrink-0">
                   <Button variant="outline" size="sm" onClick={handleClear}>Clear Results</Button>
                </CardFooter>
            )}

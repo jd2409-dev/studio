@@ -3,7 +3,7 @@
 import * as React from 'react'; // Import React
 import { useState, useEffect, useMemo } from 'react'; // Import useMemo
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BarChart, LineChart, PieChart, ListChecks, Target, BrainCircuit, Loader2, AlertTriangle } from "lucide-react"; // Lucide icons
+import { LineChart as LineChartIcon, ListChecks, Target, BrainCircuit, Loader2, AlertTriangle } from "lucide-react"; // Lucide icons - Renamed LineChart import
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart"; // Shadcn chart wrappers
 import {
   BarChart as RechartsBarChart, // Renamed import
@@ -26,9 +26,9 @@ import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { UserProgress, SubjectMastery, QuizResult, HomeworkAssignment } from '@/types/user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { parseISO, format, isValid } from 'date-fns'; // Import isValid
+import { parseISO, format, isValid, parse } from 'date-fns'; // Import isValid and parse
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added AlertTitle
 
 
 // Helper function to assign colors based on subject ID or index
@@ -59,15 +59,21 @@ export default function PerformancePage() {
   const { user, loading: authLoading } = useAuth();
 
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Use this for page loading
   const [selectedSubject, setSelectedSubject] = useState<string>('all'); // Default to 'all' subjects
   const [fetchError, setFetchError] = useState<string | null>(null); // Store fetch error
 
   // Fetch user progress data
   useEffect(() => {
-    if (user) {
+      // Start loading immediately if auth is not finished or user doesn't exist yet
+      if (authLoading || !user) {
+           setIsLoading(true);
+           return; // Wait for auth to resolve
+      }
+
+      // Proceed with fetch if user exists
       const fetchData = async () => {
-        setIsLoading(true);
+        // setIsLoading(true); // Already true or set above
         setFetchError(null); // Reset error on new fetch attempt
         try {
             ensureFirebaseInitialized();
@@ -78,27 +84,28 @@ export default function PerformancePage() {
             } else {
               console.log("No progress data found for performance analytics.");
               setUserProgress(null); // Set to null if no data
-              setFetchError("No performance data available yet."); // Set specific message
+              // Don't set fetchError here unless it's truly an error state
+              // setFetchError("No performance data available yet.");
             }
         } catch (error: any) {
           console.error("Error fetching performance data:", error);
           let errorDesc = "Could not load performance data.";
           if (error.code === 'permission-denied') {
                errorDesc = "Permission denied. Check Firestore rules.";
+               console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
+          } else if (error.code === 'unavailable') {
+               errorDesc = "Network unavailable. Could not load performance data.";
           }
           toast({ title: "Error", description: errorDesc, variant: "destructive" });
           setFetchError(errorDesc); // Store error message
           setUserProgress(null); // Clear potentially stale data on error
         } finally {
-          setIsLoading(false);
+          setIsLoading(false); // Stop loading once fetch completes or fails
         }
       };
       fetchData();
-    } else if (!authLoading) {
-      setIsLoading(false); // Stop loading if user is null after auth check
-       setFetchError("Please log in to view performance data.");
-    }
-  }, [user, authLoading, toast]);
+
+  }, [user, authLoading, toast]); // Dependencies
 
   // Chart Data Processing (Memoize to avoid recalculations on every render)
    const subjectMasteryData = useMemo(() => {
@@ -242,28 +249,45 @@ export default function PerformancePage() {
   };
 
 
+  // Consolidated Loading State: Display loader if auth is loading OR data fetch is loading
   if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading performance data...</p>
       </div>
     );
   }
 
   // Handle fetch error state
-   if (fetchError && !userProgress) {
+   if (fetchError) {
        return (
           <div className="container mx-auto py-8 text-center">
              <h1 className="text-3xl font-bold mb-6">Performance Analytics</h1>
              <Alert variant="destructive" className="max-w-md mx-auto">
                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Error Loading Data</AlertTitle>
                <AlertDescription>{fetchError}</AlertDescription>
              </Alert>
           </div>
        );
    }
 
-  // Handle no data available state (after loading and no error)
+  // Handle no user state (should be redirected, but handle defensively)
+  if (!user) {
+       return (
+          <div className="container mx-auto py-8 text-center">
+              <h1 className="text-3xl font-bold mb-6">Performance Analytics</h1>
+               <Alert variant="destructive" className="max-w-md mx-auto">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Authentication Required</AlertTitle>
+                  <AlertDescription>Please log in to view performance data.</AlertDescription>
+               </Alert>
+          </div>
+       );
+  }
+
+  // Handle no data available state (after loading and no error/no user)
    if (!userProgress || (!userProgress.subjectMastery?.length && !userProgress.quizHistory?.length && !userProgress.upcomingHomework?.length)) {
        return (
            <div className="container mx-auto py-8 text-center">
@@ -373,7 +397,7 @@ export default function PerformancePage() {
          {/* Quiz Performance Trend */}
          <Card className="lg:col-span-3">
            <CardHeader>
-             <CardTitle className="flex items-center gap-2"><LineChart className="text-secondary" /> Quiz Performance Trend</CardTitle>
+             <CardTitle className="flex items-center gap-2"><LineChartIcon className="text-secondary" /> Quiz Performance Trend</CardTitle> {/* Used renamed icon */}
               <CardDescription>
                   Your average quiz scores over time {selectedSubject !== 'all' ? `for ${userProgress.subjectMastery.find(s=>s.subjectId === selectedSubject)?.subjectName || 'selected subject'}` : ''}.
               </CardDescription>
@@ -412,26 +436,30 @@ export default function PerformancePage() {
            </CardContent>
          </Card>
 
-         {/* AI Recommendations Placeholder - Replace with actual AI logic later */}
+         {/* AI Recommendations Placeholder */}
          <Card className="lg:col-span-3">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><BrainCircuit className="text-secondary" /> AI-Powered Insights</CardTitle>
                 <CardDescription>Personalized recommendations based on your performance.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 min-h-[100px]">
-                 {/* Example Placeholder Logic */}
-               {quizHistoryData.length >= 1 && subjectMasteryData.length > 0 ? (
+               {(quizHistoryData.length >= 1 || subjectMasteryData.length > 0) ? ( // Check if there's *any* data
                    <>
-                      <div className="p-4 border rounded-md bg-muted/30">
-                         <p className="font-medium text-sm">Focus Area: {subjectMasteryData[0]?.name || 'Review Needed'}</p>
-                         <p className="text-xs text-muted-foreground">Consider revisiting topics in {subjectMasteryData[0]?.name || 'your lowest-scoring subject'} based on recent performance. Try generating a targeted quiz!</p>
-                      </div>
-                       {quizHistoryData.length >= 2 && (
+                      {subjectMasteryData.length > 0 && ( // Only show if mastery data exists
+                          <div className="p-4 border rounded-md bg-muted/30">
+                             <p className="font-medium text-sm">Focus Area: {subjectMasteryData.reduce((prev, current) => (prev.mastery < current.mastery) ? prev : current)?.name || 'Review Needed'}</p>
+                             <p className="text-xs text-muted-foreground">Consider revisiting topics in your lowest-scoring subject based on recent performance. Try generating a targeted quiz!</p>
+                          </div>
+                      )}
+                       {quizHistoryData.length >= 2 && ( // Only show if trend data exists
                            <div className="p-4 border rounded-md bg-muted/30">
                               <p className="font-medium text-sm">Trend Observation</p>
                               <p className="text-xs text-muted-foreground">Analyze your quiz performance trend chart to see progress over time.</p>
                            </div>
                        )}
+                        {(subjectMasteryData.length === 0 || quizHistoryData.length < 2) && (
+                            <p className="text-center text-muted-foreground p-4">More insights will appear as you complete more quizzes and track subject mastery.</p>
+                        )}
                    </>
                ) : (
                   <p className="text-center text-muted-foreground p-8">Not enough data to provide personalized insights yet. Complete more quizzes or track subject mastery.</p>
@@ -443,4 +471,3 @@ export default function PerformancePage() {
     </div>
   );
 }
-

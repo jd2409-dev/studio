@@ -18,7 +18,8 @@ import { format, parse, addDays, startOfWeek, eachDayOfInterval, isSameDay, isVa
 import { Loader2, PlusCircle, Trash2, CalendarIcon, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { StudyPlannerEntry, UserProgress, SubjectMastery } from '@/types/user';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added AlertTitle
+import { Badge } from '@/components/ui/badge'; // Added Badge
 
 
 export default function StudyPlannerPage() {
@@ -27,7 +28,7 @@ export default function StudyPlannerPage() {
 
   const [plannerEntries, setPlannerEntries] = useState<StudyPlannerEntry[]>([]);
   const [subjects, setSubjects] = useState<SubjectMastery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Use this for page loading
   const [isUpdating, setIsUpdating] = useState(false); // For form submission/deletion loading state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewStartDate, setViewStartDate] = useState<Date>(startOfWeek(new Date()));
@@ -44,9 +45,15 @@ export default function StudyPlannerPage() {
 
   // Fetch user progress data (including planner entries and subjects)
   useEffect(() => {
-    if (user) {
+      // Start loading if auth is not finished or no user yet
+      if (authLoading || !user) {
+           setIsLoading(true);
+           return; // Wait for auth
+      }
+
+      // Proceed with fetch if user exists
       const fetchData = async () => {
-        setIsLoading(true);
+        // setIsLoading(true); // Already true or set above
         setFetchError(null); // Reset error on fetch
         try {
           ensureFirebaseInitialized();
@@ -76,21 +83,18 @@ export default function StudyPlannerPage() {
            let errorDesc = "Could not load study planner data.";
            if (error.code === 'permission-denied') {
                 errorDesc = "Permission denied. Check Firestore rules.";
+                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
            } else if (error.code === 'unavailable') {
                  errorDesc = "Network error. Could not load planner data.";
            }
            setFetchError(errorDesc);
           toast({ title: "Error", description: errorDesc, variant: "destructive" });
         } finally {
-          setIsLoading(false);
+          setIsLoading(false); // Stop loading after fetch attempt
         }
       };
       fetchData();
-    } else if (!authLoading) {
-      setIsLoading(false); // Stop loading if user is null after auth check
-      setFetchError("Please log in to use the study planner.");
-    }
-  }, [user, authLoading, toast]);
+  }, [user, authLoading, toast]); // Dependencies
 
   // Helper to parse time for sorting
   const parseEntryTime = (timeStr?: string): number => {
@@ -417,26 +421,42 @@ export default function StudyPlannerPage() {
      }
   ); // Sorting is now done when setting state
 
+  // Consolidated Loading State
   if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading planner...</p>
       </div>
     );
   }
 
+   // Handle fetch error state
    if (fetchError) {
         return (
             <div className="container mx-auto py-8 text-center">
                 <h1 className="text-3xl font-bold mb-6">Study Planner</h1>
                  <Alert variant="destructive" className="max-w-md mx-auto">
                      <AlertTriangle className="h-4 w-4" />
-                     <AlertTitle>Error</AlertTitle>
+                     <AlertTitle>Error Loading Data</AlertTitle>
                      <AlertDescription>{fetchError}</AlertDescription>
                  </Alert>
             </div>
         );
     }
+   // Handle no user after loading
+   if (!user) {
+        return (
+            <div className="container mx-auto py-8 text-center">
+                <h1 className="text-3xl font-bold mb-6">Study Planner</h1>
+                 <Alert variant="destructive" className="max-w-md mx-auto">
+                     <AlertTriangle className="h-4 w-4" />
+                     <AlertTitle>Authentication Required</AlertTitle>
+                     <AlertDescription>Please log in to use the study planner.</AlertDescription>
+                 </Alert>
+            </div>
+        );
+   }
 
 
   return (
@@ -598,11 +618,7 @@ export default function StudyPlannerPage() {
              <CardDescription>Your scheduled tasks for the selected date.</CardDescription>
            </CardHeader>
            <CardContent>
-             {isLoading ? (
-               <div className="flex justify-center items-center p-8">
-                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-               </div>
-             ) : entriesForSelectedDate.length > 0 ? (
+             {entriesForSelectedDate.length > 0 ? (
                <ul className="space-y-3">
                  {entriesForSelectedDate.map((entry) => (
                    <li key={entry.id} className="flex items-start gap-4 p-3 border rounded-md bg-card hover:bg-muted/50 transition-colors shadow-sm">
@@ -650,4 +666,3 @@ export default function StudyPlannerPage() {
     </div>
   );
 }
-

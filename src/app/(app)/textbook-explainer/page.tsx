@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react';
@@ -20,7 +19,7 @@ const ALLOWED_FILE_TYPE = 'application/pdf';
 export default function TextbookExplainerPage() {
   const [file, setFile] = useState<File | null>(null);
   const [explanation, setExplanation] = useState<ExplainTextbookPdfOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // State for AI processing
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth(); // Get user auth state
 
@@ -63,7 +62,7 @@ export default function TextbookExplainerPage() {
           toast({
               title: "Invalid File Type",
               description: `Please select a PDF file. Type detected: ${selectedFile.type}`,
-              variant: "destructive" // Corrected syntax: colon instead of equals
+              variant: "destructive",
           });
           if (event.target) event.target.value = ''; // Clear the input
           return;
@@ -95,7 +94,7 @@ export default function TextbookExplainerPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true); // Start loading indicator
     setExplanation(null);
     cancelSpeech(); // Stop any previous speech
 
@@ -144,7 +143,7 @@ export default function TextbookExplainerPage() {
             }
             toast({ title: "Error Generating Explanation", description: errorDesc, variant: "destructive" });
         } finally {
-            setIsLoading(false);
+            setIsLoading(false); // Stop loading indicator
         }
     };
     reader.onerror = (error) => {
@@ -201,35 +200,35 @@ export default function TextbookExplainerPage() {
                   setIsPaused(false); // Ensure consistency
               };
                utterance.onerror = (event) => {
-                  // Handle 'interrupted' gracefully (often user action or navigation)
-                   if (event.error === 'interrupted') {
-                       console.warn("Speech synthesis interrupted.", event);
-                       // Optionally show a less severe message or just log it
-                       // setSpeechError("Speech playback was interrupted.");
-                       // toast({ title: "Playback Interrupted", description: "Audio playback stopped.", variant: "default" });
-                   } else {
-                       // Handle other errors more severely
-                       console.error("Speech synthesis error:", event.error, event);
-                       let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
-                       if (event.error === 'synthesis-failed' || event.error === 'network') {
-                           errorMsg += ". Check connection or try a different voice/browser.";
-                       } else if (event.error === 'language-unavailable') {
-                           errorMsg += ". The selected language is unavailable.";
-                       } else if (event.error === 'not-allowed') {
-                           errorMsg = "Speech synthesis permission denied by the browser.";
-                       } else if (event.error === 'audio-busy') {
+                    // Handle 'interrupted' gracefully (often user action or navigation)
+                    if (event.error === 'interrupted') {
+                        console.warn("Speech synthesis interrupted.", event);
+                        // Optionally show a less severe message or just log it
+                         setSpeechError("Speech playback was interrupted.");
+                        // toast({ title: "Playback Interrupted", description: "Audio playback stopped.", variant: "default" });
+                    } else {
+                        // Handle other errors more severely
+                        console.error("Speech synthesis error:", event.error, event);
+                        let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
+                        if (event.error === 'synthesis-failed' || event.error === 'network') {
+                            errorMsg += ". Check connection or try a different voice/browser.";
+                        } else if (event.error === 'language-unavailable') {
+                            errorMsg += ". The selected language is unavailable.";
+                        } else if (event.error === 'not-allowed') {
+                            errorMsg = "Speech synthesis permission denied by the browser.";
+                        } else if (event.error === 'audio-busy') {
                             errorMsg = "Audio output is busy. Please wait or try again.";
-                       } else if (event.error === 'invalid-argument') {
-                           errorMsg = "Invalid argument provided to speech synthesis.";
-                       }
-                       setSpeechError(errorMsg);
-                       toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
-                   }
-                  // Reset state regardless of error type
-                  setIsSpeaking(false);
-                  setIsPaused(false);
-                  utteranceRef.current = null;
-              };
+                        } else if (event.error === 'invalid-argument') {
+                            errorMsg = "Invalid argument provided to speech synthesis.";
+                        }
+                        setSpeechError(errorMsg);
+                        toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
+                    }
+                   // Reset state regardless of error type
+                   setIsSpeaking(false);
+                   setIsPaused(false);
+                   utteranceRef.current = null;
+               };
 
               // Attempt to speak
               try {
@@ -332,33 +331,33 @@ export default function TextbookExplainerPage() {
         </Card>
 
         {/* Explanation Section */}
-        <Card className="shadow-lg rounded-lg min-h-[400px]"> {/* Ensure min height */}
+        <Card className="shadow-lg rounded-lg min-h-[400px] flex flex-col"> {/* Ensure min height & flex */}
           <CardHeader>
             <CardTitle className="text-xl">Generated Explanation</CardTitle>
             <CardDescription>View the AI-generated explanation below.</CardDescription>
           </CardHeader>
-          <CardContent className="relative"> {/* Add relative for loader positioning */}
-             {isLoading && (
+          <CardContent className="relative flex-1"> {/* Add relative & flex-1 */}
+             {isLoading && ( // Show overlay loader
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-b-lg">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground">Generating explanation...</p>
                  <p className="text-xs text-muted-foreground mt-1">(This may take a moment)</p>
               </div>
             )}
-            {explanation ? (
-              <Tabs defaultValue="text" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-4">
+            {!isLoading && explanation ? ( // Show content when not loading and explanation exists
+              <Tabs defaultValue="text" className="w-full h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-3 mb-4 flex-shrink-0">
                   <TabsTrigger value="text"><Text className="mr-1 h-4 w-4" /> Text</TabsTrigger>
                   <TabsTrigger value="audio"><AudioLines className="mr-1 h-4 w-4" /> Audio</TabsTrigger>
                   <TabsTrigger value="mindmap"><BrainCircuit className="mr-1 h-4 w-4" /> Mind Map</TabsTrigger>
                 </TabsList>
                 {/* Text Content */}
-                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+                <TabsContent value="text" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
                   <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Text Explanation</h3>
                    <p className="whitespace-pre-wrap mt-4">{explanation.textExplanation}</p>
                 </TabsContent>
                 {/* Audio Content */}
-                 <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] flex flex-col">
+                 <TabsContent value="audio" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto flex flex-col">
                    <h3 className="font-semibold mb-2 text-base flex-shrink-0">Audio Explanation</h3>
                    {speechError && (
                       <Alert variant="destructive" className="mb-3 flex-shrink-0">
@@ -403,18 +402,19 @@ export default function TextbookExplainerPage() {
                    </div>
                  </TabsContent>
                  {/* Mind Map Content */}
-                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 min-h-[250px] max-h-[60vh] overflow-y-auto">
+                <TabsContent value="mindmap" className="mt-2 p-4 border rounded-md bg-muted/30 flex-1 overflow-y-auto">
                   <h3 className="font-semibold mb-2 text-base sticky top-0 bg-muted/30 py-1 -mt-4 -mx-4 px-4 border-b">Mind Map (Markdown)</h3>
                      <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-md border mt-4">{explanation.mindMapExplanation}</pre>
                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">This is a hierarchical representation of the key concepts.</p>
                 </TabsContent>
               </Tabs>
             ) : (
-               !isLoading && <p className="text-muted-foreground text-center py-20">Upload a PDF and click "Generate Explanation" to see the results here.</p>
+               // Show placeholder only when not loading and no explanation exists
+               !isLoading && <p className="text-muted-foreground text-center flex items-center justify-center h-full">Upload a PDF and click "Generate Explanation" to see the results here.</p>
             )}
           </CardContent>
-           {explanation && (
-             <CardFooter className="pt-4 border-t flex justify-end">
+           {explanation && ( // Footer only shows if there are results
+             <CardFooter className="pt-4 border-t flex justify-end flex-shrink-0">
                 <Button variant="outline" size="sm" onClick={handleClear} disabled={isLoading}>Clear Results</Button>
              </CardFooter>
            )}
@@ -423,4 +423,3 @@ export default function TextbookExplainerPage() {
     </div>
   );
 }
-

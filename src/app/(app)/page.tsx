@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BarChart, FileText, Calendar, AlertTriangle, Activity, Target, Clock, BrainCircuit, Loader2, BookOpen, MessageSquareQuote, Upload, HelpCircle } from "lucide-react"; // Added Upload, HelpCircle
+import { FileText, Calendar, AlertTriangle, Activity, Target, Clock, BrainCircuit, Loader2, Upload, HelpCircle, MessageSquareQuote, Search } from "lucide-react"; // Added BookOpen explicitly
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -14,17 +14,15 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { UserProgress, SubjectMastery, HomeworkAssignment, ExamSchedule, StudyRecommendation } from '@/types/user';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-
 export default function DashboardPage() {
   const { toast } = useToast();
   const router = useRouter();
   const { user, loading: authLoading, authError } = useAuth();
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true); // Keep this for data fetching state
   const [userName, setUserName] = useState<string>('Student');
   const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error' | 'nodata'>('server');
   const [fetchError, setFetchError] = useState<string | null>(null);
-
 
    // Default placeholder data
    const defaultProgress: UserProgress = {
@@ -36,12 +34,20 @@ export default function DashboardPage() {
         upcomingHomework: [],
         upcomingExams: [],
         studyRecommendations: [],
+        quizHistory: [], // Added
+        studyPlanner: [], // Added
         lastUpdated: new Date().toISOString(),
    };
 
   // Fetch user progress data and name from Firestore
   useEffect(() => {
     console.log("DashboardPage: useEffect triggered. AuthLoading:", authLoading, "User:", !!user, "AuthError:", !!authError, "FirebaseInitError:", !!firebaseInitializationError);
+
+    // If auth is still loading, show loading state and wait
+    if (authLoading) {
+        setIsLoadingData(true);
+        return;
+    }
 
     // Abort if Firebase itself failed to initialize (handled by AuthProvider/Layout)
     if (firebaseInitializationError || authError) {
@@ -54,9 +60,9 @@ export default function DashboardPage() {
     }
 
     // Only fetch data if auth is complete, user exists, and no init/auth errors
-    if (!authLoading && user) {
+    if (user) {
       console.log("DashboardPage: Auth loaded, user exists. Starting data fetch for user:", user.uid);
-      setIsLoadingData(true);
+      setIsLoadingData(true); // Set loading true before starting fetch
       setFetchError(null); // Reset previous errors
 
       const fetchData = async () => {
@@ -176,29 +182,28 @@ export default function DashboardPage() {
           }
           toast({ title: errorTitle, description: errorDesc, variant: "destructive" });
         } finally {
-          setIsLoadingData(false);
+          setIsLoadingData(false); // Set loading false after fetch completes or fails
           console.log("DashboardPage: Data fetching process finished. isLoadingData: false");
         }
       };
       fetchData();
     } else if (!authLoading && !user) {
        console.log("DashboardPage: Auth loaded, but no user. Data fetch skipped. Redirect handled by AppLayout.");
-       setIsLoadingData(false);
+       setIsLoadingData(false); // Stop loading if no user
        setDataFetchSource('nodata');
        setFetchError("User not authenticated.");
        setUserProgress({ ...defaultProgress, uid: 'fallback_uid_no_user' }); // Set default on no user
-    } else if (authLoading) {
-        console.log("DashboardPage: Auth is loading, data fetch deferred.");
-        // Keep loading state until auth is resolved
     }
-  }, [user, authLoading, authError, toast]); // Added toast dependency
+  }, [user, authLoading, authError, toast]); // Keep dependencies
 
 
-   if (authLoading || isLoadingData) {
-     console.log("DashboardPage: Rendering loading spinner. AuthLoading:", authLoading, "IsLoadingData:", isLoadingData);
+   // Consolidated Loading State: Use isLoadingData for page content loading
+   if (isLoadingData) {
+     console.log("DashboardPage: Rendering full page loading spinner. isLoadingData:", isLoadingData);
      return (
        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+         <p className="ml-3 text-muted-foreground">Loading dashboard...</p>
        </div>
      );
    }
@@ -226,10 +231,6 @@ export default function DashboardPage() {
                          {title === "Not Logged In" && <Link href="/login" className="underline hover:text-primary">Log in here</Link>}
                     </AlertDescription>
                 </Alert>
-                 {/* Optionally render placeholder cards or nothing */}
-                 {/* <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 opacity-50">
-                     {renderDashboardCards(defaultProgress)}
-                 </div> */}
             </div>
         );
     }
@@ -367,11 +368,11 @@ export default function DashboardPage() {
                <CardTitle className="text-2xl font-bold">Welcome back, {userName}!</CardTitle>
                <CardDescription>Here's your personalized study dashboard.</CardDescription>
              </div>
-               {/* Data Fetch Status */}
+               {/* Display data fetch status */}
                <div className="text-xs">
-                    {dataFetchSource === 'cache' && <span className="text-blue-600">(Offline Cache)</span>}
+                    {dataFetchSource === 'cache' && <span className="text-blue-600">(Data from Offline Cache)</span>}
                     {dataFetchSource === 'default' && !fetchError && <span className="text-muted-foreground">(Default Data)</span>}
-                    {dataFetchSource === 'error' && fetchError && <span className="text-destructive">({fetchError.length > 50 ? fetchError.substring(0,50) + '...' : fetchError})</span>}
+                    {dataFetchSource === 'error' && fetchError && <span className="text-destructive">(Error Loading)</span>}
                     {dataFetchSource === 'server' && !fetchError && <span className="text-green-600">(Online)</span>}
                </div>
             </div>
@@ -391,11 +392,14 @@ export default function DashboardPage() {
             <BrainCircuit className="mr-2 h-4 w-4"/> AI Tutor Session
           </Button>
           <Button variant="outline" onClick={() => router.push('/textbook-summary')}>
-            <BookOpen className="mr-2 h-4 w-4"/> Textbook Summary
+            <Upload className="mr-2 h-4 w-4"/> Textbook Summary
           </Button>
           <Button variant="outline" onClick={() => router.push('/textbook-explainer')}>
             <MessageSquareQuote className="mr-2 h-4 w-4"/> Textbook Explainer
           </Button>
+           <Button variant="outline" onClick={() => router.push('/quickfind')}>
+             <Search className="mr-2 h-4 w-4"/> QuickFind
+           </Button>
        </CardFooter>
       </Card>
 

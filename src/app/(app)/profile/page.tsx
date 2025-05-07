@@ -18,7 +18,7 @@ import { Loader2, UploadCloud, AlertTriangle } from 'lucide-react';
 import { getSchoolBoards, type SchoolBoard } from '@/services/school-board'; // Assuming this exists
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { UserProfile } from '@/types/user'; // Import UserProfile type
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import AlertTitle
 
 // Max avatar size (e.g., 1MB) - adjust as needed
 const MAX_AVATAR_SIZE = 1 * 1024 * 1024;
@@ -37,10 +37,10 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState(''); // For re-authentication
 
   // Loading and state management
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // For profile data fetching
   const [isSaving, setIsSaving] = useState(false);
   const [schoolBoards, setSchoolBoards] = useState<SchoolBoard[]>([]);
-  const [isLoadingBoards, setIsLoadingBoards] = useState(true);
+  const [isLoadingBoards, setIsLoadingBoards] = useState(true); // For boards list
   const [avatarFile, setAvatarFile] = useState<File | null>(null); // Still track the file for temporary use
   const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
   const [fetchError, setFetchError] = useState<string | null>(null); // Store fetch error
@@ -64,74 +64,80 @@ export default function ProfilePage() {
 
   // Fetch user profile data from Firestore
   useEffect(() => {
-    if (user) {
-      const fetchProfile = async () => {
-        setIsLoading(true);
-        setFetchError(null); // Reset error
-        try {
-            ensureFirebaseInitialized(); // Ensure Firebase is ready
-            const userDocRef = doc(db!, 'users', user.uid);
-            const docSnap = await getDoc(userDocRef);
+      // Wait for auth state to be resolved
+      if (authLoading) {
+           setIsLoading(true); // Keep loading true while auth is resolving
+           return;
+      }
+      // Only fetch if user is loaded and exists
+      if (user) {
+          const fetchProfile = async () => {
+            setIsLoading(true); // Set loading true before fetch starts
+            setFetchError(null); // Reset error
+            try {
+                ensureFirebaseInitialized(); // Ensure Firebase is ready
+                const userDocRef = doc(db!, 'users', user.uid);
+                const docSnap = await getDoc(userDocRef);
 
-            setDataFetchSource(docSnap.metadata.fromCache ? 'cache' : 'server');
-            console.log(`Profile data fetched from ${docSnap.metadata.fromCache ? 'cache' : 'server'}.`);
+                setDataFetchSource(docSnap.metadata.fromCache ? 'cache' : 'server');
+                console.log(`Profile data fetched from ${docSnap.metadata.fromCache ? 'cache' : 'server'}.`);
 
-            if (docSnap.exists()) {
-                const data = docSnap.data() as UserProfile;
-                // Basic validation (can be more thorough)
-                if (data && typeof data.name === 'string' && typeof data.email === 'string') {
-                    setProfile(data);
-                    setName(data.name || user.displayName || '');
-                    // Use avatarUrl from Firestore first, then auth, then fallback
-                    const currentAvatar = data.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
-                    setAvatarDataUrl(currentAvatar); // Set initial avatar display URL/Data URL
-                    setSchoolBoard(data.schoolBoard || 'none'); // Default to 'none' if empty
-                    setGrade(data.grade || 'none'); // Default to 'none' if empty
+                if (docSnap.exists()) {
+                    const data = docSnap.data() as UserProfile;
+                    // Basic validation (can be more thorough)
+                    if (data && typeof data.name === 'string' && typeof data.email === 'string') {
+                        setProfile(data);
+                        setName(data.name || user.displayName || '');
+                        // Use avatarUrl from Firestore first, then auth, then fallback
+                        const currentAvatar = data.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
+                        setAvatarDataUrl(currentAvatar); // Set initial avatar display URL/Data URL
+                        setSchoolBoard(data.schoolBoard || 'none'); // Default to 'none' if empty
+                        setGrade(data.grade || 'none'); // Default to 'none' if empty
+                    } else {
+                        console.warn("Fetched profile data has invalid structure:", data);
+                        setFetchError("Profile data is corrupted. Creating default.");
+                        await createDefaultProfile(userDocRef, user);
+                        setDataFetchSource('default'); // Mark as default data
+                    }
                 } else {
-                    console.warn("Fetched profile data has invalid structure:", data);
-                    setFetchError("Profile data is corrupted. Creating default.");
-                    await createDefaultProfile(userDocRef, user);
-                    setDataFetchSource('default'); // Mark as default data
+                     // Create a default profile if it doesn't exist
+                     console.log("User document not found in Firestore for UID:", user.uid, ". Creating default profile.");
+                     await createDefaultProfile(userDocRef, user);
+                     setDataFetchSource('default');
+                     setFetchError(null); // Clear any previous error if creating default
                 }
-            } else {
-                 // Create a default profile if it doesn't exist
-                 console.log("User document not found in Firestore for UID:", user.uid, ". Creating default profile.");
-                 await createDefaultProfile(userDocRef, user);
-                 setDataFetchSource('default');
-                 setFetchError(null); // Clear any previous error if creating default
+            } catch (error: any) {
+                console.error("Error fetching user profile:", error);
+                 let errorDesc = "Could not load profile data.";
+                 if (error.code === 'unavailable') {
+                     errorDesc = "Network unavailable. Displaying cached or default data if possible.";
+                     setDataFetchSource('error'); // Indicate data might be stale or default
+                 } else if (error.code === 'permission-denied') {
+                     errorDesc = "Permission denied. Could not load profile. Check Firestore rules.";
+                     console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
+                     setDataFetchSource('error');
+                 } else {
+                      setDataFetchSource('error');
+                 }
+                 setFetchError(errorDesc);
+                 toast({ title: "Error Loading Profile", description: errorDesc, variant: "destructive" });
+                 // Attempt to show fallback data even on error
+                 setName(user.displayName || user.email?.split('@')[0] || 'User');
+                 const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
+                 setAvatarDataUrl(fallbackAvatar);
+                 setSchoolBoard('none'); // Default on error
+                 setGrade('none'); // Default on error
+            } finally {
+              setIsLoading(false); // Stop loading after fetch attempt
             }
-        } catch (error: any) {
-            console.error("Error fetching user profile:", error);
-             let errorDesc = "Could not load profile data.";
-             if (error.code === 'unavailable') {
-                 errorDesc = "Network unavailable. Displaying cached or default data if possible.";
-                 setDataFetchSource('error'); // Indicate data might be stale or default
-             } else if (error.code === 'permission-denied') {
-                 errorDesc = "Permission denied. Could not load profile. Check Firestore rules.";
-                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
-                 setDataFetchSource('error');
-             } else {
-                  setDataFetchSource('error');
-             }
-             setFetchError(errorDesc);
-             toast({ title: "Error Loading Profile", description: errorDesc, variant: "destructive" });
-             // Attempt to show fallback data even on error
-             setName(user.displayName || user.email?.split('@')[0] || 'User');
-             const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
-             setAvatarDataUrl(fallbackAvatar);
-             setSchoolBoard('none'); // Default on error
-             setGrade('none'); // Default on error
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchProfile();
-    } else if (!authLoading) {
-        // Handle case where user is null after auth check (should be redirected by layout)
-        setIsLoading(false);
-        setFetchError("User not logged in.");
-    }
-  }, [user, authLoading, toast]); // Added toast dependency
+          };
+          fetchProfile();
+      } else {
+          // Handle case where user is null after auth check
+          setIsLoading(false); // Stop loading if no user
+          setFetchError("User not logged in.");
+      }
+  }, [user, authLoading, toast]); // Depend on user and authLoading
 
 
     // Helper function to create and set the default profile
@@ -361,10 +367,12 @@ export default function ProfilePage() {
   };
 
 
+  // Combine loading states for the main spinner
   if (isLoading || authLoading || isLoadingBoards) {
       return (
           <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
               <Loader2 className="h-16 w-16 animate-spin text-primary" />
+               <p className="ml-3 text-muted-foreground">Loading profile...</p>
           </div>
       );
   }
@@ -376,7 +384,7 @@ export default function ProfilePage() {
               <h1 className="text-3xl font-bold mb-6">My Profile</h1>
                <Alert variant="destructive" className="max-w-md mx-auto">
                  <AlertTriangle className="h-4 w-4" />
-                 <AlertTitle>Error</AlertTitle>
+                 <AlertTitle>{fetchError ? "Error Loading Profile" : "Not Logged In"}</AlertTitle>
                  <AlertDescription>{fetchError || "Please log in to view your profile."}</AlertDescription>
                </Alert>
           </div>
@@ -549,4 +557,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
