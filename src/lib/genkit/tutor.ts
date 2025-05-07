@@ -1,3 +1,4 @@
+
 // No "use server" here
 
 import { z } from 'genkit';
@@ -22,8 +23,8 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
 // Prompt definition
 const tutorPrompt = ai.definePrompt({
-  name: 'tutorPrompt', // Keep a descriptive name
-  model: gemini15Flash, // Explicitly define the model here
+  name: 'tutorPrompt',
+  model: gemini15Flash,
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `
@@ -40,17 +41,17 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
   `,
-  // Specify handlebarsOptions to enable the 'eq' helper AND allow custom helpers
+  // Explicitly define handlebarsOptions
   handlebarsOptions: {
-      knownHelpersOnly: false, // <-- Corrected: Allow custom helpers
-      helpers: {
-         // Define the 'eq' helper required by the template
-         eq: function(a: any, b: any): boolean {
-            // Using String comparison for flexibility
-            return String(a).trim() === String(b).trim();
-         }
-      }
-   },
+    knownHelpersOnly: false, // MUST be false to allow custom helpers
+    helpers: {
+      // Define the 'eq' helper required by the template
+      eq: function (a: any, b: any): boolean {
+        // Using String comparison for flexibility
+        return String(a).trim() === String(b).trim();
+      },
+    },
+  },
   config: {
     temperature: 0.7, // Keep configuration here
   },
@@ -60,62 +61,69 @@ Tutor, provide your response:
 export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput> {
   console.log("runTutorPrompt: Validating input...");
   // Validate input using the Zod schema
-  const validatedInput = AiTutorInputSchema.parse(input); // Zod throws on failure
+  let validatedInput: AiTutorInput;
+  try {
+    validatedInput = AiTutorInputSchema.parse(input); // Zod throws on failure
+  } catch (validationError: any) {
+      console.error("runTutorPrompt: Zod validation failed:", validationError.errors);
+      // Throw a specific validation error
+      throw new Error(`Invalid input for AI Tutor: ${validationError.errors.map((e:any) => e.message).join(', ')}`);
+  }
+
 
   console.log("runTutorPrompt: Input validated. Preparing history...");
   // Basic input handling/normalization
   if (!validatedInput.history || validatedInput.history.length === 0) {
-      console.warn("runTutorPrompt: Received empty history. Providing default initial input.");
-      // Avoid modifying input directly, create a new object if needed or handle default in prompt
-      // For simplicity, let the prompt handle potentially empty history if needed.
+    console.warn("runTutorPrompt: Received empty history. Providing default initial input.");
+    // Let the prompt handle potentially empty history.
   }
 
   // Ensure content exists and roles are correct (redundant if Zod validation is strict, but safe)
-   const cleanedHistory = validatedInput.history.map(msg => ({
-       role: msg.role,
-       content: msg.content?.trim() || '[No content provided]',
-   }));
+  const cleanedHistory = validatedInput.history.map(msg => ({
+    role: msg.role,
+    content: msg.content?.trim() || '[No content provided]',
+  }));
 
-   const inputForPrompt = { history: cleanedHistory };
-
+  const inputForPrompt = { history: cleanedHistory };
 
   console.log("runTutorPrompt: Calling tutor prompt...");
 
   try {
-      // Call the prompt object directly with the validated input
-      const result = await tutorPrompt(inputForPrompt); // Use the prompt defined above
-      const responseText = result?.output?.response;
+    // Call the prompt object directly with the validated input
+    const result = await tutorPrompt(inputForPrompt); // Use the prompt defined above
+    const responseText = result?.output?.response;
 
-      // Validate the output structure and content
-      if (responseText === undefined || typeof responseText !== 'string' || responseText.trim() === '') {
-          console.error("runTutorPrompt: Prompt returned invalid or empty response object:", result);
-          // Return a structured error response
-          return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
-      }
+    // Validate the output structure and content
+    if (responseText === undefined || typeof responseText !== 'string' || responseText.trim() === '') {
+      console.error("runTutorPrompt: Prompt returned invalid or empty response object:", result);
+      // Return a structured error response
+      return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
+    }
 
-      console.log("runTutorPrompt: Response generated successfully.");
-      return { response: responseText }; // Return the validated output object { response: string }
+    console.log("runTutorPrompt: Response generated successfully.");
+    return { response: responseText }; // Return the validated output object { response: string }
 
   } catch (error: any) {
-      console.error(`Error in runTutorPrompt during prompt execution:`, error.message, error.stack, "Input:", JSON.stringify(validatedInput));
+    console.error(`Error in runTutorPrompt during prompt execution:`, error.message, error.stack, "Input:", JSON.stringify(validatedInput));
 
-      // Check if the error is the Handlebars helper issue
-      if (error.message?.includes("unknown helper")) {
-          console.error("runTutorPrompt: Handlebars template error detected:", error.message);
-          // Throw specific error type or message for frontend handling
-           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
-      }
-       // Check for specific error codes or messages from the AI/Genkit
-       if (error.message?.includes("Generation blocked")) {
-          console.error("runTutorPrompt: Generation blocked due to safety settings.");
-          // Return a specific error message or throw
-          return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
-       } else if (error.message?.includes("API key not valid")) {
-           console.error("runTutorPrompt: Invalid API Key detected.");
-           // Return a specific error message or throw
-           return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
-       }
-      // Re-throw other unexpected errors, potentially wrapped
-      throw new Error(`AI Tutor encountered an unexpected error during prompt execution: ${error.message}`);
+    // Check if the error is the Handlebars helper issue SPECIFICALLY
+    if (error.message?.includes("unknown helper")) {
+      console.error("runTutorPrompt: Handlebars template error detected:", error.message);
+      // Throw specific error type or message for frontend handling
+      throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`); // Keep this specific error for template issues
+    }
+    // Check for specific error codes or messages from the AI/Genkit
+    if (error.message?.includes("Generation blocked")) {
+      console.error("runTutorPrompt: Generation blocked due to safety settings.");
+      // Return a specific error message or throw
+      return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
+    } else if (error.message?.includes("API key not valid")) {
+      console.error("runTutorPrompt: Invalid API Key detected.");
+      // Return a specific error message or throw
+      return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
+    }
+    // Re-throw other unexpected errors, potentially wrapped
+    // Make this error distinct from the template error
+    throw new Error(`AI Tutor encountered an unexpected execution error: ${error.message}`);
   }
 }
