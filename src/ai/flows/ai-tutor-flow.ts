@@ -10,6 +10,12 @@
 import {ai} from '@/ai/ai-instance'; // Use the shared AI instance
 import {z} from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Using Gemini 1.5 Flash
+import Handlebars from 'handlebars';
+
+// Register the 'eq' helper globally as requested
+Handlebars.registerHelper('eq', function(a, b) {
+  return a === b;
+});
 
 const AiTutorInputSchema = z.object({
   history: z.array(
@@ -65,7 +71,7 @@ Tutor, provide your response:
     // Ensure helpers object exists within handlebarsOptions, preserving existing helpers
     promptObject.handlebarsOptions.helpers = {
       ...(promptObject.handlebarsOptions.helpers || {}), // Spread existing helpers, or initialize if undefined
-      eq: function (a: string, b: string) { // Define/overwrite the 'eq' helper
+      eq: function (a: string, b: string) { // Define/overwrite the 'eq' helper locally for Genkit
         return a === b;
       },
     };
