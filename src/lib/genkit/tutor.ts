@@ -1,4 +1,3 @@
-
 // No "use server" here
 
 import { z } from 'genkit';
@@ -23,7 +22,7 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
 // Prompt definition
 const tutorPrompt = ai.definePrompt({
-  name: 'tutorPrompt',
+  name: 'tutorPrompt', // Keep consistent name
   model: gemini15Flash,
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
@@ -41,16 +40,15 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
   `,
-  // Explicitly define handlebarsOptions
+  // Ensure handlebarsOptions is correctly defined HERE
   handlebarsOptions: {
-    knownHelpersOnly: false, // MUST be false to allow custom helpers
+    knownHelpersOnly: false, // Explicitly set to false
     helpers: {
       // Define the 'eq' helper required by the template
       eq: function (a: any, b: any): boolean {
-        // Using String comparison for flexibility
-        return String(a).trim() === String(b).trim();
-      },
-    },
+        return String(a) === String(b);
+      }
+    }
   },
   config: {
     temperature: 0.7, // Keep configuration here
@@ -109,19 +107,19 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
     // Check if the error is the Handlebars helper issue SPECIFICALLY
     if (error.message?.includes("unknown helper")) {
       console.error("runTutorPrompt: Handlebars template error detected:", error.message);
-      // Throw specific error type or message for frontend handling
+      // This specific check helps identify if the Handlebars helper issue persists.
+      // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
       throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`); // Keep this specific error for template issues
     }
-    // Check for specific error codes or messages from the AI/Genkit
-    if (error.message?.includes("Generation blocked")) {
-      console.error("runTutorPrompt: Generation blocked due to safety settings.");
-      // Return a specific error message or throw
-      return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
-    } else if (error.message?.includes("API key not valid")) {
-      console.error("runTutorPrompt: Invalid API Key detected.");
-      // Return a specific error message or throw
-      return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
-    }
+     if (error.message?.includes("Generation blocked")) {
+        console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
+        // Return a structured error response for safety blocks
+        return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
+     } else if (error.message?.includes("API key not valid")) {
+         console.error("AI Tutor Flow: Invalid API Key detected.");
+         // Return a structured error response for API key issues
+         return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
+     }
     // Re-throw other unexpected errors, potentially wrapped
     // Make this error distinct from the template error
     throw new Error(`AI Tutor encountered an unexpected execution error: ${error.message}`);
