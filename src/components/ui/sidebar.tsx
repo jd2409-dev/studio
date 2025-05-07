@@ -1,16 +1,17 @@
+
 'use client'; // Corrected directive
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Search } from "lucide-react"; // Added Search
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button"; // Import buttonVariants
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"; // Added SheetTitle
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -239,7 +240,7 @@ const Sidebar = React.forwardRef<
             // Removed inline style overriding CSS variable
           >
             {/* Added a visually hidden title for accessibility */}
-             <h2 className="sr-only">Sidebar Navigation</h2>
+             <SheetTitle className="sr-only">Sidebar Navigation</SheetTitle>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>
@@ -408,7 +409,7 @@ const SidebarInput = React.forwardRef<
         />
          {/* Optional: Add a search icon when collapsed */}
          <Button variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-data-[collapsible=icon]:inline-flex h-8 w-8" aria-label="Search">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <Search className="h-4 w-4" /> {/* Use Lucide Search icon */}
          </Button>
     </div>
   );
@@ -580,7 +581,7 @@ const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-   "peer/menu-button flex w-full items-center justify-start gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-offset-background transition-[width,height,padding,color,background-color] duration-150 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-sidebar-accent/80 active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-primary data-[active=true]:font-medium data-[active=true]:text-sidebar-primary-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0", // Removed class hiding text on collapse
+   "peer/menu-button flex w-full items-center justify-start gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-offset-background transition-[width,height,padding,color,background-color] duration-150 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-sidebar-accent/80 active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-primary data-[active=true]:font-medium data-[active=true]:text-sidebar-primary-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-4 [&>svg]:shrink-0", // Ensure text span is hidden on icon collapse
   {
     variants: {
       variant: {
@@ -633,7 +634,7 @@ const SidebarMenuButton = React.forwardRef<
     const Comp = asChild ? Slot : "button";
     const { isMobile, state } = useSidebar();
 
-    const buttonElement = ( // Renamed from buttonContent
+    const buttonElement = (
       <Comp
         ref={ref}
         data-sidebar="menu-button"
@@ -866,3 +867,4 @@ export {
   SidebarTrigger,
   useSidebar,
 };
+
