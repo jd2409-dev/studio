@@ -12,8 +12,29 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-// It's generally more reliable to define helpers within promptObject.handlebarsOptions.helpers
-// rather than relying on global Handlebars registration for Genkit prompts.
+import Handlebars from 'handlebars'; // Keep Handlebars import for potential global registration
+
+// Global helper registration (Attempting this route as customize isn't consistently working)
+Handlebars.registerHelper('eq', function(a, b) {
+    return a === b;
+});
+// Add other global helpers if needed for other flows, e.g., for quiz reflection
+Handlebars.registerHelper("sum", function(a, b) {
+  const numA = typeof a === 'number' ? a : 0;
+  const numB = typeof b === 'number' ? b : 0;
+  return numA + numB;
+});
+Handlebars.registerHelper("join", function(arr, sep) {
+    return Array.isArray(arr) ? arr.join(sep) : '';
+});
+Handlebars.registerHelper("isCorrect", function(userAnswer, correctAnswer) {
+  if (userAnswer === undefined || userAnswer === null) return false;
+  return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+});
+Handlebars.registerHelper("lookup", function(arr, index) {
+   return Array.isArray(arr) && index >= 0 && index < arr.length ? arr[index] : 'Not Answered';
+});
+
 
 // Define the schema for a single message in the history
 const MessageSchema = z.object({
@@ -62,26 +83,27 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
 `,
-  customize: (promptObject) => {
-    // Ensure handlebarsOptions exists
-    if (!promptObject.handlebarsOptions) {
-        promptObject.handlebarsOptions = {};
-    }
-    // Ensure helpers object exists
-    if (!promptObject.handlebarsOptions.helpers) {
-        promptObject.handlebarsOptions.helpers = {};
-    }
-    // Define the 'eq' helper directly within this prompt's Handlebars options
-    promptObject.handlebarsOptions.helpers = {
-        ...promptObject.handlebarsOptions.helpers,
-        eq: function(a: any, b: any) {
-            return a === b;
-        },
-    };
-    // Crucially, also ensure knownHelpersOnly is false to allow built-in helpers (#if, #each) AND this custom 'eq' helper.
-    promptObject.handlebarsOptions.knownHelpersOnly = false; // Explicitly set to false
-    return promptObject;
-  },
+ // REMOVED customize block: Let's rely on global helper registration or default behavior.
+  // customize: (promptObject) => {
+  //   // Ensure handlebarsOptions exists
+  //   if (!promptObject.handlebarsOptions) {
+  //       promptObject.handlebarsOptions = {};
+  //   }
+  //   // Ensure helpers object exists
+  //   if (!promptObject.handlebarsOptions.helpers) {
+  //       promptObject.handlebarsOptions.helpers = {};
+  //   }
+  //   // Define the 'eq' helper directly within this prompt's Handlebars options
+  //   promptObject.handlebarsOptions.helpers = {
+  //       ...promptObject.handlebarsOptions.helpers,
+  //       eq: function(a: any, b: any) {
+  //           return a === b;
+  //       },
+  //   };
+  //   // Crucially, also ensure knownHelpersOnly is false to allow built-in helpers (#if, #each) AND this custom 'eq' helper.
+  //   promptObject.handlebarsOptions.knownHelpersOnly = false; // Explicitly set to false
+  //   return promptObject;
+  // },
   config: {
     temperature: 0.7,
   },
