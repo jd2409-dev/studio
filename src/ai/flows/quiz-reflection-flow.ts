@@ -12,7 +12,7 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-import type { QuizQuestion, QuizResult } from '@/types/user'; 
+import type { QuizQuestion, QuizResult } from '@/types/user';
 
 const QuizReflectionInputSchema = z.object({
   questions: z.array(
@@ -23,7 +23,7 @@ const QuizReflectionInputSchema = z.object({
       correctAnswer: z.string(),
     })
   ).min(1, { message: "Quiz must have at least one question."}),
-  userAnswers: z.array(z.string().optional()), 
+  userAnswers: z.array(z.string().optional()),
   score: z.number(),
   totalQuestions: z.number().min(1),
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
@@ -84,7 +84,7 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below. If 
       }
       promptObject.handlebarsOptions.helpers = {
           ...(promptObject.handlebarsOptions.helpers || {}),
-          sum: (a: number, b: number) => { 
+          sum: (a: number, b: number) => {
               const numA = typeof a === 'number' ? a : 0;
               const numB = typeof b === 'number' ? b : 0;
               return numA + numB;
@@ -96,6 +96,7 @@ Based ONLY on the incorrect answers, provide feedback and suggestions below. If 
           },
           lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered'
       };
+      // Explicitly set knownHelpersOnly to false to allow custom helpers
       promptObject.handlebarsOptions.knownHelpersOnly = false;
       return promptObject;
   },
@@ -115,7 +116,7 @@ const quizReflectionFlow = ai.defineFlow(
     try {
         const incorrectAnswersExist = input.questions.some((q, index) => {
             const userAnswer = input.userAnswers[index];
-            if (userAnswer === undefined || userAnswer === null) return true; 
+            if (userAnswer === undefined || userAnswer === null) return true;
             return String(userAnswer).trim().toLowerCase() !== String(q.correctAnswer).trim().toLowerCase();
         });
 
@@ -142,4 +143,3 @@ const quizReflectionFlow = ai.defineFlow(
     }
   }
 );
-

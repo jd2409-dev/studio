@@ -27,7 +27,7 @@ const GenerateQuizInputSchema = z.object({
     .max(20)
     .default(5)
     .describe('The number of questions to generate for the quiz.'),
-  difficulty: DifficultyLevelSchema.default('medium'), 
+  difficulty: DifficultyLevelSchema.default('medium'),
   grade: z.string().optional().describe('The target grade level for the quiz (e.g., "9", "12").'),
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
@@ -55,12 +55,12 @@ export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQu
 
 const prompt = ai.definePrompt({
   name: 'generateQuizPrompt',
-  model: gemini15Flash, 
+  model: gemini15Flash,
   input: {
     schema: GenerateQuizInputSchema,
   },
   output: {
-    schema: GenerateQuizOutputSchema, 
+    schema: GenerateQuizOutputSchema,
   },
   prompt: `You are an AI quiz generator that creates quizzes from textbook content.
 
@@ -82,6 +82,7 @@ const prompt = ai.definePrompt({
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -99,7 +100,7 @@ const generateQuizFlow = ai.defineFlow(
   async input => {
     try {
         const {output} = await prompt(input);
-        
+
         if (!output || !output.quiz || output.quiz.length === 0) {
             console.error("Quiz generation failed: No output or empty quiz array received from AI model. Input:", JSON.stringify(input));
             throw new Error("Quiz generation failed: The AI model did not return any questions.");
@@ -119,7 +120,7 @@ const generateQuizFlow = ai.defineFlow(
                  throw new Error(`Generated multiple-choice question #${index + 1}'s correct answer is not among the options.`);
              }
         });
-        
+
         // Attempt to parse with output schema again to catch inconsistencies post-generation (though definePrompt should handle this)
         try {
             return GenerateQuizOutputSchema.parse(output);
@@ -138,4 +139,3 @@ const generateQuizFlow = ai.defineFlow(
     }
   }
 );
-

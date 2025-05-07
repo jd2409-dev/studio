@@ -12,7 +12,7 @@
 
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; 
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const ExplainTextbookPdfInputSchema = z.object({
   fileDataUri: z
@@ -37,7 +37,7 @@ export async function explainTextbookPdf(input: ExplainTextbookPdfInput): Promis
 
 const prompt = ai.definePrompt({
   name: 'explainTextbookPdfPrompt',
-  model: gemini15Flash, 
+  model: gemini15Flash,
   input: { schema: ExplainTextbookPdfInputSchema },
   output: { schema: ExplainTextbookPdfOutputSchema },
   prompt: `You are an expert AI tutor specializing in explaining complex textbook content clearly and concisely.
@@ -56,6 +56,7 @@ Generate the outputs based solely on the information present in the PDF. If the 
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -97,4 +98,3 @@ const explainTextbookPdfFlow = ai.defineFlow(
     }
   }
 );
-

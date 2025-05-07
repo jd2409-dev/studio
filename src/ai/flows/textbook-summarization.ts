@@ -12,7 +12,7 @@
 
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; 
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const GenerateTextbookSummaryInputSchema = z.object({
   fileDataUri: z
@@ -46,7 +46,7 @@ const PromptOutputSchema = z.object({
 const imagePrompt = ai.definePrompt({
   name: 'generateSummaryFromImagePrompt',
   model: gemini15Flash,
-  input: { schema: z.object({ fileDataUri: z.string() }) }, 
+  input: { schema: z.object({ fileDataUri: z.string() }) },
   output: { schema: PromptOutputSchema },
   prompt: `You are an AI assistant that helps students understand textbooks better by analyzing images of pages.
 
@@ -62,6 +62,7 @@ Generate the outputs based *only* on the content visible in the image.`,
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -73,7 +74,7 @@ Generate the outputs based *only* on the content visible in the image.`,
 const textPrompt = ai.definePrompt({
   name: 'generateSummaryFromTextPrompt',
   model: gemini15Flash,
-  input: { schema: z.object({ fileDataUri: z.string() }) }, 
+  input: { schema: z.object({ fileDataUri: z.string() }) },
   output: { schema: PromptOutputSchema },
   prompt: `You are an AI assistant that helps students understand text content better. The following content was extracted from a file.
 
@@ -90,6 +91,7 @@ Generate the outputs based *only* on the provided content.`,
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
+    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -108,11 +110,11 @@ const generateTextbookSummaryFlow = ai.defineFlow(
   async (input) => {
     const { fileDataUri, fileType } = input;
 
-    console.log(`Textbook Summary Flow: Received file of type: ${fileType}`); 
+    console.log(`Textbook Summary Flow: Received file of type: ${fileType}`);
 
     try {
         let promptToUse;
-        let promptInput = { fileDataUri }; 
+        let promptInput = { fileDataUri };
 
         if (fileType.startsWith('image/')) {
             console.log("Textbook Summary Flow: Using image prompt.");
@@ -144,4 +146,3 @@ const generateTextbookSummaryFlow = ai.defineFlow(
     }
   }
 );
-
