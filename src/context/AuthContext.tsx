@@ -1,10 +1,11 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, firebaseInitializationError, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import error status and helper
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react'; // Import AlertTriangle
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
 
 interface AuthContextType {
@@ -19,6 +20,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true); // Start as loading
   const [error, setError] = useState<Error | null>(firebaseInitializationError); // Initialize with potential init error
+
+  // Memoize the context value unconditionally at the top
+  const contextValue = useMemo(() => ({ user, loading, authError: error }), [user, loading, error]);
 
   useEffect(() => {
     // If there was an initialization error, stop loading and don't set up listener
@@ -120,9 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
     }
 
-
-  // Memoize the context value to prevent unnecessary re-renders
-   const contextValue = useMemo(() => ({ user, loading, authError: error }), [user, loading, error]);
 
   // Render children only if loading is complete and there's no error
   console.log("Auth Provider: Loading complete, no critical errors. Rendering children. User authenticated:", !!user);
