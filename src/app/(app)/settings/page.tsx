@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -103,7 +104,11 @@ export default function SettingsPage() {
                  errorDesc = "Network error fetching settings. Using defaults.";
            }
           setFetchError(errorDesc);
-          toast({ title: "Error Loading Settings", description: errorDesc, variant = "destructive" });
+          toast({
+              title: "Error Loading Settings",
+              description: errorDesc,
+              variant: "destructive" // Corrected syntax: colon instead of equals
+          });
           // Fallback to defaults on error
           setPreferences(defaultPreferences);
           applyDarkMode(defaultPreferences.darkMode); // Apply default dark mode on error
@@ -136,7 +141,7 @@ export default function SettingsPage() {
 
   const handleSaveChanges = async () => {
       if (!user) {
-          toast({ title: "Authentication Required", description: "You must be logged in to save settings.", variant = "destructive" });
+          toast({ title: "Authentication Required", description: "You must be logged in to save settings.", variant: "destructive" });
           return;
       }
       setIsSaving(true);
@@ -154,7 +159,7 @@ export default function SettingsPage() {
          } else if (error.code === 'unavailable') {
               errorDesc = "Network error saving settings. Changes might not be saved.";
          }
-          toast({ title: "Save Failed", description: errorDesc, variant = "destructive" });
+          toast({ title: "Save Failed", description: errorDesc, variant: "destructive" });
       } finally {
           setIsSaving(false);
       }
