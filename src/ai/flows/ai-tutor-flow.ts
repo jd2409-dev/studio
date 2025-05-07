@@ -10,7 +10,6 @@
 import {ai} from '@/ai/ai-instance'; // Use the shared AI instance
 import {z} from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai'; // Using Gemini 1.5 Flash
-// Removed import of Handlebars and global registration as it's handled in `customize`
 
 const AiTutorInputSchema = z.object({
   history: z.array(
