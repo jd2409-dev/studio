@@ -109,12 +109,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu className="space-y-1">
              {/* Main Features */}
              <SidebarMenuItem>
-                 <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                   <Link href="/">
-                     <Home />
-                     <span className="ml-2">Dashboard</span>
-                   </Link>
-                 </SidebarMenuButton>
+               <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+                 <Link href="/">
+                   <Home />
+                   <span className="ml-2">Dashboard</span>
+                 </Link>
+               </SidebarMenuButton>
              </SidebarMenuItem>
              <SidebarMenuItem>
                <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'} tooltip="Textbook Summary">
@@ -126,10 +126,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
              </SidebarMenuItem>
               <SidebarMenuItem>
                  <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
-                     <Link href="/textbook-explainer">
-                        <MessageSquareQuote />
-                        <span className="ml-2">Textbook Explainer</span>
-                     </Link>
+                   <Link href="/textbook-explainer">
+                      <MessageSquareQuote />
+                      <span className="ml-2">Textbook Explainer</span>
+                   </Link>
                  </SidebarMenuButton>
               </SidebarMenuItem>
              <SidebarMenuItem>
