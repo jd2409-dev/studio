@@ -53,10 +53,10 @@ PDF Content:
 
 Generate the outputs based solely on the information present in the PDF. If the PDF content is too short, unclear, or seems to be non-academic (e.g., random images, unrelated text), state that you cannot provide a meaningful explanation for the given document.`,
   customize: (promptObject) => {
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
-    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -78,14 +78,14 @@ const explainTextbookPdfFlow = ai.defineFlow(
         const { output } = await prompt(input);
 
         if (!output || !output.textExplanation || !output.audioExplanationScript || !output.mindMapExplanation) {
-            console.error("Textbook Explainer Flow: Explanation generation failed - incomplete output from AI model. Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
+            console.error("Textbook Explainer Flow: Explanation generation failed - incomplete output from AI model. Output:", JSON.stringify(output), "Input (URI length):", input.fileDataUri.length);
             throw new Error("Explanation generation failed: The AI model did not return all required explanation components.");
         }
         console.log(`Textbook Explainer Flow: Explanation generated successfully.`);
         return output;
 
     } catch (error: any) {
-        console.error(`Error in explainTextbookPdfFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
+        console.error(`Error in explainTextbookPdfFlow:`, error.message, error.stack, "Input (URI length):", input.fileDataUri.length);
 
         if (error.message?.includes('Generation blocked') || error.message?.includes('SAFETY')) {
              console.error("Textbook Explainer Flow: Explanation generation blocked due to safety settings or potentially harmful content.");

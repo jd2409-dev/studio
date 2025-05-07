@@ -1,4 +1,5 @@
-'use strict';
+
+'use server';
 
 /**
  * @fileOverview AI Tutor for NexusLearn AI.
@@ -12,6 +13,13 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
+import Handlebars from 'handlebars'; // Import Handlebars
+
+// Register the 'eq' helper globally for Handlebars used within this flow
+Handlebars.registerHelper('eq', function(a, b) {
+  return a === b;
+});
+
 
 // Define the schema for a single message in the history
 const MessageSchema = z.object({
@@ -37,21 +45,15 @@ const tutorPrompt = ai.definePrompt({
   model: gemini15Flash, // Ensure a model is specified here
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
-  customize: (promptObject) => {
-    if (!promptObject.handlebarsOptions) {
-        promptObject.handlebarsOptions = {};
-    }
-    if (!promptObject.handlebarsOptions.helpers) {
-        promptObject.handlebarsOptions.helpers = {};
-    }
-    promptObject.handlebarsOptions.helpers = {
-      ...(promptObject.handlebarsOptions.helpers || {}),
-      eq: (a: string, b: string) => a === b, // Keep the helper definition
-    };
-    // Explicitly set knownHelpersOnly to false to allow custom helpers. This is critical.
-    promptObject.handlebarsOptions.knownHelpersOnly = false;
-    return promptObject;
-  },
+  // No customize needed if Handlebars helpers are registered globally before prompt definition
+  // customize: (promptObject) => {
+  //   // Explicitly set knownHelpersOnly to false - *THIS IS THE FIX*
+  //   if (!promptObject.handlebarsOptions) {
+  //       promptObject.handlebarsOptions = {};
+  //   }
+  //   promptObject.handlebarsOptions.knownHelpersOnly = false;
+  //   return promptObject;
+  // },
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
 Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
@@ -91,16 +93,28 @@ const aiTutorFlow = ai.defineFlow(
         console.log("AI Tutor Flow: Last user message:", input.history[input.history.length-1].content);
     }
     
-    // Call the prompt object directly
-    const { output } = await tutorPrompt(input); 
+    try {
+      // Call the prompt object directly
+      const { output } = await tutorPrompt(input);
 
-    // Ensure output is not null or undefined before returning
-    if (!output || !output.response) { // Check for output.response specifically
-      console.error("AI Tutor generation failed: No response text received from the AI model. Input:", JSON.stringify(input));
-      throw new Error("AI Tutor generation failed: No output received from the AI model.");
+      // Ensure output is not null or undefined before returning
+      // Also check specifically for output.response
+      if (!output || typeof output.response !== 'string') {
+        console.error("AI Tutor generation failed: Invalid or missing response text received from the AI model. Output:", output, "Input:", JSON.stringify(input));
+        throw new Error("AI Tutor generation failed: No valid response received from the AI model.");
+      }
+      console.log("AI Tutor Flow: Response generated - ", output.response.substring(0, 100) + "...");
+      return output;
+
+    } catch (error: any) {
+      console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
+      // Check if the error message indicates a knownHelpersOnly issue, though the config should prevent it
+      if (error.message?.includes("unknown helper")) {
+          throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
+      }
+      // For other errors, re-throw a more generic error message
+      throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
-    console.log("AI Tutor Flow: Response generated - ", output.response.substring(0, 100) + "...");
-    return output;
   }
 );
 
@@ -116,8 +130,8 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
         if (error instanceof z.ZodError) {
             throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
         }
-        // For errors from the flow itself, we'll let them propagate or re-wrap them
-        // The flow already throws a new Error with a message like "AI Tutor encountered an error: ..."
-        throw error; 
+        // For errors from the flow itself, use the error message it throws
+        // The flow already throws a new Error with a message like "AI Tutor encountered an error: ..." or others
+        throw error;
     }
 }

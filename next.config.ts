@@ -4,9 +4,15 @@ import type {NextConfig} from 'next';
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
+    // !! WARN !!
+    // Dangerously allow production builds to successfully complete even if
+    // your project has type errors.
+    // !! WARN !!
     ignoreBuildErrors: true,
   },
   eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
   images: {
@@ -25,14 +31,27 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Prevent Node.js specific modules like 'async_hooks' from being bundled for the client
-      config.resolve.fallback = {
-        ...(config.resolve.fallback || {}), // Ensure fallback object exists before spreading
-        async_hooks: false, // Tell Webpack to ignore 'async_hooks' on the client
-      };
+  webpack: (config, { isServer, webpack }) => {
+    // Ensure resolve.fallback exists
+    if (!config.resolve) {
+      config.resolve = {};
     }
+    config.resolve.fallback = {
+      ...(config.resolve.fallback || {}), // Spread existing fallbacks
+    };
+
+    // Exclude 'async_hooks' from being bundled for the browser
+    if (!isServer) {
+      config.resolve.fallback.async_hooks = false;
+    }
+
+    // Optional: Ignore warnings about Critical dependency: the request of a dependency is an expression
+    // This can sometimes hide genuine issues, use with caution.
+    // config.ignoreWarnings = [
+    //   ...(config.ignoreWarnings || []),
+    //   /Critical dependency: the request of a dependency is an expression/,
+    // ];
+
     // Important: return the modified config
     return config;
   },

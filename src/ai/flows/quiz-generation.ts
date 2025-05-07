@@ -79,10 +79,10 @@ const prompt = ai.definePrompt({
   Textbook Content: {{{textbookContent}}}
   `,
   customize: (promptObject) => {
+    // Explicitly set knownHelpersOnly to false to allow custom helpers like 'if'
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
-    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },

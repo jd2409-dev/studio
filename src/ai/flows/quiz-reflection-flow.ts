@@ -13,6 +13,24 @@ import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
 import type { QuizQuestion, QuizResult } from '@/types/user';
+import Handlebars from 'handlebars'; // Import Handlebars
+
+// Register helpers globally for this flow
+Handlebars.registerHelper("sum", function(a, b) {
+  const numA = typeof a === 'number' ? a : 0;
+  const numB = typeof b === 'number' ? b : 0;
+  return numA + numB;
+});
+Handlebars.registerHelper("join", function(arr, sep) {
+    return Array.isArray(arr) ? arr.join(sep) : '';
+});
+Handlebars.registerHelper("isCorrect", function(userAnswer, correctAnswer) {
+  if (userAnswer === undefined || userAnswer === null) return false;
+  return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+});
+Handlebars.registerHelper("lookup", function(arr, index) {
+   return Array.isArray(arr) && index >= 0 && index < arr.length ? arr[index] : 'Not Answered';
+});
 
 const QuizReflectionInputSchema = z.object({
   questions: z.array(
@@ -75,31 +93,15 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 
 Based ONLY on the incorrect answers, provide feedback and suggestions below. If all answers are correct, provide a congratulatory message.
 `,
-  customize: (promptObject) => {
-      if (!promptObject.handlebarsOptions) {
-          promptObject.handlebarsOptions = {};
-      }
-      if (!promptObject.handlebarsOptions.helpers) {
-          promptObject.handlebarsOptions.helpers = {};
-      }
-      promptObject.handlebarsOptions.helpers = {
-          ...(promptObject.handlebarsOptions.helpers || {}),
-          sum: (a: number, b: number) => {
-              const numA = typeof a === 'number' ? a : 0;
-              const numB = typeof b === 'number' ? b : 0;
-              return numA + numB;
-          },
-          join: (arr: string[] | undefined, sep: string) => arr?.join(sep) ?? '',
-          isCorrect: (userAnswer: string | undefined, correctAnswer: string) => {
-              if (userAnswer === undefined || userAnswer === null) return false;
-              return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
-          },
-          lookup: (arr: any[] | undefined, index: number) => arr?.[index] ?? 'Not Answered'
-      };
-      // Explicitly set knownHelpersOnly to false to allow custom helpers
-      promptObject.handlebarsOptions.knownHelpersOnly = false;
-      return promptObject;
-  },
+  // No customize needed as helpers are registered globally
+  // customize: (promptObject) => {
+  //     // Explicitly set knownHelpersOnly to false
+  //     if (!promptObject.handlebarsOptions) {
+  //         promptObject.handlebarsOptions = {};
+  //     }
+  //     promptObject.handlebarsOptions.knownHelpersOnly = false;
+  //     return promptObject;
+  // },
   config: {
     temperature: 0.7,
   }
@@ -125,6 +127,7 @@ const quizReflectionFlow = ai.defineFlow(
             return { feedback: "Great job! You answered all questions correctly. Keep up the excellent work!" };
         }
 
+        // Call the prompt - model will handle the logic based on the template
         const { output } = await prompt(input);
 
         if (!output || !output.feedback) {
@@ -138,6 +141,10 @@ const quizReflectionFlow = ai.defineFlow(
         console.error("Error in quizReflectionFlow:", error.message, error.stack, "Input:", JSON.stringify(input));
         if (error.message.includes("No feedback received")) {
             throw error;
+        }
+        // Check for Handlebars helper error specifically
+        if (error.message?.includes("unknown helper")) {
+             throw new Error(`Quiz reflection internal template error: ${error.message}. Please report this issue.`);
         }
         throw new Error(`Quiz reflection encountered an unexpected error: ${error.message}`);
     }

@@ -59,10 +59,10 @@ Textbook Page Image: {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the content visible in the image.`,
   customize: (promptObject) => {
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
-    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -88,10 +88,10 @@ File Content:
 
 Generate the outputs based *only* on the provided content.`,
   customize: (promptObject) => {
-    if (!promptObject.handlebarsOptions) {
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
+     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
-    // Explicitly set knownHelpersOnly to false to allow custom helpers
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },
@@ -116,16 +116,21 @@ const generateTextbookSummaryFlow = ai.defineFlow(
         let promptToUse;
         let promptInput = { fileDataUri };
 
-        if (fileType.startsWith('image/')) {
-            console.log("Textbook Summary Flow: Using image prompt.");
-            promptToUse = imagePrompt;
-        } else if (fileType === 'application/pdf' || fileType === 'text/plain' || fileType === 'application/msword' || fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            console.log("Textbook Summary Flow: Using text-based file prompt.");
-            promptToUse = textPrompt;
-        } else {
-            console.warn(`Textbook Summary Flow: Unsupported file type: ${fileType}`);
-            throw new Error(`File type "${fileType}" is currently not supported for summarization. Please use an image, PDF, TXT, or DOCX file.`);
-        }
+        // Check if the file type is image-based
+         if (fileType.startsWith('image/')) {
+             console.log("Textbook Summary Flow: Using image prompt.");
+             promptToUse = imagePrompt;
+         }
+         // Check if the file type is text-based (PDF, TXT, DOC, DOCX)
+         else if (['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(fileType)) {
+             console.log("Textbook Summary Flow: Using text-based file prompt.");
+             promptToUse = textPrompt;
+         }
+         // Handle unsupported types
+         else {
+             console.warn(`Textbook Summary Flow: Unsupported file type: ${fileType}`);
+             throw new Error(`File type "${fileType}" is currently not supported for summarization. Please use an image, PDF, TXT, or DOCX file.`);
+         }
 
         const { output } = await promptToUse(promptInput);
 
@@ -137,11 +142,15 @@ const generateTextbookSummaryFlow = ai.defineFlow(
         return output;
 
     } catch (error: any) {
-        console.error(`Error in generateTextbookSummaryFlow for type ${fileType}:`, error.message, error.stack, "Input:", JSON.stringify(input));
+        console.error(`Error in generateTextbookSummaryFlow for type ${fileType}:`, error.message, error.stack, "Input (URI length):", input.fileDataUri.length);
         // Re-throw with a potentially more user-friendly message, or keep original if specific
         if (error.message.includes("not supported for summarization")) {
             throw error;
         }
+         if (error.message?.includes('Generation blocked') || error.message?.includes('SAFETY')) {
+              console.error("Textbook Summary Flow: Summary generation blocked due to safety settings.");
+              throw new Error("Summary generation was blocked, possibly due to safety filters or the content of the file.");
+         }
         throw new Error(`Failed to generate textbook summary: ${error.message}`);
     }
   }
