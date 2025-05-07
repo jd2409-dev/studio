@@ -28,13 +28,13 @@ const MessageSchema = z.object({
 });
 
 // Define the input schema for the AI Tutor flow
-const AiTutorInputSchema = z.object({
+export const AiTutorInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
 // Define the output schema for the AI Tutor flow
-const AiTutorOutputSchema = z.object({
+export const AiTutorOutputSchema = z.object({
   response: z.string().describe('The AI tutor\'s response to the user.'),
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
@@ -48,7 +48,9 @@ const tutorPrompt = ai.definePrompt({
   prompt: `You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor.
 Your primary goal is to assist students in understanding academic concepts, answering their questions with clarity, and guiding them effectively in their studies.
 Your knowledge base is comprehensive, covering all standard K-12 and undergraduate subjects including Mathematics, Physics, Chemistry, Biology, History, Literature, Computer Science, Economics, and more.
-If a question is outside an academic context, politely steer the conversation back to educational topics.
+
+Strive to answer all student questions comprehensively, drawing connections to academic subjects whenever relevant. 
+If a question is genuinely and completely unrelated to educational topics or seeks inappropriate content, politely decline to answer that specific query and offer to help with academic subjects instead.
 If a question is unclear or ambiguous, ask for clarification before attempting to answer.
 Utilize the provided conversation history to maintain context and provide relevant follow-up responses.
 Aim for comprehensive yet easy-to-understand explanations. Use examples, analogies, or step-by-step breakdowns where appropriate.
