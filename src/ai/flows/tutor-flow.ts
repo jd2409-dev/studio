@@ -1,3 +1,4 @@
+
 // No "use server" here
 /**
  * @fileOverview Defines the Genkit flow, schemas, and prompt for the AI Tutor feature.
@@ -7,7 +8,7 @@
 import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance';
 import Handlebars from 'handlebars';
 
-// Register Handlebars helper (this needs to be done once, maybe move to a central setup file if used elsewhere)
+// Register Handlebars helper (this needs to be done once)
 // Ensure this runs before any prompt using 'eq' is defined or used.
 Handlebars.registerHelper('eq', function(a, b) {
   // console.log(`Handlebars eq: comparing ${typeof a}"${a}" and ${typeof b}"${b}"`);
@@ -38,7 +39,7 @@ export const tutorPrompt = ai.definePrompt({
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `
-You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor. Your goal is to help students understand academic concepts and guide them through learning processes. Use the provided conversation history for context. If the user asks non-academic questions, politely steer the conversation back to educational topics. If a question is unclear, ask for clarification. Avoid giving direct answers to homework/tests; instead, guide the student towards the answer. Use examples and analogies. Maintain a supportive and motivational tone.
+You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor. Your goal is to help students understand academic concepts and guide them through learning processes. Use the provided conversation history for context. If the user asks non-academic questions, politely steer the conversation back to educational topics. If a question is unclear, ask for clarification. Avoid giving direct answers to homework/tests; instead, guide the student towards the answer. Use examples and analogies. Maintain a supportive and motivational tone. Address any question the user asks, even if non-academic, but always gently try to guide back to learning if the conversation strays too far.
 
 Conversation History:
 {{#each history}}
@@ -54,7 +55,7 @@ Unknown: {{{content}}}
 Tutor, provide your response:
   `,
    handlebarsOptions: {
-      // knownHelpersOnly: false, // Setting to false allows unregistered helpers
+      knownHelpersOnly: false, // Explicitly allow unregistered helpers
       // helpers are now registered globally via Handlebars.registerHelper
    },
   config: {
@@ -87,7 +88,7 @@ export const aiTutorFlow = ai.defineFlow(
     console.log("AI Tutor Flow: Normalized input. Calling prompt...");
 
     try {
-        const result = await tutorPrompt(input);
+        const result = await tutorPrompt(input); // Changed from prompt to tutorPrompt
         const output = result?.output; // Use optional chaining
 
         // Validate the output structure and content
@@ -100,25 +101,22 @@ export const aiTutorFlow = ai.defineFlow(
         console.log("AI Tutor Flow: Response generated successfully.");
         return output; // Return the validated output object { response: string }
 
-    } catch (err: any) {
-        // Catch errors during prompt execution (e.g., API errors, safety blocks)
-        console.error("AI Tutor Flow: Error during tutorPrompt execution:", err.message, err.stack);
-        // Provide more specific user-facing messages based on error type if possible
-        if (err.message?.includes("Generation blocked")) {
-           console.error("AI Tutor Flow: Generation blocked due to safety settings.");
-           return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
-        } else if (err.message?.includes("API key not valid")) {
-            console.error("AI Tutor Flow: Invalid API Key detected during prompt execution.");
-            return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
-        } else if (err.message?.includes("unknown helper")) {
-             // This specific check helps identify if the Handlebars helper issue persists.
-             // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
-             console.error("AI Tutor Flow: Handlebars template error detected:", err.message);
-             return { response: "Sorry, an internal error occurred while preparing the response. Please try again." };
-        }
-        // Fallback to the generic error message for other unexpected issues
-        return { response: "Sorry, something went wrong while generating your answer. Please try again shortly." };
+    } catch (error: any) {
+      console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
+      if (error.message?.includes("unknown helper")) {
+          // This specific check helps identify if the Handlebars helper issue persists.
+          // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
+          throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
+      }
+       if (error.message?.includes("Generation blocked")) {
+          console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
+          return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
+       } else if (error.message?.includes("API key not valid")) {
+           console.error("AI Tutor Flow: Invalid API Key detected during prompt execution.");
+           return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
+       }
+      // Fallback for other unexpected errors
+      throw new Error(`AI Tutor encountered an error: ${error.message}`);
     }
   }
 );
-```
