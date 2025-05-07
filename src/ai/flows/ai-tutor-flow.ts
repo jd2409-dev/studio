@@ -58,17 +58,14 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
-    // Ensure handlebarsOptions and its helpers property exist
+    // Ensure handlebarsOptions exists
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
-    if (!promptObject.handlebarsOptions.helpers) {
-        promptObject.handlebarsOptions.helpers = {};
-    }
-    // Add/overwrite the 'eq' helper
+    // Ensure helpers object exists within handlebarsOptions, preserving existing helpers
     promptObject.handlebarsOptions.helpers = {
-      ...(promptObject.handlebarsOptions.helpers), // Spread existing helpers first
-      eq: function (a: string, b: string) { // Define 'eq' helper
+      ...(promptObject.handlebarsOptions.helpers || {}), // Spread existing helpers, or initialize if undefined
+      eq: function (a: string, b: string) { // Define/overwrite the 'eq' helper
         return a === b;
       },
     };
@@ -114,4 +111,3 @@ const aiTutorFlow = ai.defineFlow(
     }
   }
 );
-
