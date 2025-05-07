@@ -9,8 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 // Import the action function
 import { getTutorResponse } from '@/app/ai-tutor/actions';
-// Import types directly from the flow definition file
-import type { AiTutorInput, AiTutorOutput } from '@/ai/flows/tutor-flow';
+// Import types directly from the flow logic file
+import type { AiTutorInput, AiTutorOutput } from '@/lib/genkit/tutor'; // UPDATED IMPORT PATH
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';

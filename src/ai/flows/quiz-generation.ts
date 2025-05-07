@@ -8,7 +8,7 @@
  * - GenerateQuizOutput - The return type for the generateQuiz function.
  */
 
-import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
+import { ai, z, gemini15Flash } from '@/lib/genkit/instance'; // Updated import path
 
 const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']).describe('The desired difficulty level for the quiz.');
 type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;

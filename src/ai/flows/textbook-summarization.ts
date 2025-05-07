@@ -9,7 +9,7 @@
  * - GenerateTextbookSummaryOutput - The return type for the generateTextbookSummary function.
  */
 
-import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
+import { ai, z, gemini15Flash } from '@/lib/genkit/instance'; // Updated import path
 
 const SUPPORTED_MIME_TYPES = [
     'image/jpeg',

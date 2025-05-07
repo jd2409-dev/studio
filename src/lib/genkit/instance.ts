@@ -37,7 +37,8 @@ export const ai = genkit({
     googleAI({ apiKey: googleApiKey }),
     // firebase() // Include if you need Firebase integration in other flows
   ],
-  model: gemini15Flash, // Default model if needed across flows
+  // Removing default model here as it's specified in prompts
+  // model: gemini15Flash,
   logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
   enableTracing: process.env.NODE_ENV === 'development',
 });

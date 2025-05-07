@@ -8,7 +8,7 @@
  * - QuizReflectionOutput - The return type for the generateQuizReflection function.
  */
 
-import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance'; // Updated import path
+import { ai, z, gemini15Flash } from '@/lib/genkit/instance'; // Updated import path
 import type { QuizQuestion, QuizResult } from '@/types/user';
 
 // Define the schema for a single question within the reflection input
