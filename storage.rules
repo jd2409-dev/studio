@@ -2,27 +2,31 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Allow public read access to placeholder images (if you store any there)
+    // match /placeholders/{allPaths=**} {
+    //   allow read;
+    // }
 
-    // User Avatars: Allow read access to anyone, but only allow authenticated users
-    // to write to their *own* avatar path.
-    match /user_avatars/{userId}/{allPaths=**} {
-      // Public read access for avatars is common
-      allow read: if true;
-      // Write access restricted to the owner of the avatar
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // Allow authenticated users to manage their own avatar files
+    match /user_avatars/{userId}/{fileName} {
+      allow read: if request.auth != null; // Allow any authenticated user to read (e.g., for display)
+      allow write: if request.auth != null && request.auth.uid == userId; // Only allow user to write their own avatar
     }
 
-    // User Uploads (e.g., textbooks): Only allow authenticated users to read and write
-    // files within their *own* directory.
-    match /user_uploads/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Allow authenticated users to manage their own general uploads (e.g., textbooks)
+    match /user_uploads/{userId}/{allPaths=**} { // Use allPaths=** to match any file/folder structure
+      allow read, write: if request.auth != null && request.auth.uid == userId; // Only allow user to manage their own uploads
     }
 
-    // --- Potentially add rules for other storage paths as needed ---
-
-    // Default rule: Deny all reads and writes to any other path
-    match /{allPaths=**} {
-      allow read, write: if false;
+    // Allow authenticated users to manage their own QuickFind uploads
+    // Separating this for potentially different future rules
+    match /quickfind_uploads/{userId}/{fileName} {
+      allow read, write: if request.auth != null && request.auth.uid == userId; // Only allow user to manage their own quickfind files
     }
+
+    // Deny all other access by default
+    // match /{allPaths=**} {
+    //   allow read, write: if false;
+    // }
   }
 }
