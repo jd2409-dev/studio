@@ -1,21 +1,12 @@
-
 // No "use server" here
 /**
- * @fileOverview Defines the Genkit flow, schemas, and prompt for the AI Tutor feature.
+ * @fileOverview Defines the Genkit prompt, schemas, and logic for the AI Tutor feature.
  * This file does NOT contain the 'use server' directive.
  */
 
-import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance';
-// Removed Handlebars import as registration will happen inline
-// import Handlebars from 'handlebars';
-
-// Register Handlebars helper (this needs to be done once)
-// Ensure this runs before any prompt using 'eq' is defined or used.
-// Handlebars.registerHelper('eq', function(a, b) {
-//   // console.log(`Handlebars eq: comparing ${typeof a}"${a}" and ${typeof b}"${b}"`);
-//   return a === b;
-// });
-
+import { z } from 'genkit';
+import { ai } from '@/ai/config/genkit-instance'; // Import the configured ai instance
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 // Schema for messages in conversation history
 const MessageSchema = z.object({
@@ -23,20 +14,22 @@ const MessageSchema = z.object({
   content: z.string(),
 });
 
+// Schema for the input to the tutor flow
 export const AiTutorInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
+// Schema for the output from the tutor flow
 export const AiTutorOutputSchema = z.object({
   response: z.string().describe("The AI tutor's response to the user."),
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 
-// Define prompt
-export const tutorPrompt = ai.definePrompt({
+// Define the prompt configuration
+const tutorPrompt = ai.definePrompt({
   name: 'aiTutorNexusLearnPrompt',
-  model: gemini15Flash,
+  model: gemini15Flash, // Specify the model to use
   input: { schema: AiTutorInputSchema },
   output: { schema: AiTutorOutputSchema },
   prompt: `
@@ -55,15 +48,14 @@ Unknown: {{{content}}}
 
 Tutor, provide your response:
   `,
-   handlebarsOptions: {
-      knownHelpersOnly: false, // **Crucial: Allow custom helpers**
+  // Specify handlebarsOptions to enable the 'eq' helper
+  handlebarsOptions: {
+      knownHelpersOnly: false, // Allow custom helpers
       helpers: {
-         // **Crucial: Define the 'eq' helper here**
+         // Define the 'eq' helper required by the template
          eq: function(a: any, b: any): boolean {
-            // Basic comparison, handles strings and numbers reasonably
             return String(a) === String(b);
          }
-         // Add other custom helpers here if needed
       }
    },
   config: {
@@ -71,61 +63,56 @@ Tutor, provide your response:
   },
 });
 
+// Define the core logic for running the tutor flow
+export async function runTutorFlow(input: AiTutorInput): Promise<AiTutorOutput> {
+  console.log("runTutorFlow: Validating input...");
+  // Validate input using the Zod schema
+  const validatedInput = AiTutorInputSchema.parse(input); // Zod throws on failure
 
-// Define the AI Tutor Flow
-export const aiTutorFlow = ai.defineFlow(
-  {
-    name: 'nexusLearnAiTutorFlow',
-    inputSchema: AiTutorInputSchema,
-    outputSchema: AiTutorOutputSchema,
-  },
-  async (input) => {
-    // Add basic input handling/normalization
-    if (!input.history || input.history.length === 0) {
-      // Handle empty history - maybe provide a default greeting?
-      console.warn("AI Tutor Flow: Received empty history. Providing default initial input.");
-      input.history = [{ role: 'user', content: 'Hi, I need help with a topic.' }]; // Example default
-    }
+  console.log("runTutorFlow: Input validated. Preparing history...");
+  // Basic input handling/normalization
+  if (!validatedInput.history || validatedInput.history.length === 0) {
+      console.warn("runTutorFlow: Received empty history. Providing default initial input.");
+      validatedInput.history = [{ role: 'user', content: 'Hi, I need help with a topic.' }];
+  }
 
-    // Ensure content exists and roles are correct
-    input.history = input.history.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'assistant', // Ensure role is valid
-      content: msg.content?.trim() || '[No content provided]', // Ensure content is a string
-    }));
+  // Ensure content exists and roles are correct (redundant if Zod validation is strict, but safe)
+  validatedInput.history = validatedInput.history.map(msg => ({
+    role: msg.role, // Role is already validated by Zod enum
+    content: msg.content?.trim() || '[No content provided]', // Ensure content is a non-empty string
+  }));
 
-    console.log("AI Tutor Flow: Normalized input. Calling prompt...");
+  console.log("runTutorFlow: Calling tutor prompt...");
 
-    try {
-        // Use optional chaining and check the specific output property
-        const result = await tutorPrompt(input);
-        const responseText = result?.output?.response;
+  try {
+      // Call the prompt object directly with the validated input
+      const result = await tutorPrompt(validatedInput);
+      const responseText = result?.output?.response;
 
-        // Validate the output structure and content
-        if (responseText === undefined || typeof responseText !== 'string' || responseText.trim() === '') {
-            console.error("AI Tutor Flow: Prompt returned invalid or empty response object:", result);
-            // Provide a slightly more specific internal error message if possible
-            return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
-        }
+      // Validate the output structure and content
+      if (responseText === undefined || typeof responseText !== 'string' || responseText.trim() === '') {
+          console.error("runTutorFlow: Prompt returned invalid or empty response object:", result);
+          return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
+      }
 
-        console.log("AI Tutor Flow: Response generated successfully.");
-        return { response: responseText }; // Return the validated output object { response: string }
+      console.log("runTutorFlow: Response generated successfully.");
+      return { response: responseText }; // Return the validated output object { response: string }
 
-    } catch (error: any) {
-      console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
+  } catch (error: any) {
+      console.error(`Error in runTutorFlow during prompt execution:`, error.message, error.stack, "Input:", JSON.stringify(validatedInput));
+
       if (error.message?.includes("unknown helper")) {
-          // This specific check helps identify if the Handlebars helper issue persists.
-          // It might indicate the global registration wasn't effective or knownHelpersOnly was overridden.
+          console.error("runTutorFlow: Handlebars template error detected:", error.message);
           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
       }
        if (error.message?.includes("Generation blocked")) {
-          console.error("AI Tutor Flow: Generation blocked due to safety settings or potentially harmful content.");
+          console.error("runTutorFlow: Generation blocked due to safety settings.");
           return { response: "I cannot provide a response to that request due to safety guidelines. Let's focus on educational topics!" };
        } else if (error.message?.includes("API key not valid")) {
-           console.error("AI Tutor Flow: Invalid API Key detected during prompt execution.");
+           console.error("runTutorFlow: Invalid API Key detected.");
            return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
        }
-      // Fallback for other unexpected errors
-      throw new Error(`AI Tutor encountered an error: ${error.message}`);
-    }
+      // Re-throw other unexpected errors
+      throw new Error(`AI Tutor encountered an unexpected error during prompt execution: ${error.message}`);
   }
-);
+}

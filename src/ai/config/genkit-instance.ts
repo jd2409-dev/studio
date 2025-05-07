@@ -4,7 +4,7 @@ import { genkit, z } from 'genkit';
 import { gemini15Flash, googleAI } from '@genkit-ai/googleai';
 import { firebase } from "@genkit-ai/firebase"; // Import firebase plugin if needed for other flows
 
-// Check for API Key validity (moved from old ai-instance.ts)
+// Check for API Key validity
 const googleApiKey = process.env.GOOGLE_GENAI_API_KEY;
 
 if (!googleApiKey || googleApiKey === "YOUR_GOOGLE_GENAI_API_KEY_HERE" || googleApiKey.trim() === "") {
@@ -24,8 +24,14 @@ To fix this:
 If you've already done this, ensure the key is correct and has no extra spaces.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`;
   console.error(errorMessage);
+  // Optionally throw an error to prevent initialization if the key is invalid
+  // throw new Error("Missing or invalid GOOGLE_GENAI_API_KEY. Cannot initialize Genkit.");
+} else {
+    console.log("GOOGLE_GENAI_API_KEY detected. Initializing Genkit...");
 }
 
+
+// Configure Genkit instance
 export const ai = genkit({
   plugins: [
     googleAI({ apiKey: googleApiKey }),
@@ -36,9 +42,9 @@ export const ai = genkit({
   enableTracing: process.env.NODE_ENV === 'development',
 });
 
-// Log successful initialization based on API key validity
+// Log successful initialization based on API key validity check passed
 if (googleApiKey && googleApiKey !== "YOUR_GOOGLE_GENAI_API_KEY_HERE" && googleApiKey.trim() !== "") {
-    console.log("Genkit initialized with Google AI plugin using provided API key.");
+    console.log("Genkit initialized successfully with Google AI plugin.");
 } else {
      console.warn("Genkit initialized, but Google AI plugin is likely non-functional due to missing or placeholder API key. AI features may fail.");
 }

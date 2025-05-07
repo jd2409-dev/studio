@@ -4,12 +4,13 @@ import { useState, type FormEvent, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send, Sparkles, Bot } from 'lucide-react'; // Removed User icon as it's not used directly here
+import { Loader2, Send, Sparkles, Bot, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-// Import the action function and types (types are safe to import)
+// Import the action function
 import { getTutorResponse } from '@/app/ai-tutor/actions';
-import type { AiTutorInput, AiTutorOutput } from '@/ai/flows/tutor-flow'; // Import types from the flow definition file
+// Import types directly from the flow definition file
+import type { AiTutorInput, AiTutorOutput } from '@/ai/flows/tutor-flow';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
@@ -138,6 +139,7 @@ export default function AiTutorPage() {
     const optimisticUserMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: new Date() };
     // Construct history for the flow using current messages + optimistic user message
     const historyForFlow: AiTutorInput = {
+        // Map ChatMessage[] to the structure expected by AiTutorInputSchema
         history: [...messages, optimisticUserMessage].map(m => ({ role: m.role, content: m.content }))
     };
 
@@ -158,18 +160,18 @@ export default function AiTutorPage() {
       const result: AiTutorOutput = await getTutorResponse(historyForFlow);
       // --- Server Action Call End ---
 
-      // Check if the result contains an error message from the flow/action itself
-      if (!result || result.response.startsWith("Sorry,") || result.response.startsWith("I cannot provide a response") || result.response.startsWith("AI Tutor Error:")) {
-         const errorMessage = result?.response || "AI Tutor returned an empty or invalid response.";
-         console.error("AI Tutor Error Response Received:", errorMessage);
-         // Throw an error so it's caught by the catch block and displayed as a toast
-         throw new Error(errorMessage);
-      }
+       // Check if the action threw an error or if the result indicates a handled error
+       if (!result || result.response.startsWith("Sorry,") || result.response.startsWith("I cannot provide a response")) {
+          const errorMessage = result?.response || "AI Tutor returned an empty or invalid response.";
+          console.error("AI Tutor Error Response Received:", errorMessage);
+          // Throw an error so it's caught by the catch block and displayed as a toast
+          throw new Error(errorMessage); // Use the error message from the result if available
+       }
 
-      // Ensure we have a valid string response
+      // Ensure we have a valid string response (redundant check after above, but safe)
       if (typeof result.response !== 'string') {
         console.error("AI Tutor Error: No valid response content from AI action for input:", JSON.stringify(historyForFlow), "Result:", result);
-        throw new Error("The AI tutor did not provide a valid response. Please try rephrasing your question.");
+        throw new Error("The AI tutor did not provide a valid response structure.");
       }
 
       // Save AI message to Firestore
@@ -186,25 +188,30 @@ export default function AiTutorPage() {
       let errorDesc = "An unexpected error occurred. Please try again.";
 
       if (error instanceof Error) {
-         // Use the specific error message thrown by the action or flow
-         errorDesc = error.message;
+          errorDesc = error.message; // Use the specific error message from the action/flow
 
-         // Customize title based on error type if needed
+          // Customize title based on common error prefixes
           if (error.message.startsWith("AI Tutor Error:")) {
-             errorTitle = "AI Tutor Error";
-             errorDesc = error.message.replace("AI Tutor Error:", "").trim(); // Clean up prefix
+              errorTitle = "AI Tutor Error";
+              errorDesc = error.message.replace("AI Tutor Error:", "").trim(); // Clean up prefix
           } else if (error.message.startsWith("Invalid input:")) {
               errorTitle = "Input Error";
-               errorDesc = error.message.replace("Invalid input:", "").trim();
+              errorDesc = error.message.replace("Invalid input:", "").trim();
           } else if (error.code && error.code.startsWith('permission-denied')) { // Check for FirestoreError codes during save
               errorTitle = "Database Error";
-              errorDesc = "Could not save message due to insufficient permissions. Please ensure Firestore rules are deployed correctly (see README). Command: `firebase deploy --only firestore:rules`.";
+              errorDesc = "Could not save message due to insufficient permissions. Ensure Firestore rules are deployed correctly (see README).";
           } else if (error.code === 'unavailable') {
-               errorTitle = "Network Error";
-               errorDesc = "Could not save message. Please check your connection and try again.";
-          } else if (error.message.startsWith("AI Tutor internal template error:")) {
-             errorTitle = "AI Tutor Template Error";
-             errorDesc = error.message.replace("AI Tutor internal template error:", "").trim() + " Please contact support.";
+              errorTitle = "Network Error";
+              errorDesc = "Could not save message. Please check your connection and try again.";
+          } else if (error.message.includes("internal template error")) {
+              errorTitle = "AI Tutor Template Error";
+              // Keep the specific message from the error
+          } else if (error.message.includes("AI Tutor returned an invalid response structure")) {
+               errorTitle = "AI Response Error";
+               // Keep the specific message
+          } else if (error.message.includes("AI Tutor encountered an unexpected error")) {
+               errorTitle = "AI Processing Error";
+               errorDesc = error.message.replace("AI Tutor encountered an unexpected error during prompt execution:", "").trim();
           }
       }
 
@@ -213,10 +220,7 @@ export default function AiTutorPage() {
         description: errorDesc,
         variant: "destructive",
       });
-      // Consider adding a temporary error indicator to the UI if needed,
-      // though the toast provides feedback.
-      // Example: could update the user message in Firestore with an error flag,
-      // but that adds complexity.
+
     } finally {
       setIsLoading(false);
     }
