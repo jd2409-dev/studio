@@ -581,7 +581,14 @@ const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-   "peer/menu-button flex w-full items-center justify-start gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-offset-background transition-[width,height,padding,color,background-color] duration-150 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-sidebar-accent/80 active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-primary data-[active=true]:font-medium data-[active=true]:text-sidebar-primary-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-4 [&>svg]:shrink-0", // Ensure text span is hidden on icon collapse
+   // Base styles: flex container, alignment, padding, transitions etc.
+   "peer/menu-button relative flex w-full items-center justify-start gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-offset-background transition-[width,height,padding,color,background-color] duration-150 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-sidebar-accent/80 active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-primary data-[active=true]:font-medium data-[active=true]:text-sidebar-primary-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
+   // Icon collapse specific styles: fixed size, center content
+   "group-data-[collapsible=icon]:group-data-[state=collapsed]:size-9 group-data-[collapsible=icon]:group-data-[state=collapsed]:p-0 group-data-[collapsible=icon]:group-data-[state=collapsed]:items-center group-data-[collapsible=icon]:group-data-[state=collapsed]:justify-center",
+   // Hide the text span specifically when collapsed in icon mode, targeting any span after the first child (icon)
+   "group-data-[collapsible=icon]:group-data-[state=collapsed]:[&>span]:hidden",
+   // Ensure icon size is consistent
+   "[&>svg]:size-4 [&>svg]:shrink-0", // Base icon size
   {
     variants: {
       variant: {
@@ -592,7 +599,7 @@ const sidebarMenuButtonVariants = cva(
       size: {
         default: "h-9", // Adjusted height
         sm: "h-8 text-xs", // Adjusted height
-        lg: "h-11 text-base group-data-[collapsible=icon]:!size-10", // Adjusted icon size
+        lg: "h-11 text-base group-data-[collapsible=icon]:group-data-[state=collapsed]:!size-10", // Adjusted icon size when collapsed
       },
     },
     defaultVariants: {
@@ -704,7 +711,7 @@ const SidebarMenuAction = React.forwardRef<
          "peer-data-[size=default]/menu-button:top-1.5", // Already h-6 w-6 by default
          "peer-data-[size=lg]/menu-button:top-[7px] peer-data-[size=lg]/menu-button:h-7 peer-data-[size=lg]/menu-button:w-7", // Adjust top for larger buttons
         // Visibility logic
-        "group-data-[collapsible=icon]:hidden",
+        "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
         showOnHover &&
           "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 peer-data-[active=true]/menu-button:text-sidebar-accent-foreground md:opacity-0",
         className
@@ -729,7 +736,7 @@ const SidebarMenuBadge = React.forwardRef<
        "peer-data-[size=default]/menu-button:top-2",
        "peer-data-[size=lg]/menu-button:top-2.5",
       // Hide when collapsed
-      "group-data-[collapsible=icon]:hidden",
+      "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
       className
     )}
     {...props}
@@ -790,7 +797,7 @@ const SidebarMenuSub = React.forwardRef<
     className={cn(
        // Use ml based on icon size + gap + half of border width
        "ml-[calc(theme(spacing.4)_+_theme(spacing.2)_+_1px)] flex min-w-0 flex-col gap-0.5 border-l border-sidebar-border pl-2 py-1",
-      "group-data-[collapsible=icon]:hidden", // Hide when collapsed
+      "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
       className
     )}
     {...props}
@@ -830,7 +837,7 @@ const SidebarMenuSubButton = React.forwardRef<
         height,
         textSize,
         isActive && "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium", // Active state style
-        "group-data-[collapsible=icon]:hidden", // Hide when collapsed
+        "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
         className
       )}
       {...props}
@@ -867,4 +874,3 @@ export {
   SidebarTrigger,
   useSidebar,
 };
-
