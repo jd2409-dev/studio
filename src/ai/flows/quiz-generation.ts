@@ -10,8 +10,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai'; // Import a specific model
-// Handlebars is imported and helpers are registered globally in ai-tutor-flow.ts
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const DifficultyLevelSchema = z.enum(['easy', 'medium', 'hard']).describe('The desired difficulty level for the quiz.');
 type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
@@ -19,7 +18,7 @@ type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
 const GenerateQuizInputSchema = z.object({
   textbookContent: z
     .string()
-    .min(50, { message: "Textbook content must be at least 50 characters." }) // Add min length for content
+    .min(50, { message: "Textbook content must be at least 50 characters." })
     .describe('The content of the textbook chapter or section to generate a quiz from.'),
   questionCount: z
     .number()
@@ -30,12 +29,11 @@ const GenerateQuizInputSchema = z.object({
     .describe('The number of questions to generate for the quiz (1-20).'),
   difficulty: DifficultyLevelSchema.default('medium'),
   grade: z.string().refine(val => !val || /^(?:[1-9]|1[0-2])$/.test(val), {
-    message: "Grade must be between 1 and 12, or empty.", // Validation for grade format
+    message: "Grade must be between 1 and 12, or empty.",
   }).optional().describe('The target grade level for the quiz (e.g., "9", "12", or empty for general).'),
 });
 export type GenerateQuizInput = z.infer<typeof GenerateQuizInputSchema>;
 
-// Stricter validation for the output question structure
 const QuizQuestionSchema = z.object({
     question: z.string().min(1, { message: "Question text cannot be empty."}).describe('The quiz question.'),
     type: z
@@ -44,25 +42,20 @@ const QuizQuestionSchema = z.object({
     answers: z.array(z.string()).optional().describe('The possible answers for the question. Required for multiple-choice.'),
     correctAnswer: z.string().min(1, { message: "Correct answer cannot be empty."}).describe('The correct answer to the question.'),
   }).refine(data => {
-      // Validation specific to multiple-choice questions
       if (data.type === 'multiple-choice') {
-          // Must have answers array
           if (!data.answers || data.answers.length === 0) return false;
-          // Correct answer must be one of the options
           if (!data.answers.includes(data.correctAnswer)) return false;
-          // Must have at least 2 options
           if (data.answers.length < 2) return false;
       }
       return true;
   }, {
       message: "Multiple-choice questions must have at least two 'answers' options, and the 'correctAnswer' must be one of those options.",
-      // Specify path if needed, e.g., path: ['answers', 'correctAnswer']
   });
 
 
 const GenerateQuizOutputSchema = z.object({
   quiz: z.array(QuizQuestionSchema)
-  .min(1, { message: "Generated quiz must have at least one question."}) // Ensure quiz is not empty
+  .min(1, { message: "Generated quiz must have at least one question."})
   .describe('The generated quiz questions.'),
 });
 export type GenerateQuizOutput = z.infer<typeof GenerateQuizOutputSchema>;
@@ -71,7 +64,6 @@ export type GenerateQuizOutput = z.infer<typeof GenerateQuizOutputSchema>;
 export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQuizOutput> {
    console.log("generateQuiz: Validating input...");
    try {
-       // Use safeParse for better error handling potential, though parse throws on error which is fine here
        const validatedInput = GenerateQuizInputSchema.parse(input);
        console.log("generateQuiz: Input validated successfully. Calling generateQuizFlow...");
        return await generateQuizFlow(validatedInput);
@@ -82,7 +74,6 @@ export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQu
             console.error("generateQuiz: Zod validation failed:", validationErrors);
             throw new Error(`Invalid input for quiz generation: ${validationErrors}`);
         }
-        // Re-throw other errors
         throw error;
    }
 }
@@ -94,7 +85,7 @@ const prompt = ai.definePrompt({
     schema: GenerateQuizInputSchema,
   },
   output: {
-    schema: GenerateQuizOutputSchema, // Use the stricter output schema here
+    schema: GenerateQuizOutputSchema,
   },
   prompt: `You are an AI quiz generator that creates quizzes from textbook content.
 
@@ -113,12 +104,12 @@ const prompt = ai.definePrompt({
   Textbook Content:
   {{{textbookContent}}}
   `,
-   // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow global helpers.
    handlebarsOptions: {
-      knownHelpersOnly: false,
+      knownHelpersOnly: false, // Allow built-in helpers like 'if'
+      // No custom helpers needed for this prompt
    },
    config: {
-    temperature: 0.6, // Slightly lower temperature for more factual quiz generation
+    temperature: 0.6,
   }
 });
 
@@ -126,26 +117,22 @@ const generateQuizFlow = ai.defineFlow(
   {
     name: 'generateQuizFlow',
     inputSchema: GenerateQuizInputSchema,
-    outputSchema: GenerateQuizOutputSchema, // Use the stricter output schema here
+    outputSchema: GenerateQuizOutputSchema,
   },
   async input => {
       console.log("generateQuizFlow: Starting quiz generation with input:", JSON.stringify(input));
       try {
           const {output} = await prompt(input);
 
-          // Basic check for output existence
           if (!output) {
               console.error("Quiz generation failed: No output received from AI model. Input:", JSON.stringify(input));
               throw new Error("Quiz generation failed: The AI model did not return any output.");
           }
 
-          // Validate the received output against the Zod schema.
-          // This will throw a ZodError if validation fails, which will be caught below.
           console.log("generateQuizFlow: Received output from AI. Validating against schema...");
           const validatedOutput = GenerateQuizOutputSchema.parse(output);
           console.log("generateQuizFlow: Output validated successfully.");
 
-          // Additional runtime check (optional, as Zod schema should cover this)
           if (!validatedOutput.quiz || validatedOutput.quiz.length === 0) {
               console.error("Quiz generation failed: Validated output has empty quiz array. Input:", JSON.stringify(input), "Output:", JSON.stringify(output));
               throw new Error("Quiz generation failed: The AI model returned an empty list of questions after validation.");
@@ -158,10 +145,8 @@ const generateQuizFlow = ai.defineFlow(
           console.error("Error in generateQuizFlow:", error.message, error.stack, "Input:", JSON.stringify(input));
 
            if (error instanceof z.ZodError) {
-               // Log the specific validation errors
                 const validationErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-                console.error("Quiz generation output failed Zod validation:", validationErrors, "Raw Output:", JSON.stringify(error.input)); // Log raw output if available in error
-                // Provide a user-friendly error message indicating format issues
+                console.error("Quiz generation output failed Zod validation:", validationErrors, "Raw Output:", JSON.stringify(error.input)); 
                 throw new Error(`Quiz generation failed: The AI returned data in an unexpected format. (${validationErrors})`);
             }
 
@@ -173,10 +158,7 @@ const generateQuizFlow = ai.defineFlow(
                  throw new Error(`Quiz generation internal template error: ${error.message}. Please report this issue.`);
             }
 
-          // Re-throw other errors with potentially more context
           throw new Error(`Quiz generation encountered an unexpected error: ${error.message}`);
       }
   }
 );
-
-

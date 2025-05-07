@@ -12,7 +12,6 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-// Handlebars is imported and helpers are registered globally in ai-tutor-flow.ts
 
 const ExplainTextbookPdfInputSchema = z.object({
   fileDataUri: z
@@ -26,7 +25,6 @@ const ExplainTextbookPdfInputSchema = z.object({
 });
 export type ExplainTextbookPdfInput = z.infer<typeof ExplainTextbookPdfInputSchema>;
 
-// Add minimum length requirements for generated content
 const ExplainTextbookPdfOutputSchema = z.object({
   textExplanation: z.string().min(10, {message: "Text explanation seems too short."}).describe('A detailed text explanation of the PDF content.'),
   audioExplanationScript: z.string().min(10, {message: "Audio script seems too short."}).describe('A script suitable for text-to-speech, explaining the PDF content.'),
@@ -38,7 +36,6 @@ export type ExplainTextbookPdfOutput = z.infer<typeof ExplainTextbookPdfOutputSc
 export async function explainTextbookPdf(input: ExplainTextbookPdfInput): Promise<ExplainTextbookPdfOutput> {
    console.log("explainTextbookPdf: Validating input...");
     try {
-       // Use safeParse for better error handling potential
         const validatedInput = ExplainTextbookPdfInputSchema.parse(input);
         console.log("explainTextbookPdf: Input validated successfully. Calling explainTextbookPdfFlow...");
         return await explainTextbookPdfFlow(validatedInput);
@@ -49,7 +46,6 @@ export async function explainTextbookPdf(input: ExplainTextbookPdfInput): Promis
             console.error("explainTextbookPdf: Zod validation failed:", validationErrors);
             throw new Error(`Invalid input for textbook explanation: ${validationErrors}`);
         }
-        // Re-throw other errors
         throw error;
    }
 }
@@ -71,12 +67,12 @@ PDF Content:
 {{media url=fileDataUri}}
 
 Generate the outputs based solely on the information present in the PDF. If the PDF content is too short (e.g., less than a paragraph), unclear (e.g., scanned image with poor OCR), or seems to be non-academic or irrelevant (e.g., random images, unrelated text, forms), state clearly in the 'textExplanation' field that you cannot provide a meaningful explanation for the given document and briefly explain why (e.g., "Cannot explain: Document content is too short/unclear/irrelevant."). Keep the other fields ('audioExplanationScript', 'mindMapExplanation') minimal in this case (e.g., "Not applicable.").`,
-   // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow the built-in 'media' helper.
    handlebarsOptions: {
-      knownHelpersOnly: false,
+      knownHelpersOnly: false, // Allow the built-in 'media' helper
+      // No custom helpers needed here
    },
    config: {
-    temperature: 0.6, // Slightly lower temperature for more factual explanation
+    temperature: 0.6,
   }
 });
 
@@ -92,22 +88,17 @@ const explainTextbookPdfFlow = ai.defineFlow(
     try {
         const { output } = await prompt(input);
 
-        // Basic check for output existence
         if (!output) {
              console.error("Textbook Explainer Flow: Explanation generation failed - No output received from AI model. Input URI length:", input.fileDataUri.length);
             throw new Error("Explanation generation failed: The AI model did not return any output.");
         }
 
-        // Validate the received output against the Zod schema.
         console.log("Textbook Explainer Flow: Received output from AI. Validating against schema...");
         const validatedOutput = ExplainTextbookPdfOutputSchema.parse(output);
         console.log("Textbook Explainer Flow: Output validated successfully.");
 
-        // Additional check for placeholder/error messages from the AI (as instructed in the prompt)
         if (validatedOutput.textExplanation.startsWith("Cannot explain:")) {
              console.warn("Textbook Explainer Flow: AI indicated it could not explain the document. Reason:", validatedOutput.textExplanation);
-             // Potentially throw a specific error or return the AI's message gracefully
-             // For now, we return the AI's response as it contains the reason.
         }
 
         console.log(`Textbook Explainer Flow: Explanation generated successfully.`);
@@ -125,13 +116,10 @@ const explainTextbookPdfFlow = ai.defineFlow(
              console.error("Textbook Explainer Flow: Explanation generation blocked due to safety settings or potentially harmful content.");
              throw new Error("Explanation generation was blocked, possibly due to safety filters or the content of the PDF. Please try a different document or section, or ensure the content is appropriate.");
         }
-         if (error.message?.includes("unknown helper")) {
+         if (error.message?.includes("unknown helper")) { // Should not happen if 'media' is allowed
              throw new Error(`Textbook explanation internal template error: ${error.message}. Please report this issue.`);
          }
-        // Re-throw other errors
         throw new Error(`Failed to generate textbook explanation: ${error.message}`);
     }
   }
 );
-
-

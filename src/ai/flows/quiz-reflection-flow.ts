@@ -12,7 +12,6 @@ import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
 import type { QuizQuestion, QuizResult } from '@/types/user';
-// Handlebars is imported and helpers are registered globally in ai-tutor-flow.ts
 
 // Define the schema for a single question within the reflection input
 const ReflectionQuizQuestionSchema = z.object({
@@ -32,7 +31,6 @@ const QuizReflectionInputSchema = z.object({
   grade: z.string().optional().describe('The grade level the quiz was intended for.'),
 }).refine(data => data.questions.length === data.userAnswers.length && data.questions.length === data.totalQuestions, {
     message: "Mismatch between number of questions, user answers, and total questions count.",
-    // path: ["totalQuestions"], // Optionally specify a path for the error
 });
 export type QuizReflectionInput = z.infer<typeof QuizReflectionInputSchema>;
 
@@ -46,7 +44,6 @@ export type QuizReflectionOutput = z.infer<typeof QuizReflectionOutputSchema>;
 export async function generateQuizReflection(input: QuizReflectionInput): Promise<QuizReflectionOutput> {
    console.log("generateQuizReflection: Validating input...");
    try {
-       // Use safeParse for better error handling potential
        const validatedInput = QuizReflectionInputSchema.parse(input);
        console.log("generateQuizReflection: Input validated successfully. Calling quizReflectionFlow...");
        return await quizReflectionFlow(validatedInput);
@@ -57,7 +54,6 @@ export async function generateQuizReflection(input: QuizReflectionInput): Promis
             console.error("generateQuizReflection: Zod validation failed:", validationErrors);
             throw new Error(`Invalid input for quiz reflection: ${validationErrors}`);
         }
-        // Re-throw other errors
         throw error;
    }
 }
@@ -98,9 +94,21 @@ Correct Answer: {{this.correctAnswer}}
 
 Provide your feedback below. If all answers are correct, just provide the congratulatory message. Structure feedback clearly for each incorrect question.
 `,
-  // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow global helpers.
   handlebarsOptions: {
-     knownHelpersOnly: false,
+     knownHelpersOnly: false, // Allow custom and built-in helpers
+     helpers: {
+        sum: (a: number, b: number) => {
+          const numA = typeof a === 'number' ? a : 0;
+          const numB = typeof b === 'number' ? b : 0;
+          return numA + numB;
+        },
+        join: (arr: any[], sep: string) => (Array.isArray(arr) ? arr.join(sep) : ''),
+        isCorrect: (userAnswer: any, correctAnswer: any) => {
+          if (userAnswer === undefined || userAnswer === null) return false;
+          return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+        },
+        lookup: (arr: any[], index: number) => (Array.isArray(arr) && index >= 0 && index < arr.length ? arr[index] : 'Not Answered'),
+     }
   },
   config: {
     temperature: 0.7,
@@ -117,34 +125,27 @@ const quizReflectionFlow = ai.defineFlow(
   async (input) => {
     console.log("Quiz Reflection Flow: Starting for quiz. Score:", input.score, "Total:", input.totalQuestions);
 
-    // Determine if there are any incorrect answers before calling the prompt
     const incorrectAnswersExist = input.questions.some((q, index) => {
         const userAnswer = input.userAnswers[index];
-        // Consider unanswered as incorrect for feedback purposes
         if (userAnswer === undefined || userAnswer === null || userAnswer === '') return true;
-        // Case-insensitive comparison
         return String(userAnswer).trim().toLowerCase() !== String(q.correctAnswer).trim().toLowerCase();
     });
 
-    // Handle the "all correct" case directly without calling the AI if possible
-    // Note: The score should ideally match the calculation, but double-check against answers
     if (!incorrectAnswersExist && input.score === input.totalQuestions) {
         console.log("Quiz Reflection Flow: All answers correct. Returning standard congratulations.");
         return { feedback: "Excellent work! You answered all questions correctly. Keep up the fantastic effort!" };
     }
-    // If score mismatch but no incorrect found by logic, proceed to AI for analysis
+    
     if (incorrectAnswersExist || input.score !== input.totalQuestions) {
         console.log("Quiz Reflection Flow: Incorrect answers found or score mismatch. Generating AI feedback...");
         try {
             const { output } = await prompt(input);
 
-            // Validate the output from the AI
             if (!output || typeof output.feedback !== 'string' || output.feedback.trim() === '') {
                 console.error("Quiz reflection generation failed: Invalid or empty feedback received from AI model. Input:", JSON.stringify(input), "Output:", JSON.stringify(output));
                 throw new Error("Quiz reflection failed: The AI tutor did not provide valid feedback.");
             }
             console.log("Quiz Reflection Flow: Feedback generated successfully.");
-            // Optional: Parse and validate output against schema again
             return QuizReflectionOutputSchema.parse(output);
 
         } catch (error: any) {
@@ -164,11 +165,8 @@ const quizReflectionFlow = ai.defineFlow(
             throw new Error(`Quiz reflection encountered an unexpected error: ${error.message}`);
         }
     } else {
-         // This case should ideally not be reached due to the initial check, but as a fallback:
         console.warn("Quiz Reflection Flow: Logic indicates all correct, but proceeding as if not. Score:", input.score, "Total:", input.totalQuestions);
-         return { feedback: "Congratulations on completing the quiz!" }; // Fallback message
+         return { feedback: "Congratulations on completing the quiz!" };
     }
   }
 );
-
-

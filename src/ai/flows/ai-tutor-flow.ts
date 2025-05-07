@@ -12,32 +12,6 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-import Handlebars from 'handlebars'; // Keep Handlebars import for potential global registration
-
-// Global helper registration (Attempting this route as customize isn't consistently working)
-// Registering 'eq' helper globally
-Handlebars.registerHelper('eq', function(a, b) {
-    // Simple strict equality check
-    return a === b;
-});
-// Add other global helpers if needed for other flows
-Handlebars.registerHelper("sum", function(a, b) {
-  const numA = typeof a === 'number' ? a : 0;
-  const numB = typeof b === 'number' ? b : 0;
-  return numA + numB;
-});
-Handlebars.registerHelper("join", function(arr, sep) {
-    return Array.isArray(arr) ? arr.join(sep) : '';
-});
-Handlebars.registerHelper("isCorrect", function(userAnswer, correctAnswer) {
-  if (userAnswer === undefined || userAnswer === null) return false;
-  // Ensure comparison is case-insensitive and trims whitespace
-  return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
-});
-Handlebars.registerHelper("lookup", function(arr, index) {
-   return Array.isArray(arr) && index >= 0 && index < arr.length ? arr[index] : 'Not Answered';
-});
-
 
 // Define the schema for a single message in the history
 const MessageSchema = z.object({
@@ -86,10 +60,11 @@ Tutor: {{{content}}}
 
 Tutor, provide your response:
 `,
-  // Ensure `knownHelpersOnly` is false in handlebarsOptions to allow global helpers.
-  // Genkit's definePrompt merges options; setting it here ensures it's applied.
   handlebarsOptions: {
-     knownHelpersOnly: false,
+     knownHelpersOnly: false, // Allow custom and built-in helpers
+     helpers: {
+        eq: (a: any, b: any) => a === b,
+     }
   },
   config: {
     temperature: 0.7,
@@ -156,5 +131,3 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
         throw error;
     }
 }
-
-
