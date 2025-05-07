@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -94,7 +93,7 @@ Status: {{#if (isCorrect (lookup ../userAnswers @index) this.correctAnswer)}}Cor
 Based ONLY on the incorrect answers, provide feedback and suggestions below. If all answers are correct, provide a congratulatory message.
 `,
   customize: (promptObject) => {
-      // Explicitly set knownHelpersOnly to false to allow globally registered helpers
+      // Explicitly set knownHelpersOnly to false to allow globally registered helpers and any other dynamic helpers.
       if (!promptObject.handlebarsOptions) {
           promptObject.handlebarsOptions = {};
       }

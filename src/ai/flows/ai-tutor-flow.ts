@@ -12,7 +12,8 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-// import Handlebars from 'handlebars'; // Global Handlebars instance is not reliably picked up by Genkit prompt
+// It's generally more reliable to define helpers within promptObject.handlebarsOptions.helpers
+// rather than relying on global Handlebars registration for Genkit prompts.
 
 // Define the schema for a single message in the history
 const MessageSchema = z.object({
@@ -69,15 +70,14 @@ Tutor, provide your response:
     if (!promptObject.handlebarsOptions.helpers) {
         promptObject.handlebarsOptions.helpers = {};
     }
-    // Define the 'eq' helper directly within the prompt's Handlebars options
-    // This is more robust than relying on global registration for Genkit prompts.
+    // Define the 'eq' helper directly within this prompt's Handlebars options
     promptObject.handlebarsOptions.helpers = {
         ...promptObject.handlebarsOptions.helpers,
         eq: function(a: any, b: any) {
             return a === b;
         },
     };
-    // Crucially, also ensure knownHelpersOnly is false
+    // Crucially, also ensure knownHelpersOnly is false to allow built-in helpers (#if, #each) AND this custom 'eq' helper.
     promptObject.handlebarsOptions.knownHelpersOnly = false;
     return promptObject;
   },

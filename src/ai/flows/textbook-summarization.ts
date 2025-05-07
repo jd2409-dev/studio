@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -59,7 +58,7 @@ Textbook Page Image: {{media url=fileDataUri}}
 
 Generate the outputs based *only* on the content visible in the image.`,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media' and any other dynamic helpers.
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
@@ -88,7 +87,7 @@ File Content:
 
 Generate the outputs based *only* on the provided content.`,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media' and any other dynamic helpers.
      if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }

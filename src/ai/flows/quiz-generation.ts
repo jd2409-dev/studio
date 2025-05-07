@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -79,7 +78,7 @@ const prompt = ai.definePrompt({
   Textbook Content: {{{textbookContent}}}
   `,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false to allow custom helpers like 'if'
+    // Explicitly set knownHelpersOnly to false to allow custom helpers like 'if' and any future dynamic helpers
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }

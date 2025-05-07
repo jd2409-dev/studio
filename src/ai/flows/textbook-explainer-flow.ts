@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -53,7 +52,7 @@ PDF Content:
 
 Generate the outputs based solely on the information present in the PDF. If the PDF content is too short, unclear, or seems to be non-academic (e.g., random images, unrelated text), state that you cannot provide a meaningful explanation for the given document.`,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media'
+    // Explicitly set knownHelpersOnly to false to allow default helpers like 'media' and any other dynamic helpers.
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
