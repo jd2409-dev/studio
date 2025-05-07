@@ -28,13 +28,13 @@ const MessageSchema = z.object({
 });
 
 // Define the input schema for the AI Tutor flow
-export const AiTutorInputSchema = z.object({
+const AiTutorInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
 // Define the output schema for the AI Tutor flow
-export const AiTutorOutputSchema = z.object({
+const AiTutorOutputSchema = z.object({
   response: z.string().describe('The AI tutor\'s response to the user.'),
 });
 export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
