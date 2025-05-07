@@ -6,14 +6,15 @@
  */
 
 import { ai, z, gemini15Flash } from '@/ai/config/genkit-instance';
-import Handlebars from 'handlebars';
+// Removed Handlebars import as registration will happen inline
+// import Handlebars from 'handlebars';
 
 // Register Handlebars helper (this needs to be done once)
 // Ensure this runs before any prompt using 'eq' is defined or used.
-Handlebars.registerHelper('eq', function(a, b) {
-  // console.log(`Handlebars eq: comparing ${typeof a}"${a}" and ${typeof b}"${b}"`);
-  return a === b;
-});
+// Handlebars.registerHelper('eq', function(a, b) {
+//   // console.log(`Handlebars eq: comparing ${typeof a}"${a}" and ${typeof b}"${b}"`);
+//   return a === b;
+// });
 
 
 // Schema for messages in conversation history
@@ -55,8 +56,15 @@ Unknown: {{{content}}}
 Tutor, provide your response:
   `,
    handlebarsOptions: {
-      knownHelpersOnly: false, // Explicitly allow unregistered helpers
-      // helpers are now registered globally via Handlebars.registerHelper
+      knownHelpersOnly: false, // **Crucial: Allow custom helpers**
+      helpers: {
+         // **Crucial: Define the 'eq' helper here**
+         eq: function(a: any, b: any): boolean {
+            // Basic comparison, handles strings and numbers reasonably
+            return String(a) === String(b);
+         }
+         // Add other custom helpers here if needed
+      }
    },
   config: {
     temperature: 0.7,
@@ -88,18 +96,19 @@ export const aiTutorFlow = ai.defineFlow(
     console.log("AI Tutor Flow: Normalized input. Calling prompt...");
 
     try {
-        const result = await tutorPrompt(input); // Changed from prompt to tutorPrompt
-        const output = result?.output; // Use optional chaining
+        // Use optional chaining and check the specific output property
+        const result = await tutorPrompt(input);
+        const responseText = result?.output?.response;
 
         // Validate the output structure and content
-        if (!output || typeof output.response !== 'string' || output.response.trim() === '') {
+        if (responseText === undefined || typeof responseText !== 'string' || responseText.trim() === '') {
             console.error("AI Tutor Flow: Prompt returned invalid or empty response object:", result);
             // Provide a slightly more specific internal error message if possible
             return { response: "Sorry, I couldn't generate a valid response at this moment. Please try rephrasing or asking again later." };
         }
 
         console.log("AI Tutor Flow: Response generated successfully.");
-        return output; // Return the validated output object { response: string }
+        return { response: responseText }; // Return the validated output object { response: string }
 
     } catch (error: any) {
       console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));

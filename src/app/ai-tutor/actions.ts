@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Server Actions for the AI Tutor feature.
@@ -49,7 +48,8 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
     }
 
     // Re-throw other errors (like flow execution errors caught and re-thrown by the flow, or unexpected action errors)
-     // Prepend a clear indicator that this is an AI Tutor specific error for the frontend toast
-     throw new Error(`AI Tutor Error: ${err.message}`);
+    // Prepend a clear indicator that this is an AI Tutor specific error for the frontend toast
+    // Use err.message directly, as the flow itself already includes specific details
+    throw new Error(err.message); // Removed the "AI Tutor Error:" prefix as the flow adds better context
   }
 }
