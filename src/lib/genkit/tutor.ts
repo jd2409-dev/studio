@@ -1,3 +1,4 @@
+
 // No "use server" here
 
 import { z } from 'genkit';
@@ -24,7 +25,7 @@ export type AiTutorOutput = z.infer<typeof AiTutorOutputSchema>;
 const tutorPrompt = ai.definePrompt({
   name: 'tutorPrompt',
   model: gemini15Flash,
-  input: { schema: AiTutorInputSchema }, // Still use the original schema for the function input
+  input: { schema: z.object({ history: z.array(z.object({ role: z.string(), content: z.string() })) }) }, // Use simpler schema for prompt input after preprocessing
   output: { schema: AiTutorOutputSchema },
   prompt: `
 You are NexusLearn AI, a friendly, encouraging, and highly knowledgeable AI Tutor. Your goal is to help students understand academic concepts and guide them through learning processes. Use the provided conversation history for context. If the user asks non-academic questions, politely steer the conversation back to educational topics. If a question is unclear, ask for clarification. Avoid giving direct answers to homework/tests; instead, guide the student towards the answer. Use examples and analogies. Maintain a supportive and motivational tone. Address any question the user asks, even if non-academic, but always gently try to guide back to learning if the conversation strays too far.
@@ -36,7 +37,7 @@ Conversation History:
 
 Tutor, provide your response:
   `,
-  // Removed handlebarsOptions entirely as no custom helpers or logic needed in the template
+  // Removed handlebarsOptions entirely
   config: {
     temperature: 0.7, // Keep configuration here
   },
@@ -64,11 +65,13 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
   }
 
   // **Pre-process history for the prompt template**
+  // This step replaces the Handlebars helper logic
   const historyForPrompt = validatedInput.history.map(msg => ({
-    role: msg.role === 'user' ? 'User' : 'Tutor', // Normalize role names
+    role: msg.role === 'user' ? 'User' : 'Tutor', // Normalize role names *before* sending to prompt
     content: msg.content?.trim() || '[No content provided]', // Ensure content is non-empty string
   }));
 
+  // Create the input object specifically for the simplified prompt schema
   const inputForPrompt = { history: historyForPrompt };
 
   console.log("runTutorPrompt: Calling tutor prompt...");
@@ -101,7 +104,7 @@ export async function runTutorPrompt(input: AiTutorInput): Promise<AiTutorOutput
          // Return a structured error response for API key issues
          return { response: "Sorry, there's an issue with the AI configuration. Please contact support." };
      } else if (error.message?.includes("unknown helper")) {
-         // This should technically not happen now, but catch just in case
+         // This should *definitely* not happen now as helpers are removed, but catch just in case
           console.error("runTutorPrompt: Handlebars template error detected (unexpected):", error.message);
           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
      }
