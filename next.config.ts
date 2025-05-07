@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
     if (!isServer) {
       // Prevent Node.js specific modules like 'async_hooks' from being bundled for the client
       config.resolve.fallback = {
-        ...config.resolve.fallback,
+        ...(config.resolve.fallback || {}), // Ensure fallback object exists before spreading
         async_hooks: false, // Tell Webpack to ignore 'async_hooks' on the client
       };
     }
@@ -39,3 +39,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
