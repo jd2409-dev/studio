@@ -64,6 +64,9 @@ const SheetContent = React.forwardRef<
       className={cn(sheetVariants({ side }), className)}
       {...props}
     >
+      {/* Add a default, visually hidden title for accessibility */}
+      {/* This ensures DialogContent has an accessible name for screen readers */}
+      <SheetPrimitive.Title className="sr-only">Sheet Content</SheetPrimitive.Title>
       {children}
       <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
         <X className="h-4 w-4" />
