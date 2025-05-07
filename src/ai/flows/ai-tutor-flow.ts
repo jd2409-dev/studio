@@ -15,6 +15,7 @@ import { gemini15Flash } from '@genkit-ai/googleai';
 import Handlebars from 'handlebars'; 
 
 // Register the 'eq' helper globally for Handlebars used within this flow
+// This helper is used in the prompt template.
 Handlebars.registerHelper('eq', function(a, b) {
   return a === b;
 });
@@ -26,13 +27,13 @@ const MessageSchema = z.object({
   content: z.string(),
 });
 
-// Define the input schema for the AI Tutor flow - NOT EXPORTED
+// Define the input schema for the AI Tutor flow
 const AiTutorInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history between the user and the tutor.'),
 });
 export type AiTutorInput = z.infer<typeof AiTutorInputSchema>;
 
-// Define the output schema for the AI Tutor flow - NOT EXPORTED
+// Define the output schema for the AI Tutor flow
 const AiTutorOutputSchema = z.object({
   response: z.string().describe('The AI tutor\'s response to the user.'),
 });
@@ -66,7 +67,9 @@ Tutor: {{{content}}}
 Tutor, provide your response:
 `,
   customize: (promptObject) => {
-    // Explicitly set knownHelpersOnly to false
+    // Explicitly set knownHelpersOnly to false.
+    // This ensures that Handlebars doesn't restrict usage to only its built-in helpers,
+    // allowing our globally registered 'eq' helper to be recognized.
     if (!promptObject.handlebarsOptions) {
         promptObject.handlebarsOptions = {};
     }
@@ -105,6 +108,7 @@ const aiTutorFlow = ai.defineFlow(
     } catch (error: any) {
       console.error(`Error in aiTutorFlow:`, error.message, error.stack, "Input:", JSON.stringify(input));
       if (error.message?.includes("unknown helper")) {
+          // This specific check helps identify if the Handlebars helper issue persists.
           throw new Error(`AI Tutor internal template error: ${error.message}. Please report this issue.`);
       }
       throw new Error(`AI Tutor encountered an error: ${error.message}`);
@@ -122,7 +126,7 @@ export async function getTutorResponse(input: AiTutorInput): Promise<AiTutorOutp
         if (error instanceof z.ZodError) {
             throw new Error(`Invalid input for AI Tutor: ${error.errors.map(e => e.message).join(', ')}`);
         }
-        throw error;
+        // Re-throw the error so the calling page can handle it (e.g., show a toast)
+        throw error; 
     }
 }
-
