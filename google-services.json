@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1078854310147",
+    "project_id": "nexuslearn-ai",
+    "storage_bucket": "nexuslearn-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1078854310147:android:f018b715ecb75ea0efb136",
+        "android_client_info": {
+          "package_name": "com.nexuslearn.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1078854310147-nq5887456rch189lct07g4bgrg4mfgte.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCguUC0Xvp0W11qSiQGsL9fVei9qvzf9FM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1078854310147-nq5887456rch189lct07g4bgrg4mfgte.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
