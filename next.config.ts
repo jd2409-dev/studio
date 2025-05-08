@@ -1,5 +1,14 @@
 
 import type {NextConfig} from 'next';
+import withPWAInit from 'next-pwa'; // Import next-pwa
+
+// Configure PWA options
+const withPWA = withPWAInit({
+  dest: 'public', // Destination directory for service worker files
+  register: true, // Register the service worker
+  skipWaiting: true, // Skip waiting phase for service worker updates
+  disable: process.env.NODE_ENV === 'development', // Disable PWA in development mode
+});
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -57,4 +66,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap the Next.js config with the PWA config
+export default withPWA(nextConfig);
