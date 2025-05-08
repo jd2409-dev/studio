@@ -1,4 +1,5 @@
 
+
 'use client'; // Corrected directive
 
 import * as React from "react";
@@ -397,18 +398,18 @@ const SidebarInput = React.forwardRef<
   React.ComponentProps<typeof Input>
 >(({ className, ...props }, ref) => {
   return (
-    <div className="relative px-2 pb-2 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:pb-0"> {/* Add padding container */}
+    <div className="relative px-2 pb-2 group-data-[state=collapsed]:group-data-[collapsible=icon]:px-0 group-data-[state=collapsed]:group-data-[collapsible=icon]:pb-0"> {/* Add padding container and collapse specific padding */}
         <Input
           ref={ref}
           data-sidebar="input"
           className={cn(
-            "h-9 w-full bg-sidebar-accent border-sidebar-border shadow-none focus-visible:ring-1 focus-visible:ring-ring placeholder:text-muted-foreground group-data-[collapsible=icon]:hidden", // Use theme colors
+            "h-9 w-full bg-sidebar-accent border-sidebar-border shadow-none focus-visible:ring-1 focus-visible:ring-ring placeholder:text-muted-foreground group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Use theme colors and hide on icon collapse
             className
           )}
           {...props}
         />
          {/* Optional: Add a search icon when collapsed */}
-         <Button variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-data-[collapsible=icon]:inline-flex h-8 w-8" aria-label="Search">
+         <Button variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-data-[state=collapsed]:group-data-[collapsible=icon]:inline-flex h-8 w-8" aria-label="Search">
               <Search className="h-4 w-4" /> {/* Use Lucide Search icon */}
          </Button>
     </div>
@@ -471,7 +472,7 @@ const SidebarContent = React.forwardRef<
       data-sidebar="content"
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden p-1", // Add padding
-        "group-data-[collapsible=icon]:overflow-visible", // Allow tooltips to overflow when collapsed
+        "group-data-[collapsible=icon]:group-data-[state=collapsed]:overflow-visible", // Allow tooltips to overflow when collapsed
         className
       )}
       {...props}
@@ -507,7 +508,7 @@ const SidebarGroupLabel = React.forwardRef<
       data-sidebar="group-label"
       className={cn(
         "duration-200 flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-[margin,opacity] ease-in-out", // Use muted foreground
-        "group-data-[collapsible=icon]:my-2 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:px-2.5 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-[10px] group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:text-muted-foreground", // Icon collapsed style
+        "group-data-[collapsible=icon]:group-data-[state=collapsed]:my-2 group-data-[collapsible=icon]:group-data-[state=collapsed]:h-auto group-data-[collapsible=icon]:group-data-[state=collapsed]:px-2.5 group-data-[collapsible=icon]:group-data-[state=collapsed]:text-center group-data-[collapsible=icon]:group-data-[state=collapsed]:text-[10px] group-data-[collapsible=icon]:group-data-[state=collapsed]:font-semibold group-data-[collapsible=icon]:group-data-[state=collapsed]:text-muted-foreground", // Icon collapsed style
         className
       )}
       {...props}
@@ -530,7 +531,7 @@ const SidebarGroupAction = React.forwardRef<
         "absolute right-2 top-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none ring-offset-background transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&>svg]:size-4 [&>svg]:shrink-0", // Use theme colors
         // Increases hit area
         "after:absolute after:-inset-2 after:md:hidden",
-        "group-data-[collapsible=icon]:hidden", // Hide when icon collapsed
+        "group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Hide when icon collapsed
         showOnHover &&
           "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 peer-data-[active=true]/menu-button:text-sidebar-accent-foreground md:opacity-0",
         className
@@ -711,7 +712,7 @@ const SidebarMenuAction = React.forwardRef<
          "peer-data-[size=default]/menu-button:top-1.5", // Already h-6 w-6 by default
          "peer-data-[size=lg]/menu-button:top-[7px] peer-data-[size=lg]/menu-button:h-7 peer-data-[size=lg]/menu-button:w-7", // Adjust top for larger buttons
         // Visibility logic
-        "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
+        "group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Correctly hide when collapsed
         showOnHover &&
           "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 peer-data-[active=true]/menu-button:text-sidebar-accent-foreground md:opacity-0",
         className
@@ -736,7 +737,7 @@ const SidebarMenuBadge = React.forwardRef<
        "peer-data-[size=default]/menu-button:top-2",
        "peer-data-[size=lg]/menu-button:top-2.5",
       // Hide when collapsed
-      "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
+      "group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Correctly hide when collapsed
       className
     )}
     {...props}
@@ -797,7 +798,7 @@ const SidebarMenuSub = React.forwardRef<
     className={cn(
        // Use ml based on icon size + gap + half of border width
        "ml-[calc(theme(spacing.4)_+_theme(spacing.2)_+_1px)] flex min-w-0 flex-col gap-0.5 border-l border-sidebar-border pl-2 py-1",
-      "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
+      "group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Correctly hide when collapsed
       className
     )}
     {...props}
@@ -837,7 +838,7 @@ const SidebarMenuSubButton = React.forwardRef<
         height,
         textSize,
         isActive && "bg-sidebar-accent/70 text-sidebar-accent-foreground font-medium", // Active state style
-        "group-data-[collapsible=icon]:group-data-[state=collapsed]:hidden", // Correctly hide when collapsed
+        "group-data-[state=collapsed]:group-data-[collapsible=icon]:hidden", // Correctly hide when collapsed
         className
       )}
       {...props}
