@@ -34,7 +34,17 @@ export default function LoginPage() {
   }, [user, authLoading, router]);
 
   const createFirestoreUserProfile = async (userId: string, userEmail: string, userName: string, photoURL?: string | null) => {
-       ensureFirebaseInitialized();
+       try {
+            ensureFirebaseInitialized(); // Ensure services are ready
+       } catch(initError: any) {
+            console.error("Firestore User Profile Creation Skipped: Firebase not initialized.", initError.message);
+            toast({
+                 title: "Initialization Error",
+                 description: "Could not create profile due to initialization issues.",
+                 variant: "destructive",
+             });
+            return; // Stop if Firebase isn't ready
+       }
       const userDocRef = doc(db!, 'users', userId);
       try {
         const docSnap = await getDoc(userDocRef);
@@ -53,12 +63,18 @@ export default function LoginPage() {
         } else {
            console.log("Firestore user profile already exists for:", userId);
         }
-      } catch (error) {
+      } catch (error: any) {
          console.error("Error creating/checking Firestore profile:", error);
-         // Log error but proceed, user is authenticated at this point
+          // Log error but proceed, user is authenticated at this point
+           let errorDesc = "Could not create or verify user profile data.";
+           if (error.code === 'permission-denied') {
+                errorDesc = "Permission denied accessing profile data.";
+            } else if (error.code === 'unavailable') {
+                 errorDesc = "Network error accessing profile data.";
+            }
          toast({
              title: "Profile Creation Warning",
-             description: "Could not create or verify user profile data in the database. Some features might be limited.",
+             description: errorDesc,
              variant: "default",
          });
       }
@@ -69,13 +85,15 @@ export default function LoginPage() {
     e?.preventDefault();
     setIsLoggingIn(true); // Start loading indicator *before* async operation
     try {
-        ensureFirebaseInitialized();
+        ensureFirebaseInitialized(); // Ensure Firebase is ready
         if (!email || !password) {
-            toast({ title: "Error", description: "Please enter email and password.", variant = "destructive"});
+            toast({ title: "Error", description: "Please enter email and password.", variant: "destructive"});
             setIsLoggingIn(false); // Stop loading if validation fails
             return;
         }
-        await signInWithEmailAndPassword(auth!, email, password);
+        if (!auth) throw new Error("Firebase auth instance is unexpectedly null."); // Check auth instance
+
+        await signInWithEmailAndPassword(auth, email, password);
         toast({
             title: "Login Successful",
             description: "Redirecting to dashboard.",
@@ -87,6 +105,8 @@ export default function LoginPage() {
        if (error.code) {
            switch (error.code) {
                 case 'auth/invalid-credential':
+                case 'auth/user-not-found': // Handle both invalid email/password and user not found
+                case 'auth/wrong-password':
                    description = "Invalid email or password."; break;
                 case 'auth/invalid-email':
                      description = "Please enter a valid email."; break;
@@ -95,20 +115,25 @@ export default function LoginPage() {
                case 'auth/too-many-requests':
                     description = "Too many failed login attempts. Please try again later or reset your password."; break;
                 case 'auth/network-request-failed':
-                    description = "Network error. Check connection."; break;
+                    description = "Network error. Check your connection."; break;
                 case 'auth/api-key-not-valid':
-                    description = "Authentication failed: Invalid configuration."; break;
+                    description = "Authentication failed: Invalid application configuration."; break;
                 case 'auth/configuration-not-found':
-                     description = "Authentication error. Ensure Email/Password sign-in is enabled."; break;
+                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
+                      console.error("Email/Password sign-in method not enabled in Firebase console.");
+                      break;
                 case 'auth/unauthorized-domain':
-                     description = "Domain not authorized for login."; break;
+                     description = "This domain is not authorized for login. Please check your Firebase project settings.";
+                      console.error("Domain not authorized in Firebase console.");
+                      break;
                default:
                  description = error.message || `Login failed with code: ${error.code}`;
            }
        } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error.";
+            description = "Application configuration error. Firebase services are not ready.";
+            console.error("Firebase initialization error detected during login attempt.");
        }
-      toast({ title: "Login Failed", description: description, variant = "destructive" });
+      toast({ title: "Login Failed", description: description, variant: "destructive" });
     } finally {
       setIsLoggingIn(false); // Stop loading indicator regardless of success/failure
     }
@@ -118,16 +143,20 @@ export default function LoginPage() {
     e?.preventDefault();
     setIsSigningUp(true); // Start loading indicator *before* async operation
      try {
-        ensureFirebaseInitialized();
+        ensureFirebaseInitialized(); // Ensure Firebase is ready
         if (!email || !password || !name) {
-            toast({ title: "Error", description: "Please enter name, email, and password.", variant = "destructive"});
+            toast({ title: "Error", description: "Please enter name, email, and password.", variant: "destructive"});
             setIsSigningUp(false); // Stop loading if validation fails
             return;
         }
+         if (!auth) throw new Error("Firebase auth instance is unexpectedly null."); // Check auth instance
 
-        const userCredential = await createUserWithEmailAndPassword(auth!, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const newUser = userCredential.user;
+
+        // Update Firebase Auth profile with name
         await updateProfile(newUser, { displayName: name });
+        // Create Firestore profile document
         await createFirestoreUserProfile(newUser.uid, newUser.email!, name, newUser.photoURL);
 
         toast({ title: "Signup Successful", description: "Account created. Redirecting...", });
@@ -137,19 +166,26 @@ export default function LoginPage() {
         let description = "An unexpected error occurred during signup.";
         if (error.code) {
             switch (error.code) {
-                case 'auth/email-already-in-use': description = "Email already in use."; break;
-                case 'auth/invalid-email': description = "Please enter a valid email."; break;
-                case 'auth/weak-password': description = "Password too weak (min. 6 characters)."; break;
-                 case 'auth/network-request-failed': description = "Network error. Check connection."; break;
-                 case 'auth/api-key-not-valid': description = "Authentication failed: Invalid configuration."; break;
-                 case 'auth/configuration-not-found': description = "Authentication error. Ensure Email/Password sign-in is enabled."; break;
-                 case 'auth/unauthorized-domain': description = "Domain not authorized for signup."; break;
+                case 'auth/email-already-in-use': description = "This email address is already in use by another account."; break;
+                case 'auth/invalid-email': description = "Please enter a valid email address."; break;
+                case 'auth/weak-password': description = "Password is too weak. It must be at least 6 characters long."; break;
+                 case 'auth/network-request-failed': description = "Network error. Please check your internet connection and try again."; break;
+                 case 'auth/api-key-not-valid': description = "Authentication failed: Invalid application configuration."; break;
+                 case 'auth/configuration-not-found':
+                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
+                      console.error("Email/Password sign-in method not enabled in Firebase console.");
+                      break;
+                 case 'auth/unauthorized-domain':
+                     description = "This domain is not authorized for signup. Please check your Firebase project settings.";
+                      console.error("Domain not authorized in Firebase console.");
+                      break;
                 default: description = error.message || `Signup failed with code: ${error.code}`;
             }
         } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error.";
+            description = "Application configuration error. Firebase services are not ready.";
+             console.error("Firebase initialization error detected during signup attempt.");
        }
-        toast({ title: "Signup Failed", description: description, variant = "destructive" });
+        toast({ title: "Signup Failed", description: description, variant: "destructive" });
     } finally {
         setIsSigningUp(false); // Stop loading indicator regardless of success/failure
     }
@@ -158,10 +194,13 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
      setIsGoogleLoading(true); // Start loading indicator *before* async operation
      try {
-        ensureFirebaseInitialized();
+        ensureFirebaseInitialized(); // Ensure Firebase is ready
+        if (!auth) throw new Error("Firebase auth instance is unexpectedly null."); // Check auth instance
+
         const provider = new GoogleAuthProvider();
-        const result = await signInWithPopup(auth!, provider);
+        const result = await signInWithPopup(auth, provider);
         const googleUser = result.user;
+        // Ensure Firestore profile exists or is created
         await createFirestoreUserProfile(googleUser.uid, googleUser.email!, googleUser.displayName || '', googleUser.photoURL);
 
         toast({ title: "Google Sign-In Successful", description: "Redirecting...", });
@@ -172,29 +211,39 @@ export default function LoginPage() {
          if (error.code) {
              switch(error.code) {
                  case 'auth/account-exists-with-different-credential':
-                     description = "Account exists with a different sign-in method (e.g., email/password)."; break;
+                     description = "An account already exists with this email address using a different sign-in method (e.g., email/password). Please log in using that method."; break;
                  case 'auth/popup-closed-by-user':
                      description = "Sign-in cancelled.";
+                     // Don't show a destructive toast for user cancellation
                      toast({ title: "Sign-in Cancelled", description: description });
                      setIsGoogleLoading(false); // Stop loading here for cancellation
                      return;
                  case 'auth/popup-blocked-by-browser':
-                      description = "Sign-In popup blocked by browser."; break;
+                      description = "The Google Sign-In popup was blocked by your browser. Please allow popups for this site."; break;
                  case 'auth/network-request-failed':
-                    description = "Network error. Check connection."; break;
+                    description = "Network error. Please check your internet connection and try again."; break;
                  case 'auth/api-key-not-valid':
-                    description = "Authentication failed: Invalid configuration."; break;
+                    description = "Authentication failed: Invalid application configuration."; break;
                 case 'auth/configuration-not-found':
-                     description = "Authentication error. Ensure Google sign-in is enabled."; break;
+                     description = "Authentication configuration error. Please ensure Google Sign-In is enabled in your Firebase project settings.";
+                     console.error("Google sign-in method not enabled in Firebase console.");
+                     break;
                 case 'auth/unauthorized-domain':
-                     description = "Domain not authorized for Google Sign-In."; break;
+                     description = "This domain is not authorized for Google Sign-In. Please check your Firebase project settings.";
+                     console.error("Domain not authorized in Firebase console.");
+                     break;
                  default:
                      description = error.message || `Google Sign-In failed with code: ${error.code}`;
              }
+             toast({ title: "Google Sign-In Failed", description: description, variant: "destructive" });
          } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error.";
+            description = "Application configuration error. Firebase services are not ready.";
+             console.error("Firebase initialization error detected during Google sign-in attempt.");
+             toast({ title: "Google Sign-In Failed", description: description, variant: "destructive" });
+         } else {
+             // Generic catch-all if no specific code/message matched
+             toast({ title: "Google Sign-In Failed", description: description, variant: "destructive" });
          }
-         toast({ title: "Google Sign-In Failed", description: description, variant = "destructive" });
     } finally {
         // Ensure loading stops unless it was stopped early (e.g., for cancellation)
         if (isGoogleLoading) {

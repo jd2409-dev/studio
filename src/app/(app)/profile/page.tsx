@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile as updateAuthProfile } from 'firebase/auth';
-import { Loader2, UploadCloud, AlertTriangle } from 'lucide-react';
+import { Loader2, UploadCloud, AlertTriangle, Moon, Sun, Bell, Volume2, UserCircle } from 'lucide-react';
 import { getSchoolBoards, type SchoolBoard } from '@/services/school-board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { UserProfile } from '@/types/user';
@@ -49,7 +49,7 @@ export default function ProfilePage() {
               setSchoolBoards(boards);
           } catch (error) {
               console.error("Failed to fetch school boards:", error);
-              toast({ title: "Error", description: "Could not load school boards list.", variant = "destructive" });
+              toast({ title: "Error", description: "Could not load school boards list.", variant: "destructive" });
           } finally {
               setIsLoadingBoards(false);
           }
@@ -109,7 +109,7 @@ export default function ProfilePage() {
                       setDataFetchSource('error');
                  }
                  setFetchError(errorDesc);
-                 toast({ title: "Error Loading Profile", description: errorDesc, variant = "destructive" });
+                 toast({ title: "Error Loading Profile", description: errorDesc, variant: "destructive" });
                  setName(user.displayName || user.email?.split('@')[0] || 'User');
                  const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
                  setAvatarDataUrl(fallbackAvatar);
@@ -151,7 +151,7 @@ export default function ProfilePage() {
              if (creationError.code === 'permission-denied') {
                   errorDesc = "Permission denied. Cannot create default profile.";
              }
-             toast({ title: "Error", description: errorDesc, variant = "destructive" });
+             toast({ title: "Error", description: errorDesc, variant: "destructive" });
              setFetchError(errorDesc);
              setProfile(defaultProfileData); // Still set local state
              setName(defaultProfileData.name);
@@ -165,13 +165,13 @@ export default function ProfilePage() {
       const file = event.target.files?.[0];
       if (file) {
           if (!file.type.startsWith('image/')) {
-              toast({ title: "Invalid File", description: "Please select an image file (PNG, JPG, GIF, WEBP).", variant = "destructive" });
+              toast({ title: "Invalid File", description: "Please select an image file (PNG, JPG, GIF, WEBP).", variant: "destructive" });
               setAvatarFile(null);
               event.target.value = '';
               return;
           }
           if (file.size > MAX_AVATAR_SIZE) {
-               toast({ title: "File Too Large", description: `Avatar image must be smaller than ${MAX_AVATAR_SIZE / 1024 / 1024}MB.`, variant = "destructive" });
+               toast({ title: "File Too Large", description: `Avatar image must be smaller than ${MAX_AVATAR_SIZE / 1024 / 1024}MB.`, variant: "destructive" });
                setAvatarFile(null);
                event.target.value = '';
                return;
@@ -193,13 +193,13 @@ export default function ProfilePage() {
 
    const handleUpdateProfile = async () => {
       if (!user) {
-          toast({ title: "Error", description: "You must be logged in to update your profile.", variant = "destructive" });
+          toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
           return;
       }
        try {
            ensureFirebaseInitialized();
        } catch (initErr: any) {
-            toast({ title: "Application Error", description: `Cannot save profile: ${initErr.message}`, variant = "destructive" });
+            toast({ title: "Application Error", description: `Cannot save profile: ${initErr.message}`, variant: "destructive" });
             return;
        }
 
@@ -261,7 +261,7 @@ export default function ProfilePage() {
 
            if (password) {
                if (!navigator.onLine) {
-                    toast({ title: "Offline", description: "Cannot change password while offline.", variant = "destructive"});
+                    toast({ title: "Offline", description: "Cannot change password while offline.", variant: "destructive"});
                } else if (!currentPassword) {
                    toast({ title: "Password Update Skipped", description: "Enter your current password to change it.", variant: "default" });
                } else {
@@ -288,7 +288,7 @@ export default function ProfilePage() {
                        } else {
                             passErrorDesc = `Password update failed: ${passwordError.message || passwordError.code}`;
                        }
-                        toast({ title: "Password Update Failed", description: passErrorDesc, variant = "destructive" });
+                        toast({ title: "Password Update Failed", description: passErrorDesc, variant: "destructive" });
                    }
                }
            }
@@ -310,14 +310,14 @@ export default function ProfilePage() {
                  setAvatarDataUrl(profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
                  setSchoolBoard(profile?.schoolBoard || 'none');
                  setGrade(profile?.grade || 'none');
-                 toast({ title: "Save Failed", description: errorDesc, variant = "destructive" });
+                 toast({ title: "Save Failed", description: errorDesc, variant: "destructive" });
             } else {
                  setProfile(profile); // Revert optimistic update
                  setName(profile?.name || '');
                  setAvatarDataUrl(profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
                  setSchoolBoard(profile?.schoolBoard || 'none');
                  setGrade(profile?.grade || 'none');
-                 toast({ title: "Update Failed", description: error.message || errorDesc, variant = "destructive" });
+                 toast({ title: "Update Failed", description: error.message || errorDesc, variant: "destructive" });
             }
       } finally {
           setIsSaving(false); // Stop saving indicator regardless of success/failure
@@ -340,7 +340,7 @@ export default function ProfilePage() {
        return (
           <div className="container mx-auto py-8 text-center">
               <h1 className="text-3xl font-bold mb-6">My Profile</h1>
-               <Alert variant = "destructive" className="max-w-md mx-auto">
+               <Alert variant = "destructive" className="max-w-md mx-auto shadow">
                  <AlertTriangle className="h-4 w-4" />
                  <AlertTitle>{fetchError ? "Error Loading Profile" : "Not Logged In"}</AlertTitle>
                  <AlertDescription>{fetchError || "Please log in to view your profile."}</AlertDescription>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent, useEffect, useRef } from 'react';
@@ -28,7 +29,7 @@ export default function TextbookExplainerPage() {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false); // Placeholder for potential server-side audio
   const [speechError, setSpeechError] = useState<string | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const cancelSpeech = () => {
        if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
@@ -55,22 +56,22 @@ export default function TextbookExplainerPage() {
 
     if (selectedFile) {
       if (selectedFile.type !== ALLOWED_FILE_TYPE) {
-          toast({
-              title: "Invalid File Type",
-              description: `Please select a PDF file. Type detected: ${selectedFile.type}`,
-              variant = "destructive",
-          });
-          if (event.target) event.target.value = '';
-          return;
+        toast({
+          title: "Invalid File Type",
+          description: `Please select a PDF file. Type detected: ${selectedFile.type}`,
+          variant: "destructive",
+        });
+        if (event.target) event.target.value = '';
+        return;
       }
       if (selectedFile.size > MAX_FILE_SIZE) {
-          toast({
-              title: "File Too Large",
-              description: `PDF file must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
-              variant = "destructive"
-          });
-          if (event.target) event.target.value = '';
-          return;
+        toast({
+          title: "File Too Large",
+          description: `PDF file must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+          variant: "destructive"
+        });
+        if (event.target) event.target.value = '';
+        return;
       }
       setFile(selectedFile);
     }
@@ -79,11 +80,11 @@ export default function TextbookExplainerPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-        toast({ title: "Authentication Required", description: "Please log in to use the explainer.", variant = "destructive" });
+        toast({ title: "Authentication Required", description: "Please log in to use the explainer.", variant: "destructive" });
         return;
     }
     if (!file) {
-      toast({ title: "Input Required", description: "Please select a PDF file first.", variant = "destructive" });
+      toast({ title: "Input Required", description: "Please select a PDF file first.", variant: "destructive" });
       return;
     }
 
@@ -97,7 +98,7 @@ export default function TextbookExplainerPage() {
     reader.onload = async () => {
         const fileDataUri = reader.result as string;
         if (!fileDataUri || !fileDataUri.startsWith(`data:${ALLOWED_FILE_TYPE};base64,`)) {
-            toast({ title: "File Read Error", description: "Failed to read the PDF file correctly.", variant = "destructive" });
+            toast({ title: "File Read Error", description: "Failed to read the PDF file correctly.", variant: "destructive" });
             setIsLoading(false);
             return;
         }
@@ -132,14 +133,14 @@ export default function TextbookExplainerPage() {
                     errorDesc = error.message;
                  }
             }
-            toast({ title: "Error Generating Explanation", description: errorDesc, variant = "destructive" });
+            toast({ title: "Error Generating Explanation", description: errorDesc, variant: "destructive" });
         } finally {
             setIsLoading(false); // Stop loading indicator regardless of success/failure
         }
     };
     reader.onerror = (error) => {
         console.error("Error reading file:", error);
-        toast({ title: "File Read Error", description: "Could not read the selected file.", variant = "destructive" });
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
         setIsLoading(false);
     };
   };
@@ -173,7 +174,7 @@ export default function TextbookExplainerPage() {
               utterance.onpause = () => { console.log("Speech paused via API"); /* State handled by logic */ };
               utterance.onresume = () => { console.log("Speech resumed via API"); setIsPaused(false); };
                utterance.onerror = (event) => {
-                    console.warn("Speech synthesis error/interruption:", event.error, event);
+                    console.error("Speech synthesis error:", event.error, event);
                     let errorMsg = `Speech synthesis failed: ${event.error || 'unknown error'}`;
                      if (event.error === 'interrupted') {
                          errorMsg = "Speech playback was interrupted.";
@@ -181,13 +182,13 @@ export default function TextbookExplainerPage() {
                          toast({ title: "Playback Interrupted", description: errorMsg, variant: "default" });
                     } else {
                         // Handle other errors more severely
-                        if (event.error === 'synthesis-failed' || event.error === 'network') { errorMsg += ". Check connection or try a different voice/browser/browser."; }
+                        if (event.error === 'synthesis-failed' || event.error === 'network') { errorMsg += ". Check connection or try a different voice/browser."; }
                         else if (event.error === 'language-unavailable') { errorMsg += ". The selected language is unavailable."; }
                         else if (event.error === 'not-allowed') { errorMsg = "Speech synthesis permission denied by the browser."; }
                         else if (event.error === 'audio-busy') { errorMsg = "Audio output is busy. Please wait or try again."; }
                         else if (event.error === 'invalid-argument') { errorMsg = "Invalid argument provided to speech synthesis."; }
                         setSpeechError(errorMsg);
-                         toast({ title: "Audio Playback Error", description: errorMsg, variant = "destructive" });
+                         toast({ title: "Audio Playback Error", description: errorMsg, variant: "destructive" });
                     }
                    setIsSpeaking(false);
                    setIsPaused(false);
@@ -201,7 +202,7 @@ export default function TextbookExplainerPage() {
                   console.error("Error calling speechSynthesis.speak:", speakError);
                    const errorMsg = `Could not start speech: ${speakError.message}`;
                    setSpeechError(errorMsg);
-                    toast({ title: "Audio Error", description: errorMsg, variant = "destructive" });
+                    toast({ title: "Audio Error", description: errorMsg, variant: "destructive" });
                    setIsSpeaking(false);
                    setIsPaused(false);
                    utteranceRef.current = null;
@@ -390,5 +391,3 @@ export default function TextbookExplainerPage() {
     </div>
   );
 }
-
-    

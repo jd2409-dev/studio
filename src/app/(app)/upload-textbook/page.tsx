@@ -25,7 +25,7 @@ export default function UploadTextbookPage() {
   const [isOnline, setIsOnline] = useState(true);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
      if (typeof navigator !== 'undefined') {
@@ -74,15 +74,15 @@ export default function UploadTextbookPage() {
     event.preventDefault();
 
     if (!isOnline) {
-        toast({ title: "Offline", description: "Cannot upload files while offline.", variant = "destructive" });
+        toast({ title: "Offline", description: "Cannot upload files while offline.", variant: "destructive" });
         return;
     }
      if (!user) {
-        toast({ title: "Error", description: "You must be logged in to upload.", variant = "destructive" });
+        toast({ title: "Error", description: "You must be logged in to upload.", variant: "destructive" });
         return;
     }
     if (!file) {
-      toast({ title: "Error", description: "Please select a file to upload.", variant = "destructive" });
+      toast({ title: "Error", description: "Please select a file to upload.", variant: "destructive" });
       return;
     }
 
@@ -128,7 +128,7 @@ export default function UploadTextbookPage() {
                      case 'storage/retry-limit-exceeded': errorMessage = "Network error during upload. Please check connection and try again."; break;
                      default: errorMessage = `Upload failed: ${error.message}`;
                  }
-                toast({ title: "Upload Failed", description: errorMessage, variant = "destructive" });
+                toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
                 setUploadStatus('error');
                 setIsLoading(false); // Ensure loading stops on error
             },
@@ -166,7 +166,7 @@ export default function UploadTextbookPage() {
          } else if (error.message?.includes("storage is null")) {
              errorMessage = "Storage service not available. Check Firebase configuration.";
          }
-        toast({ title: "Upload Error", description: errorMessage, variant = "destructive" });
+        toast({ title: "Upload Error", description: errorMessage, variant: "destructive" });
         setUploadStatus('error');
         setIsLoading(false); // Ensure loading stops on init error
         setUploadProgress(null);
