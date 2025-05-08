@@ -1,3 +1,4 @@
+
 'use client'; // Corrected directive
 
 import * as React from "react";
@@ -260,25 +261,25 @@ const Sidebar = React.forwardRef<
         <div
           className={cn(
             "duration-200 relative h-svh bg-transparent transition-[width] ease-in-out flex-shrink-0", // Prevent shrinking
-             // Base width
+             // Base width for expanded state or no collapse
              "w-[--sidebar-width]",
-             // Handle different collapse styles
-             state === 'collapsed' && collapsible === 'offcanvas' && '!w-0', // Use ! to override base width
-             state === 'collapsed' && collapsible === 'icon' && (variant === 'floating' || variant === 'inset' ? '!w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]' : '!w-[var(--sidebar-width-icon)]')
+             // Handle different collapse styles based on state and collapsible prop
+             state === 'collapsed' && collapsible === 'offcanvas' && '!w-0',
+             state === 'collapsed' && collapsible === 'icon' && '!w-[var(--sidebar-width-icon)]' // Icon mode width
           )}
         />
          {/* This is the actual fixed sidebar */}
         <div
           className={cn(
             "duration-200 fixed inset-y-0 z-10 hidden h-svh transition-[left,right,width] ease-in-out md:flex",
-            // Base width
+            // Base width for expanded state or no collapse
             "w-[--sidebar-width]",
             // Positioning based on side
             side === "left" ? "left-0" : "right-0",
              // Offcanvas collapse behavior
              state === 'collapsed' && collapsible === 'offcanvas' && (side === 'left' ? "!left-[calc(var(--sidebar-width)*-1)]" : "!right-[calc(var(--sidebar-width)*-1)]"),
-            // Icon collapse behavior with variants
-             state === 'collapsed' && collapsible === 'icon' && (variant === 'floating' || variant === 'inset' ? "!w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)] p-2" : "!w-[var(--sidebar-width-icon)]"),
+             // Icon collapse behavior width adjustment
+             state === 'collapsed' && collapsible === 'icon' && '!w-[var(--sidebar-width-icon)]',
              // Border for non-floating/inset variants
              variant !== 'floating' && variant !== 'inset' && (side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border'),
             className
@@ -584,8 +585,8 @@ const sidebarMenuButtonVariants = cva(
    "peer/menu-button relative flex w-full items-center justify-start gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-offset-background transition-[width,height,padding,color,background-color] duration-150 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-sidebar-accent/80 active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-primary data-[active=true]:font-medium data-[active=true]:text-sidebar-primary-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
    // Icon collapse specific styles: fixed size, center content
    "group-data-[collapsible=icon]:group-data-[state=collapsed]:size-9 group-data-[collapsible=icon]:group-data-[state=collapsed]:p-0 group-data-[collapsible=icon]:group-data-[state=collapsed]:items-center group-data-[collapsible=icon]:group-data-[state=collapsed]:justify-center",
-   // Hide the text span specifically when collapsed in icon mode, targeting any span after the first child (icon)
-   // IMPORTANT: Target the direct child span, assuming structure is <Icon/><span/>
+   // Hide the text span specifically when collapsed in icon mode
+   // Ensure it targets only the span meant for text, not icons or other elements
    "group-data-[collapsible=icon]:group-data-[state=collapsed]:[&>span]:hidden",
    // Ensure icon size is consistent
    "[&>svg]:size-4 [&>svg]:shrink-0", // Base icon size
@@ -650,6 +651,7 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size, className }))}
         {...props}
       >
+        {/* Render children directly - the CSS handles hiding the span */}
         {children}
       </Comp>
     );

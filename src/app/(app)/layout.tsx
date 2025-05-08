@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -84,7 +85,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Desktop Sidebar */}
       <Sidebar className="hidden md:flex flex-col" collapsible="icon"> {/* Ensure collapsible="icon" */}
         <SidebarHeader className="flex items-center justify-between p-2 border-b border-sidebar-border">
-            <Link href="/" className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
+            {/* Expanded Logo/Title */}
+            <Link href="/" className="flex items-center gap-2 group-data-[state=expanded]:flex group-data-[state=collapsed]:hidden">
                {/* SVG Logo */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
                   <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -94,14 +96,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span className="font-semibold text-lg text-sidebar-foreground">NexusLearn AI</span>
             </Link>
              {/* Collapsed Logo/Icon */}
-            <Link href="/" className="items-center gap-2 hidden group-data-[state=collapsed]:flex" aria-label="NexusLearn AI Home">
-                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary">
+            <Link href="/" className="items-center gap-2 hidden group-data-[state=collapsed]:flex group-data-[state=expanded]:hidden p-1.5" aria-label="NexusLearn AI Home">
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                    <path d="M2 17l10 5 10-5"/>
                    <path d="M2 12l10 5 10-5"/>
                  </svg>
             </Link>
-          <SidebarTrigger className="ml-auto"/>
+          {/* Trigger is only visually relevant when expanded */}
+          <SidebarTrigger className="ml-auto group-data-[state=collapsed]:hidden"/>
         </SidebarHeader>
 
         {/* Scrollable Content Area */}
@@ -133,7 +136,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                  </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                 <SidebarMenuButton asChild isActive={pathname === '/quickfind'} tooltip="QuickFind">
+                 <SidebarMenuButton asChild isActive={pathname === '/quickfind'} tooltip="QuickFind Document Search">
                    <Link href="/quickfind">
                       <Search />
                       <span>QuickFind</span>
@@ -192,7 +195,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </SidebarContent>
 
         {/* Footer Section */}
-        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto group-data-[state=collapsed]:group-data-[collapsible=icon]:border-t-0">
           <SidebarMenu className="space-y-1">
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
