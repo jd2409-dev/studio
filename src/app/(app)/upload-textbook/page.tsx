@@ -21,7 +21,7 @@ export default function UploadTextbookPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false); // Tracks the entire upload process
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = 'idle' | 'uploading' | 'success' | 'error' ('idle');
   const [isOnline, setIsOnline] = useState(true);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -72,23 +72,30 @@ export default function UploadTextbookPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Set loading immediately
+    setIsLoading(true);
+    setUploadStatus('uploading');
+    setUploadProgress(0);
 
     if (!isOnline) {
         toast({ title: "Offline", description: "Cannot upload files while offline.", variant: "destructive" });
+        setIsLoading(false); // Stop loading
+        setUploadStatus('error');
         return;
     }
      if (!user) {
         toast({ title: "Error", description: "You must be logged in to upload.", variant: "destructive" });
+        setIsLoading(false); // Stop loading
+        setUploadStatus('error');
         return;
     }
     if (!file) {
       toast({ title: "Error", description: "Please select a file to upload.", variant: "destructive" });
+      setIsLoading(false); // Stop loading
+      setUploadStatus('error');
       return;
     }
 
-    setIsLoading(true); // Start loading *before* async operations
-    setUploadStatus('uploading');
-    setUploadProgress(0);
 
     try {
         ensureFirebaseInitialized();
@@ -115,10 +122,11 @@ export default function UploadTextbookPage() {
                      case 'storage/canceled':
                         errorMessage = "Upload cancelled.";
                          console.log("Upload cancelled by user or system.");
+                         // No toast for user cancellation, just reset state
                          setUploadStatus('idle'); setIsLoading(false); setUploadProgress(null); setFile(null);
                          if (fileInputRef.current) fileInputRef.current.value = '';
-                         toast({ title: "Upload Cancelled", description: errorMessage, variant: "default" }); // Inform user
-                         return;
+                         // toast({ title: "Upload Cancelled", description: errorMessage, variant: "default" }); // Inform user
+                         return; // Exit if cancelled
                      case 'storage/unknown': errorMessage = "Unknown storage error occurred."; break;
                      case 'storage/object-not-found': errorMessage = "File path issue (internal error)."; break;
                      case 'storage/bucket-not-found': errorMessage = "Storage bucket not found. Check Firebase project config."; break;
@@ -131,6 +139,7 @@ export default function UploadTextbookPage() {
                 toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
                 setUploadStatus('error');
                 setIsLoading(false); // Ensure loading stops on error
+                setUploadProgress(null); // Reset progress on error
             },
             async () => {
                 console.log('Upload successful');
@@ -140,20 +149,21 @@ export default function UploadTextbookPage() {
                      // TODO: Save downloadURL to Firestore (e.g., update userProgress or a userFiles collection)
                      toast({ title: "Upload Complete", description: `${file.name} uploaded successfully.` });
                       setUploadStatus('success');
-                      setUploadProgress(100);
+                      setUploadProgress(100); // Ensure progress shows 100% on success
                       // Reset form after a short delay on success
                       setTimeout(() => {
                          setFile(null);
                          setUploadStatus('idle');
                          setUploadProgress(null);
                          if (fileInputRef.current) fileInputRef.current.value = '';
+                         setIsLoading(false); // Stop loading finally after success delay
                       }, 2500);
                  } catch (urlError: any) {
                       console.error("Error getting download URL:", urlError);
                       toast({ title: "Upload Warning", description: "File uploaded, but failed to get download URL.", variant: "default" });
                       setUploadStatus('success'); // Still success, but URL failed
-                 } finally {
-                    setIsLoading(false); // Ensure loading stops after completion/URL fetch attempt
+                      setIsLoading(false); // Stop loading even if URL fails
+                      setUploadProgress(100);
                  }
             }
         );
@@ -266,7 +276,7 @@ export default function UploadTextbookPage() {
               disabled={isLoading || !file || uploadStatus === 'success' || !isOnline || authLoading || !user || uploadStatus === 'uploading'}
               className="w-full"
             >
-              {isLoading ? (
+              {isLoading && uploadStatus === 'uploading' ? ( // Show loading only when actively uploading
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Uploading...
@@ -292,4 +302,5 @@ export default function UploadTextbookPage() {
   );
 }
 
+    
     

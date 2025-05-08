@@ -100,7 +100,7 @@ export default function SettingsPage() {
               toast({
                   title: "Error Loading Settings",
                   description: errorDesc,
-                  variant = "destructive",
+                  variant: "destructive",
               });
               // Use defaults on error, apply system dark mode via the other useEffect
               setPreferences(defaultPreferences);
@@ -125,11 +125,13 @@ export default function SettingsPage() {
   };
 
   const handleSaveChanges = async () => {
+      // Set saving state immediately
+      setIsSaving(true);
       if (!user) {
-          toast({ title: "Authentication Required", description: "You must be logged in to save settings.", variant = "destructive" });
+          toast({ title: "Authentication Required", description: "You must be logged in to save settings.", variant: "destructive" });
+          setIsSaving(false); // Stop saving if not logged in
           return;
       }
-      setIsSaving(true); // Start saving indicator *before* async operation
       try {
             ensureFirebaseInitialized();
             const userDocRef = doc(db!, 'users', user.uid);
@@ -143,7 +145,7 @@ export default function SettingsPage() {
          } else if (error.code === 'unavailable') {
               errorDesc = "Network error saving settings. Changes might not be saved.";
          }
-          toast({ title: "Save Failed", description: errorDesc, variant = "destructive" });
+          toast({ title: "Save Failed", description: errorDesc, variant: "destructive" });
       } finally {
           setIsSaving(false); // Stop saving indicator regardless of success/failure
       }
@@ -289,4 +291,5 @@ export default function SettingsPage() {
   );
 }
 
+    
     

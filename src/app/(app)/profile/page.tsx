@@ -37,7 +37,7 @@ export default function ProfilePage() {
   const [schoolBoards, setSchoolBoards] = useState<SchoolBoard[]>([]);
   const [isLoadingBoards, setIsLoadingBoards] = useState(true);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server');
+  const [dataFetchSource, setDataFetchSource] = 'cache' | 'server' | 'default' | 'error' ('server');
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Fetch school boards
@@ -192,18 +192,21 @@ export default function ProfilePage() {
 
 
    const handleUpdateProfile = async () => {
+      // Set saving state immediately
+      setIsSaving(true);
       if (!user) {
           toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
+          setIsSaving(false); // Stop saving if not logged in
           return;
       }
        try {
            ensureFirebaseInitialized();
        } catch (initErr: any) {
             toast({ title: "Application Error", description: `Cannot save profile: ${initErr.message}`, variant: "destructive" });
+            setIsSaving(false); // Stop saving on init error
             return;
        }
 
-      setIsSaving(true); // Start saving indicator *before* async operations
       let finalAvatarUrl = profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`;
 
       if (avatarFile && avatarDataUrl && avatarDataUrl.startsWith('data:image')) {
@@ -516,4 +519,5 @@ export default function ProfilePage() {
   );
 }
 
+    
     

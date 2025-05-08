@@ -81,7 +81,7 @@ export default function StudyPlannerPage() {
                  errorDesc = "Network error. Could not load planner data.";
            }
            setFetchError(errorDesc);
-          toast({ title: "Error", description: errorDesc, variant = "destructive" });
+          toast({ title: "Error", description: errorDesc, variant: "destructive" });
         } finally {
           setIsLoading(false); // Stop loading after fetch attempt
         }
@@ -114,20 +114,26 @@ export default function StudyPlannerPage() {
 
   const handleAddOrUpdateEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Set loading state immediately
+    setIsUpdating(true);
+
     if (!user) {
-        toast({title: "Error", description: "You must be logged in.", variant = "destructive"});
+        toast({title: "Error", description: "You must be logged in.", variant: "destructive"});
+        setIsUpdating(false); // Stop loading on validation fail
         return;
     }
     if (!task.trim()) {
-         toast({title: "Error", description: "Task description cannot be empty.", variant = "destructive"});
+         toast({title: "Error", description: "Task description cannot be empty.", variant: "destructive"});
+        setIsUpdating(false); // Stop loading on validation fail
         return;
     }
      if (!isValid(formDate)) {
-         toast({title: "Error", description: "Invalid date selected for the task.", variant = "destructive"});
+         toast({title: "Error", description: "Invalid date selected for the task.", variant: "destructive"});
+        setIsUpdating(false); // Stop loading on validation fail
         return;
     }
 
-    setIsUpdating(true); // Start updating indicator *before* async operation
+    // Start updating indicator *before* async operation
     const selectedSubject = subjects.find(s => s.subjectId === subjectId);
     const formattedDate = format(formDate, 'yyyy-MM-dd');
 
@@ -227,7 +233,7 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
            errorDesc = error.message;
         }
-        toast({ title: "Error", description: errorDesc, variant = "destructive" });
+        toast({ title: "Error", description: errorDesc, variant: "destructive" });
     } finally {
         setIsUpdating(false); // Stop updating indicator regardless of success/failure
     }
@@ -235,9 +241,13 @@ export default function StudyPlannerPage() {
 
 
  const handleDeleteEntry = async (entryToDelete: StudyPlannerEntry) => {
-    if (!user || !window.confirm(`Are you sure you want to delete the task "${entryToDelete.task}"?`)) return;
+    // Set loading state immediately
+    setIsUpdating(true);
+    if (!user || !window.confirm(`Are you sure you want to delete the task "${entryToDelete.task}"?`)) {
+        setIsUpdating(false); // Stop loading if user cancels or is not logged in
+        return;
+    }
 
-    setIsUpdating(true); // Start loading
     const originalEntries = [...plannerEntries]; // Backup for potential revert
 
     // Optimistically update UI
@@ -263,6 +273,7 @@ export default function StudyPlannerPage() {
 
              if (!entryToRemoveFromServer) {
                   console.warn(`Task with ID ${entryToDelete.id} not found in Firestore during delete transaction.`);
+                   // Optionally proceed without error if UI already reflects deletion
              } else {
                  transaction.update(progressDocRef, {
                      studyPlanner: arrayRemove(entryToRemoveFromServer),
@@ -286,7 +297,7 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
            errorDesc = error.message;
         }
-        toast({ title: "Error", description: errorDesc, variant = "destructive" });
+        toast({ title: "Error", description: errorDesc, variant: "destructive" });
     } finally {
         setIsUpdating(false); // Stop loading indicator
     }
@@ -294,9 +305,13 @@ export default function StudyPlannerPage() {
 
 
  const handleToggleComplete = async (entryToToggle: StudyPlannerEntry) => {
-    if (!user) return;
+     // Set loading state immediately
+     setIsUpdating(true);
+    if (!user){
+         setIsUpdating(false); // Stop loading if no user
+         return;
+    }
 
-    setIsUpdating(true); // Start loading state specifically for toggle
     const updatedEntry = { ...entryToToggle, completed: !entryToToggle.completed };
     const originalEntries = [...plannerEntries]; // Backup for revert
 
@@ -346,7 +361,7 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
             errorDesc = error.message;
         }
-       toast({ title: "Update Failed", description: errorDesc, variant = "destructive" });
+       toast({ title: "Update Failed", description: errorDesc, variant: "destructive" });
     } finally {
         setIsUpdating(false); // Stop toggle loading state
     }
@@ -639,4 +654,5 @@ export default function StudyPlannerPage() {
   );
 }
 
+    
     
