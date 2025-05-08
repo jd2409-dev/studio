@@ -103,102 +103,82 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu className="space-y-1">
              {/* Main Features */}
              <SidebarMenuItem>
-               <Link href="/" passHref legacyBehavior>
+               <Link href="/" passHref>
                   <SidebarMenuButton asChild isActive={pathname === '/'}>
-                     <a> {/* Use anchor tag */}
                         <Home />
                         <span>Dashboard</span>
-                     </a>
                   </SidebarMenuButton>
                </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                <Link href="/textbook-summary" passHref legacyBehavior>
+                <Link href="/textbook-summary" passHref>
                    <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
-                      <a>
                          <BookOpen />
                          <span>Textbook Summary</span>
-                      </a>
                    </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
               <SidebarMenuItem>
-                  <Link href="/textbook-explainer" passHref legacyBehavior>
+                  <Link href="/textbook-explainer" passHref>
                      <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'}>
-                        <a>
                            <MessageSquareQuote />
                            <span>Textbook Explainer</span>
-                        </a>
                      </SidebarMenuButton>
                    </Link>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                  <Link href="/quickfind" passHref legacyBehavior>
+                  <Link href="/quickfind" passHref>
                      <SidebarMenuButton asChild isActive={pathname === '/quickfind'}>
-                        <a>
                            <Search />
                            <span>QuickFind</span>
-                        </a>
                      </SidebarMenuButton>
                   </Link>
               </SidebarMenuItem>
              <SidebarMenuItem>
-                 <Link href="/quiz" passHref legacyBehavior>
+                 <Link href="/quiz" passHref>
                    <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
-                       <a>
                           <HelpCircle />
                           <span>Quiz Generation</span>
-                       </a>
                    </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
             <SidebarMenuItem>
-                <Link href="/upload-textbook" passHref legacyBehavior>
+                <Link href="/upload-textbook" passHref>
                    <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
-                      <a>
                          <Upload />
                          <span>Upload Textbook</span>
-                      </a>
                    </SidebarMenuButton>
                  </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
-                  <Link href="/study-planner" passHref legacyBehavior>
+                  <Link href="/study-planner" passHref>
                      <SidebarMenuButton asChild isActive={pathname === '/study-planner'}>
-                       <a>
                           <CalendarDays />
                           <span>Study Planner</span>
-                       </a>
                      </SidebarMenuButton>
                    </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                  <Link href="/performance" passHref legacyBehavior>
+                  <Link href="/performance" passHref>
                      <SidebarMenuButton asChild isActive={pathname === '/performance'}>
-                       <a>
                           <Activity />
                           <span>Performance</span>
-                       </a>
                      </SidebarMenuButton>
                    </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                 <Link href="/ai-tutor" passHref legacyBehavior>
+                 <Link href="/ai-tutor" passHref>
                      <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'}>
-                        <a>
                            <BrainCircuit />
                            <span>AI Tutor</span>
-                        </a>
                      </SidebarMenuButton>
                   </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                 <Link href="/reflection" passHref legacyBehavior>
+                 <Link href="/reflection" passHref>
                     <SidebarMenuButton asChild isActive={pathname === '/reflection'}>
-                        <a>
                             <ListChecks />
                             <span>Reflection</span>
-                        </a>
                     </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
@@ -209,22 +189,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
           <SidebarMenu className="space-y-1">
             <SidebarMenuItem>
-               <Link href="/settings" passHref legacyBehavior>
+               <Link href="/settings" passHref>
                   <SidebarMenuButton asChild isActive={pathname === '/settings'}>
-                    <a>
                        <Settings />
                        <span>Settings</span>
-                    </a>
                   </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-               <Link href="/profile" passHref legacyBehavior>
+               <Link href="/profile" passHref>
                   <SidebarMenuButton asChild isActive={pathname === '/profile'}>
-                    <a>
                        <User />
                        <span>Profile</span>
-                    </a>
                   </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
@@ -264,5 +240,3 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-
-    
