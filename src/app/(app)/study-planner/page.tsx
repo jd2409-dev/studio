@@ -13,13 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import { db, ensureFirebaseInitialized } from '@/lib/firebase/config';
-import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, Timestamp, runTransaction } from 'firebase/firestore'; // Import runTransaction
-import { format, parse, addDays, startOfWeek, eachDayOfInterval, isSameDay, isValid } from 'date-fns'; // Import isValid
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, Timestamp, runTransaction } from 'firebase/firestore';
+import { format, parse, addDays, startOfWeek, eachDayOfInterval, isSameDay, isValid } from 'date-fns';
 import { Loader2, PlusCircle, Trash2, CalendarIcon, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { StudyPlannerEntry, UserProgress, SubjectMastery } from '@/types/user';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added AlertTitle
-import { Badge } from '@/components/ui/badge'; // Added Badge
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 
 
 export default function StudyPlannerPage() {
@@ -28,33 +28,29 @@ export default function StudyPlannerPage() {
 
   const [plannerEntries, setPlannerEntries] = useState<StudyPlannerEntry[]>([]);
   const [subjects, setSubjects] = useState<SubjectMastery[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Use this for page loading
-  const [isUpdating, setIsUpdating] = useState(false); // For form submission/deletion loading state
+  const [isLoading, setIsLoading] = useState(true); // Loading for initial data fetch
+  const [isUpdating, setIsUpdating] = useState(false); // Loading for add/update/delete/toggle actions
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewStartDate, setViewStartDate] = useState<Date>(startOfWeek(new Date()));
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Form state for adding/editing entries
   const [editingEntry, setEditingEntry] = useState<StudyPlannerEntry | null>(null);
   const [task, setTask] = useState('');
-  const [subjectId, setSubjectId] = useState<string>('none'); // Default to 'none'
+  const [subjectId, setSubjectId] = useState<string>('none');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
-  const [formDate, setFormDate] = useState<Date>(new Date()); // Date for the entry being added/edited
+  const [formDate, setFormDate] = useState<Date>(new Date());
 
-  // Fetch user progress data (including planner entries and subjects)
   useEffect(() => {
-      // Start loading if auth is not finished or no user yet
       if (authLoading || !user) {
            setIsLoading(true);
-           return; // Wait for auth
+           return;
       }
 
-      // Proceed with fetch if user exists
       const fetchData = async () => {
-        // setIsLoading(true); // Already true or set above
-        setFetchError(null); // Reset error on fetch
+        setFetchError(null);
+        setIsLoading(true); // Start loading before fetch
         try {
           ensureFirebaseInitialized();
           const progressDocRef = doc(db!, 'userProgress', user.uid);
@@ -62,7 +58,6 @@ export default function StudyPlannerPage() {
 
           if (progressSnap.exists()) {
             const data = progressSnap.data() as UserProgress;
-             // Ensure entries are valid and sort them
              const validEntries = (data.studyPlanner || []).filter(entry => entry && entry.id && entry.date && entry.task);
              const sortedEntries = validEntries.sort((a, b) => {
                  const timeA = parseEntryTime(a.startTime);
@@ -76,29 +71,26 @@ export default function StudyPlannerPage() {
             console.log("No progress data found for study planner, initializing with empty.");
             setPlannerEntries([]);
             setSubjects([]);
-            // Optionally create the document here if needed, or let the first save handle it
           }
         } catch (error: any) {
           console.error("Error fetching study planner data:", error);
            let errorDesc = "Could not load study planner data.";
            if (error.code === 'permission-denied') {
                 errorDesc = "Permission denied. Check Firestore rules.";
-                 console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
            } else if (error.code === 'unavailable') {
                  errorDesc = "Network error. Could not load planner data.";
            }
            setFetchError(errorDesc);
-          toast({ title: "Error", description: errorDesc, variant: "destructive" });
+          toast({ title: "Error", description: errorDesc, variant = "destructive" });
         } finally {
           setIsLoading(false); // Stop loading after fetch attempt
         }
       };
       fetchData();
-  }, [user, authLoading, toast]); // Dependencies
+  }, [user, authLoading, toast]);
 
-  // Helper to parse time for sorting
   const parseEntryTime = (timeStr?: string): number => {
-      if (!timeStr) return Infinity; // Put entries without time at the end
+      if (!timeStr) return Infinity;
       try {
           const [hours, minutes] = timeStr.split(':').map(Number);
           return hours * 60 + minutes;
@@ -108,10 +100,10 @@ export default function StudyPlannerPage() {
   };
 
   const handleDateSelect = (date: Date | undefined) => {
-    if (date && isValid(date)) { // Ensure date is valid
+    if (date && isValid(date)) {
       setSelectedDate(date);
-      setFormDate(date); // Update form date when a new date is selected
-      setEditingEntry(null); // Clear editing state when date changes
+      setFormDate(date);
+      setEditingEntry(null);
       resetForm();
     }
   };
@@ -123,26 +115,26 @@ export default function StudyPlannerPage() {
   const handleAddOrUpdateEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-        toast({title: "Error", description: "You must be logged in.", variant: "destructive"});
+        toast({title: "Error", description: "You must be logged in.", variant = "destructive"});
         return;
     }
     if (!task.trim()) {
-         toast({title: "Error", description: "Task description cannot be empty.", variant: "destructive"});
+         toast({title: "Error", description: "Task description cannot be empty.", variant = "destructive"});
         return;
     }
      if (!isValid(formDate)) {
-         toast({title: "Error", description: "Invalid date selected for the task.", variant: "destructive"});
+         toast({title: "Error", description: "Invalid date selected for the task.", variant = "destructive"});
         return;
     }
 
-    setIsUpdating(true);
+    setIsUpdating(true); // Start updating indicator *before* async operation
     const selectedSubject = subjects.find(s => s.subjectId === subjectId);
     const formattedDate = format(formDate, 'yyyy-MM-dd');
 
     const entryData: Omit<StudyPlannerEntry, 'id' | 'completed'> = {
       date: formattedDate,
       task: task.trim(),
-      subjectId: subjectId && subjectId !== 'none' ? subjectId : undefined, // Store 'none' as undefined
+      subjectId: subjectId && subjectId !== 'none' ? subjectId : undefined,
       subjectName: selectedSubject?.subjectName,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
@@ -157,79 +149,68 @@ export default function StudyPlannerPage() {
             console.log(`Transaction started for ${editingEntry ? 'updating' : 'adding'} task.`);
             const progressSnap = await transaction.get(progressDocRef);
             let currentEntries: StudyPlannerEntry[] = [];
+            let currentData: Partial<UserProgress> = {}; // Hold existing data
 
             if (progressSnap.exists()) {
-                currentEntries = (progressSnap.data() as UserProgress)?.studyPlanner || [];
+                currentData = progressSnap.data() as UserProgress;
+                currentEntries = currentData.studyPlanner || [];
             } else {
                  console.log("UserProgress document does not exist, will create it.");
-                 // No need to do anything here, set/update logic below handles creation
+                 // Set defaults for creation
+                 currentData = {
+                     uid: user.uid,
+                     subjectMastery: subjects, // Use fetched subjects or empty array
+                     upcomingHomework: [],
+                     upcomingExams: [],
+                     studyRecommendations: [],
+                     quizHistory: [],
+                     lastUpdated: Timestamp.now(), // Initial timestamp
+                 };
             }
 
             let updatedEntries: StudyPlannerEntry[];
 
             if (editingEntry) {
-                 // Update: find index, replace entry
                  const entryIndex = currentEntries.findIndex(e => e.id === editingEntry.id);
                  if (entryIndex === -1) {
                       console.error("Original entry not found in Firestore during update. ID:", editingEntry.id);
                       throw new Error("Could not find the original task to update.");
                  }
-                 const updatedEntryObject: StudyPlannerEntry = {
-                    ...editingEntry, // Keep original ID and completion status
-                    ...entryData, // Apply new data
-                    date: formattedDate, // Ensure date is updated if changed in form
-                 };
+                 const updatedEntryObject: StudyPlannerEntry = { ...editingEntry, ...entryData, date: formattedDate };
                  updatedEntries = [...currentEntries];
                  updatedEntries[entryIndex] = updatedEntryObject;
                  console.log("Prepared updated entry:", updatedEntryObject);
-
             } else {
-                 // Add new entry
-                 const newEntry: StudyPlannerEntry = {
-                     ...entryData,
-                     id: `task-${Date.now()}-${user.uid.substring(0,5)}`, // More robust unique ID
-                     completed: false,
-                 };
+                 const newEntry: StudyPlannerEntry = { ...entryData, id: `task-${Date.now()}-${user.uid.substring(0,5)}`, completed: false };
                  updatedEntries = [...currentEntries, newEntry];
                  console.log("Prepared new entry:", newEntry);
             }
 
-            // Sort entries after modification before saving
-            const sortedUpdatedEntries = updatedEntries.sort((a, b) => {
-                const timeA = parseEntryTime(a.startTime);
-                const timeB = parseEntryTime(b.startTime);
-                return timeA - timeB;
-            });
+            const sortedUpdatedEntries = updatedEntries.sort((a, b) => parseEntryTime(a.startTime) - parseEntryTime(b.startTime));
 
-            // Update or set the document
+            // Prepare the data to be saved/updated
+            const dataToSave = {
+                 ...currentData, // Include existing or default fields
+                 studyPlanner: sortedUpdatedEntries,
+                 lastUpdated: Timestamp.now() // Always update timestamp
+            };
+
             if (progressSnap.exists()) {
-                 transaction.update(progressDocRef, { studyPlanner: sortedUpdatedEntries, lastUpdated: Timestamp.now() });
+                 transaction.update(progressDocRef, dataToSave);
                  console.log("Updating existing document with new planner.");
             } else {
-                  // Create the document if it doesn't exist
-                   const defaultProgress: UserProgress = {
-                       uid: user.uid,
-                       subjectMastery: subjects, // Use current subjects if available
-                       upcomingHomework: [],
-                       upcomingExams: [],
-                       studyRecommendations: [],
-                       quizHistory: [],
-                       studyPlanner: sortedUpdatedEntries,
-                       lastUpdated: Timestamp.now(),
-                  };
-                 transaction.set(progressDocRef, defaultProgress);
+                 transaction.set(progressDocRef, dataToSave);
                  console.log("Creating new document with planner.");
             }
         });
 
         console.log("Transaction successful.");
-        // Optimistically update UI after successful transaction (fetch again or update state)
-        // Fetching again is safer to ensure consistency
          const updatedSnap = await getDoc(progressDocRef);
          if (updatedSnap.exists()) {
              const updatedData = updatedSnap.data() as UserProgress;
              const sortedEntries = (updatedData.studyPlanner || []).sort((a, b) => parseEntryTime(a.startTime) - parseEntryTime(b.startTime));
-             setPlannerEntries(sortedEntries);
+             setPlannerEntries(sortedEntries); // Update local state from confirmed data
+             setSubjects(updatedData.subjectMastery || []); // Also update subjects list if it changed
          }
 
         toast({ title: "Success", description: `Study task ${editingEntry ? 'updated' : 'added'}.` });
@@ -246,9 +227,9 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
            errorDesc = error.message;
         }
-        toast({ title: "Error", description: errorDesc, variant: "destructive" });
+        toast({ title: "Error", description: errorDesc, variant = "destructive" });
     } finally {
-        setIsUpdating(false);
+        setIsUpdating(false); // Stop updating indicator regardless of success/failure
     }
   };
 
@@ -256,40 +237,33 @@ export default function StudyPlannerPage() {
  const handleDeleteEntry = async (entryToDelete: StudyPlannerEntry) => {
     if (!user || !window.confirm(`Are you sure you want to delete the task "${entryToDelete.task}"?`)) return;
 
-    // Optimistically remove from UI
-    const originalEntries = [...plannerEntries];
+    setIsUpdating(true); // Start loading
+    const originalEntries = [...plannerEntries]; // Backup for potential revert
+
+    // Optimistically update UI
     setPlannerEntries(prev => prev.filter(e => e.id !== entryToDelete.id));
     if (editingEntry?.id === entryToDelete.id) {
         resetForm();
         setEditingEntry(null);
     }
 
-    setIsUpdating(true); // Use the same loading state, or a dedicated one
     const progressDocRef = doc(db!, 'userProgress', user.uid);
 
     try {
         ensureFirebaseInitialized();
-        // We need the exact object stored in Firestore to remove it with arrayRemove
-        // Fetch the current document state within a transaction for safety
         await runTransaction(db!, async (transaction) => {
              const progressSnap = await transaction.get(progressDocRef);
              if (!progressSnap.exists()) {
                  console.warn("Tried to delete entry, but user progress document doesn't exist.");
-                 throw new Error("User data not found."); // Abort transaction
+                 throw new Error("User data not found.");
              }
              const currentData = progressSnap.data() as UserProgress;
              const currentEntries = currentData.studyPlanner || [];
-             // Find the *exact* entry object to remove from the potentially stale server state
              const entryToRemoveFromServer = currentEntries.find(e => e.id === entryToDelete.id);
 
              if (!entryToRemoveFromServer) {
-                  console.warn(`Task with ID ${entryToDelete.id} not found in Firestore document during delete transaction.`);
-                  // Decide how to handle: maybe the task was already deleted?
-                  // For now, we'll proceed assuming it's okay, but log a warning.
-                  // If strict consistency is required, throw an error here.
-                  // throw new Error("Task to delete was not found on the server.");
+                  console.warn(`Task with ID ${entryToDelete.id} not found in Firestore during delete transaction.`);
              } else {
-                  // Only attempt removal if found
                  transaction.update(progressDocRef, {
                      studyPlanner: arrayRemove(entryToRemoveFromServer),
                      lastUpdated: Timestamp.now()
@@ -298,7 +272,8 @@ export default function StudyPlannerPage() {
         });
 
         toast({ title: "Success", description: "Study task deleted." });
-        // UI already updated optimistically
+        // UI already updated
+
     } catch (error: any) {
         console.error("Error deleting study planner entry:", error);
         // Revert optimistic UI update on error
@@ -311,9 +286,9 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
            errorDesc = error.message;
         }
-        toast({ title: "Error", description: errorDesc, variant: "destructive" });
+        toast({ title: "Error", description: errorDesc, variant = "destructive" });
     } finally {
-        setIsUpdating(false);
+        setIsUpdating(false); // Stop loading indicator
     }
 };
 
@@ -321,15 +296,16 @@ export default function StudyPlannerPage() {
  const handleToggleComplete = async (entryToToggle: StudyPlannerEntry) => {
     if (!user) return;
 
+    setIsUpdating(true); // Start loading state specifically for toggle
     const updatedEntry = { ...entryToToggle, completed: !entryToToggle.completed };
+    const originalEntries = [...plannerEntries]; // Backup for revert
 
-    // Optimistically update UI first
+    // Optimistically update UI
     setPlannerEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e).sort((a,b)=> parseEntryTime(a.startTime) - parseEntryTime(b.startTime)));
     if (editingEntry?.id === updatedEntry.id) {
         setEditingEntry(updatedEntry);
     }
 
-    // Update Firestore using transaction
     const progressDocRef = doc(db!, 'userProgress', user.uid);
     try {
        ensureFirebaseInitialized();
@@ -349,20 +325,16 @@ export default function StudyPlannerPage() {
 
              const entriesWithToggled = [...currentEntries];
              entriesWithToggled[entryIndex] = updatedEntry;
-
-             // Sort again before saving
              const sortedEntries = entriesWithToggled.sort((a, b) => parseEntryTime(a.startTime) - parseEntryTime(b.startTime));
 
-             transaction.update(progressDocRef, {
-                 studyPlanner: sortedEntries,
-                 lastUpdated: Timestamp.now()
-             });
+             transaction.update(progressDocRef, { studyPlanner: sortedEntries, lastUpdated: Timestamp.now() });
         });
         console.log("Task completion status updated in Firestore.");
+        // UI state already updated optimistically
     } catch (error: any) {
        console.error("Error toggling task completion:", error);
        // Revert optimistic UI update on error
-       setPlannerEntries(prev => prev.map(e => e.id === entryToToggle.id ? entryToToggle : e).sort((a,b)=> parseEntryTime(a.startTime) - parseEntryTime(b.startTime)));
+       setPlannerEntries(originalEntries);
        if (editingEntry?.id === entryToToggle.id) {
            setEditingEntry(entryToToggle);
        }
@@ -374,37 +346,40 @@ export default function StudyPlannerPage() {
         } else if (error instanceof Error) {
             errorDesc = error.message;
         }
-       toast({ title: "Update Failed", description: errorDesc, variant: "destructive" });
+       toast({ title: "Update Failed", description: errorDesc, variant = "destructive" });
+    } finally {
+        setIsUpdating(false); // Stop toggle loading state
     }
 };
 
   const resetForm = () => {
     setTask('');
-    setSubjectId('none'); // Reset to 'none'
+    setSubjectId('none');
     setStartTime('');
     setEndTime('');
     setNotes('');
-    setFormDate(selectedDate); // Reset form date to currently selected calendar date
+    setFormDate(selectedDate);
+    setEditingEntry(null); // Ensure editing state is cleared
   };
 
    const startEditing = (entry: StudyPlannerEntry) => {
        setEditingEntry(entry);
        setTask(entry.task);
-       setSubjectId(entry.subjectId || 'none'); // Use 'none' if subjectId is undefined/empty
+       setSubjectId(entry.subjectId || 'none');
        setStartTime(entry.startTime || '');
        setEndTime(entry.endTime || '');
        setNotes(entry.notes || '');
         try {
             const parsedDate = parse(entry.date, 'yyyy-MM-dd', new Date());
             if (isValid(parsedDate)) {
-                setFormDate(parsedDate); // Set form date to the entry's date
+                setFormDate(parsedDate);
             } else {
                  console.warn("Invalid date format in entry being edited:", entry.date);
-                 setFormDate(selectedDate); // Fallback to selected date
+                 setFormDate(selectedDate);
             }
         } catch (e) {
             console.error("Error parsing date for editing:", e);
-             setFormDate(selectedDate); // Fallback
+             setFormDate(selectedDate);
         }
    };
 
@@ -416,12 +391,11 @@ export default function StudyPlannerPage() {
               const entryDate = parse(entry.date, 'yyyy-MM-dd', new Date());
               return isValid(entryDate) && isSameDay(entryDate, selectedDate);
          } catch {
-              return false; // Ignore entries with invalid dates
+              return false;
          }
      }
-  ); // Sorting is now done when setting state
+  );
 
-  // Consolidated Loading State
   if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -431,12 +405,11 @@ export default function StudyPlannerPage() {
     );
   }
 
-   // Handle fetch error state
    if (fetchError) {
         return (
             <div className="container mx-auto py-8 text-center">
                 <h1 className="text-3xl font-bold mb-6">Study Planner</h1>
-                 <Alert variant="destructive" className="max-w-md mx-auto">
+                 <Alert variant = "destructive" className="max-w-md mx-auto">
                      <AlertTriangle className="h-4 w-4" />
                      <AlertTitle>Error Loading Data</AlertTitle>
                      <AlertDescription>{fetchError}</AlertDescription>
@@ -444,12 +417,11 @@ export default function StudyPlannerPage() {
             </div>
         );
     }
-   // Handle no user after loading
    if (!user) {
         return (
             <div className="container mx-auto py-8 text-center">
                 <h1 className="text-3xl font-bold mb-6">Study Planner</h1>
-                 <Alert variant="destructive" className="max-w-md mx-auto">
+                 <Alert variant = "destructive" className="max-w-md mx-auto">
                      <AlertTriangle className="h-4 w-4" />
                      <AlertTitle>Authentication Required</AlertTitle>
                      <AlertDescription>Please log in to use the study planner.</AlertDescription>
@@ -479,18 +451,17 @@ export default function StudyPlannerPage() {
                    selected={selectedDate}
                    onSelect={handleDateSelect}
                    className="rounded-md border shadow-sm"
-                    month={viewStartDate} // Control displayed month
-                    onMonthChange={setViewStartDate} // Allow month navigation within calendar
-                    // Highlight days with tasks (optional enhancement)
+                    month={viewStartDate}
+                    onMonthChange={setViewStartDate}
                      modifiers={{
                         hasTasks: plannerEntries.map(e => {
                             try { return parse(e.date, 'yyyy-MM-dd', new Date()) } catch { return undefined }
-                        }).filter(d => d && isValid(d)) as Date[], // Filter out invalid dates
+                        }).filter(d => d && isValid(d)) as Date[],
                     }}
                     modifiersClassNames={{
-                        hasTasks: 'bg-primary/10 dark:bg-primary/20 font-bold rounded-full', // Example styling
+                        hasTasks: 'bg-primary/10 dark:bg-primary/20 font-bold rounded-full',
                     }}
-                    disabled={isUpdating} // Disable calendar during updates
+                    disabled={isUpdating}
                />
                  <div className="flex justify-between w-full mt-4">
                     <Button variant="outline" size="sm" onClick={() => handleWeekChange('prev')} disabled={isUpdating}>Previous Week</Button>
@@ -507,7 +478,6 @@ export default function StudyPlannerPage() {
            </CardHeader>
            <form onSubmit={handleAddOrUpdateEntry}>
              <CardContent className="space-y-4">
-                 {/* Date Picker for the form */}
                   <div className="space-y-2">
                      <Label htmlFor="form-date">Date</Label>
                      <Popover>
@@ -529,7 +499,7 @@ export default function StudyPlannerPage() {
                         <Calendar
                             mode="single"
                             selected={formDate}
-                            onSelect={(d) => d && isValid(d) && setFormDate(d)} // Only set valid dates
+                            onSelect={(d) => d && isValid(d) && setFormDate(d)}
                             initialFocus
                             disabled={isUpdating}
                         />
@@ -597,19 +567,21 @@ export default function StudyPlannerPage() {
                  </div>
              </CardContent>
              <CardFooter className="flex justify-between items-center gap-2">
-                 <Button type="submit" disabled={isUpdating || !task.trim()}>
+                 <Button
+                    type="submit"
+                    disabled={isUpdating || !task.trim()} // Disable if updating or task is empty
+                >
                     {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingEntry ? null : <PlusCircle className="mr-2 h-4 w-4" />)}
                     {isUpdating ? 'Saving...' : (editingEntry ? 'Update Task' : 'Add Task')}
                  </Button>
                   {editingEntry && (
-                    <Button type="button" variant="ghost" onClick={() => {setEditingEntry(null); resetForm();}} disabled={isUpdating}>
+                    <Button type="button" variant="ghost" onClick={resetForm} disabled={isUpdating}>
                         Cancel Edit
                     </Button>
                   )}
              </CardFooter>
            </form>
         </Card>
-
 
         {/* Tasks for Selected Date */}
         <Card className="lg:col-span-3">
@@ -628,7 +600,7 @@ export default function StudyPlannerPage() {
                         onCheckedChange={() => handleToggleComplete(entry)}
                         className="mt-1 flex-shrink-0"
                         aria-labelledby={`task-label-${entry.id}`}
-                        disabled={isUpdating} // Disable checkbox while any update is happening
+                        disabled={isUpdating}
                      />
                      <div className="flex-1 space-y-0.5">
                         <Label
@@ -666,3 +638,5 @@ export default function StudyPlannerPage() {
     </div>
   );
 }
+
+    

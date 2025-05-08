@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
@@ -6,275 +5,206 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
-import { auth, db, firebaseInitializationError, ensureFirebaseInitialized } from '@/lib/firebase/config'; // Import error status and helper
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { Loader2 } from 'lucide-react';
+import { auth, db, firebaseInitializationError, ensureFirebaseInitialized } from '@/lib/firebase/config';
+import { useAuth } from '@/context/AuthContext';
+import { Loader2, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import type { UserProfile } from '@/types/user'; // Import UserProfile type
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert
+import type { UserProfile } from '@/types/user';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(''); // Added state for name during signup
+  const [name, setName] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isSigningUp, setIsSigningUp] = useState(false); // State for signup loading
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // State for Google Sign-in loading
-  const [showSignupFields, setShowSignupFields] = useState(false); // Toggle between Login and Signup view
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showSignupFields, setShowSignupFields] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const { user, loading } = useAuth(); // Get user and loading state
+  const { user, loading: authLoading } = useAuth(); // Renamed loading to authLoading
 
   useEffect(() => {
-      // Redirect to dashboard if user is already logged in and finished loading
-      if (!loading && user) {
+      if (!authLoading && user) {
           router.push('/');
       }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
   const createFirestoreUserProfile = async (userId: string, userEmail: string, userName: string, photoURL?: string | null) => {
-       // Check Firebase initialization *before* trying to use Firestore
        ensureFirebaseInitialized();
-      // No need to check db here, as ensureFirebaseInitialized covers it
-      const userDocRef = doc(db!, 'users', userId); // Use non-null assertion after check
-      const docSnap = await getDoc(userDocRef);
-
-      if (!docSnap.exists()) {
-          const defaultProfile: UserProfile = {
-              uid: userId,
-              name: userName || userEmail.split('@')[0] || "New User", // Use provided name, fallback to email part or default
-              email: userEmail,
-              avatarUrl: photoURL || `https://avatar.vercel.sh/${userEmail}.png`, // Use photoURL or generate fallback
-              schoolBoard: '',
-              grade: '',
-              joinDate: new Date().toISOString(), // Store join date on creation
-          };
-          await setDoc(userDocRef, defaultProfile);
-          console.log("Created Firestore user profile for:", userId);
-      } else {
-         console.log("Firestore user profile already exists for:", userId);
-         // Optionally update existing fields like lastLogin here if needed
+      const userDocRef = doc(db!, 'users', userId);
+      try {
+        const docSnap = await getDoc(userDocRef);
+        if (!docSnap.exists()) {
+            const defaultProfile: UserProfile = {
+                uid: userId,
+                name: userName || userEmail.split('@')[0] || "New User",
+                email: userEmail,
+                avatarUrl: photoURL || `https://avatar.vercel.sh/${userEmail}.png`,
+                schoolBoard: '',
+                grade: '',
+                joinDate: new Date().toISOString(),
+            };
+            await setDoc(userDocRef, defaultProfile);
+            console.log("Created Firestore user profile for:", userId);
+        } else {
+           console.log("Firestore user profile already exists for:", userId);
+        }
+      } catch (error) {
+         console.error("Error creating/checking Firestore profile:", error);
+         // Log error but proceed, user is authenticated at this point
+         toast({
+             title: "Profile Creation Warning",
+             description: "Could not create or verify user profile data in the database. Some features might be limited.",
+             variant: "default",
+         });
       }
   };
 
 
   const handleLogin = async (e?: FormEvent) => {
-    e?.preventDefault(); // Prevent default form submission if called from form
+    e?.preventDefault();
+    setIsLoggingIn(true); // Start loading indicator *before* async operation
     try {
-        ensureFirebaseInitialized(); // Check if Firebase is ready
+        ensureFirebaseInitialized();
         if (!email || !password) {
-            toast({ title: "Error", description: "Please enter email and password.", variant: "destructive"});
+            toast({ title: "Error", description: "Please enter email and password.", variant = "destructive"});
+            setIsLoggingIn(false); // Stop loading if validation fails
             return;
         }
-        setIsLoggingIn(true);
-        await signInWithEmailAndPassword(auth!, email, password); // Use non-null assertion
+        await signInWithEmailAndPassword(auth!, email, password);
         toast({
             title: "Login Successful",
             description: "Redirecting to dashboard.",
         });
-        router.push('/'); // Redirect on successful login
+        router.push('/');
     } catch (error: any) {
       console.error("Login Error:", error);
-       // Check for specific Firebase auth errors
        let description = "An unexpected error occurred during login.";
        if (error.code) {
            switch (error.code) {
                 case 'auth/invalid-credential':
-                case 'auth/user-not-found': // Deprecated, but handle just in case
-                case 'auth/wrong-password': // Deprecated, but handle just in case
-                   description = "Invalid email or password. Please check your credentials.";
-                   break;
+                   description = "Invalid email or password."; break;
                 case 'auth/invalid-email':
-                     description = "Please enter a valid email address.";
-                     break;
+                     description = "Please enter a valid email."; break;
                case 'auth/user-disabled':
-                   description = "This account has been disabled.";
-                   break;
+                   description = "This account has been disabled."; break;
                case 'auth/too-many-requests':
-                    description = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
-                    break;
+                    description = "Too many failed login attempts. Please try again later or reset your password."; break;
                 case 'auth/network-request-failed':
-                    description = "Network error. Please check your internet connection and try again.";
-                    break;
+                    description = "Network error. Check connection."; break;
                 case 'auth/api-key-not-valid':
-                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
-                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
-                    break;
+                    description = "Authentication failed: Invalid configuration."; break;
                 case 'auth/configuration-not-found':
-                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
-                     console.error("Email/Password sign-in method not enabled in Firebase console.");
-                     break;
+                     description = "Authentication error. Ensure Email/Password sign-in is enabled."; break;
                 case 'auth/unauthorized-domain':
-                     description = "This domain is not authorized for this operation. Please add it to the authorized domains list in your Firebase project Authentication settings.";
-                     console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
-                     break;
+                     description = "Domain not authorized for login."; break;
                default:
-                  // Use the error message if available, otherwise use the code
                  description = error.message || `Login failed with code: ${error.code}`;
            }
        } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error. Could not connect to authentication service.";
+            description = "Application configuration error.";
        }
-
-      toast({
-        title: "Login Failed",
-        description: description,
-        variant: "destructive",
-      });
+      toast({ title: "Login Failed", description: description, variant = "destructive" });
     } finally {
-      setIsLoggingIn(false);
+      setIsLoggingIn(false); // Stop loading indicator regardless of success/failure
     }
   };
 
   const handleSignup = async (e?: FormEvent) => {
-    e?.preventDefault(); // Prevent default form submission if called from form
+    e?.preventDefault();
+    setIsSigningUp(true); // Start loading indicator *before* async operation
      try {
-        ensureFirebaseInitialized(); // Check if Firebase is ready
+        ensureFirebaseInitialized();
         if (!email || !password || !name) {
-            toast({ title: "Error", description: "Please enter name, email, and password.", variant: "destructive"});
+            toast({ title: "Error", description: "Please enter name, email, and password.", variant = "destructive"});
+            setIsSigningUp(false); // Stop loading if validation fails
             return;
         }
-        setIsSigningUp(true);
 
-        const userCredential = await createUserWithEmailAndPassword(auth!, email, password); // Use non-null assertion
+        const userCredential = await createUserWithEmailAndPassword(auth!, email, password);
         const newUser = userCredential.user;
-
-        // Update Firebase Auth profile with name
         await updateProfile(newUser, { displayName: name });
-
-        // Create Firestore user profile
         await createFirestoreUserProfile(newUser.uid, newUser.email!, name, newUser.photoURL);
 
-
-        toast({
-            title: "Signup Successful",
-            description: "Account created. Redirecting to dashboard.",
-        });
-        // Redirect to dashboard after signup
+        toast({ title: "Signup Successful", description: "Account created. Redirecting...", });
         router.push('/');
     } catch (error: any) {
         console.error("Signup Error:", error);
-         // Check for specific Firebase auth errors
         let description = "An unexpected error occurred during signup.";
         if (error.code) {
             switch (error.code) {
-                case 'auth/email-already-in-use':
-                    description = "This email address is already associated with an account.";
-                    break;
-                case 'auth/invalid-email':
-                    description = "Please enter a valid email address.";
-                    break;
-                case 'auth/weak-password':
-                    description = "Password is too weak. Please choose a stronger password (at least 6 characters).";
-                    break;
-                 case 'auth/network-request-failed':
-                    description = "Network error. Please check your internet connection and try again.";
-                    break;
-                 case 'auth/api-key-not-valid':
-                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
-                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
-                    break;
-                 case 'auth/configuration-not-found':
-                     description = "Authentication configuration error. Please ensure the Email/Password sign-in method is enabled in your Firebase project settings.";
-                     console.error("Email/Password sign-in method not enabled in Firebase console.");
-                     break;
-                 case 'auth/unauthorized-domain':
-                      description = "This domain is not authorized for this operation. Please add it to the authorized domains list in your Firebase project Authentication settings.";
-                      console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
-                      break;
-                default:
-                    description = error.message || `Signup failed with code: ${error.code}`;
+                case 'auth/email-already-in-use': description = "Email already in use."; break;
+                case 'auth/invalid-email': description = "Please enter a valid email."; break;
+                case 'auth/weak-password': description = "Password too weak (min. 6 characters)."; break;
+                 case 'auth/network-request-failed': description = "Network error. Check connection."; break;
+                 case 'auth/api-key-not-valid': description = "Authentication failed: Invalid configuration."; break;
+                 case 'auth/configuration-not-found': description = "Authentication error. Ensure Email/Password sign-in is enabled."; break;
+                 case 'auth/unauthorized-domain': description = "Domain not authorized for signup."; break;
+                default: description = error.message || `Signup failed with code: ${error.code}`;
             }
         } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error. Could not connect to authentication service.";
+            description = "Application configuration error.";
        }
-
-        toast({
-            title: "Signup Failed",
-            description: description,
-            variant: "destructive",
-        });
+        toast({ title: "Signup Failed", description: description, variant = "destructive" });
     } finally {
-        setIsSigningUp(false);
+        setIsSigningUp(false); // Stop loading indicator regardless of success/failure
     }
   };
 
   const handleGoogleSignIn = async () => {
+     setIsGoogleLoading(true); // Start loading indicator *before* async operation
      try {
-        ensureFirebaseInitialized(); // Check if Firebase is ready
-        setIsGoogleLoading(true);
+        ensureFirebaseInitialized();
         const provider = new GoogleAuthProvider();
-
-        const result = await signInWithPopup(auth!, provider); // Use non-null assertion
+        const result = await signInWithPopup(auth!, provider);
         const googleUser = result.user;
-
-         // Create or check Firestore user profile
         await createFirestoreUserProfile(googleUser.uid, googleUser.email!, googleUser.displayName || '', googleUser.photoURL);
 
-
-        toast({
-            title: "Google Sign-In Successful",
-            description: "Redirecting to dashboard.",
-        });
+        toast({ title: "Google Sign-In Successful", description: "Redirecting...", });
         router.push('/');
     } catch (error: any) {
         console.error("Google Sign-In Error:", error);
          let description = "An unexpected error occurred during Google Sign-In.";
-         // Handle specific errors like account-exists-with-different-credential
          if (error.code) {
              switch(error.code) {
                  case 'auth/account-exists-with-different-credential':
-                     description = "An account already exists with this email address using a different sign-in method (e.g., email/password). Try logging in with that method.";
-                     break;
+                     description = "Account exists with a different sign-in method (e.g., email/password)."; break;
                  case 'auth/popup-closed-by-user':
-                     description = "Sign-in cancelled. The Google Sign-In popup was closed before completing.";
-                      // Don't show a destructive toast for user cancellation
+                     description = "Sign-in cancelled.";
                      toast({ title: "Sign-in Cancelled", description: description });
-                     setIsGoogleLoading(false);
-                     return; // Exit early
+                     setIsGoogleLoading(false); // Stop loading here for cancellation
+                     return;
                  case 'auth/popup-blocked-by-browser':
-                      description = "Google Sign-In popup blocked by the browser. Please allow popups for this site.";
-                      break;
+                      description = "Sign-In popup blocked by browser."; break;
                  case 'auth/network-request-failed':
-                    description = "Network error. Please check your internet connection and try again.";
-                    break;
+                    description = "Network error. Check connection."; break;
                  case 'auth/api-key-not-valid':
-                    description = "Authentication failed: Invalid API key. Please check the application configuration.";
-                     console.error("Firebase API Key is invalid. Check your .env file and Firebase project settings.");
-                    break;
+                    description = "Authentication failed: Invalid configuration."; break;
                 case 'auth/configuration-not-found':
-                     description = "Authentication configuration error. Please ensure the Google sign-in method is enabled in your Firebase project settings.";
-                     console.error("Google sign-in method not enabled in Firebase console.");
-                     break;
+                     description = "Authentication error. Ensure Google sign-in is enabled."; break;
                 case 'auth/unauthorized-domain':
-                     description = "This domain is not authorized for Google Sign-In. Please add it to the authorized domains list in your Firebase project Authentication settings.";
-                     console.error("Domain not authorized in Firebase console (Authentication > Settings > Authorized domains). Add localhost for local development.");
-                     break;
+                     description = "Domain not authorized for Google Sign-In."; break;
                  default:
                      description = error.message || `Google Sign-In failed with code: ${error.code}`;
              }
-
          } else if (error.message?.includes("Firebase is not initialized") || error.message?.includes("auth is null")) {
-            description = "Application configuration error. Could not connect to authentication service.";
+            description = "Application configuration error.";
          }
-
-         toast({
-             title: "Google Sign-In Failed",
-             description: description,
-             variant: "destructive",
-         });
-
+         toast({ title: "Google Sign-In Failed", description: description, variant = "destructive" });
     } finally {
-        setIsGoogleLoading(false);
+        // Ensure loading stops unless it was stopped early (e.g., for cancellation)
+        if (isGoogleLoading) {
+             setIsGoogleLoading(false);
+        }
     }
   };
 
-   // Show loading spinner if auth is still loading
-   if (loading) {
+   // Render loading state for the entire component if auth is still resolving
+   if (authLoading) {
        return (
            <div className="flex items-center justify-center min-h-screen bg-background">
                <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -282,11 +212,12 @@ export default function LoginPage() {
        )
    }
 
-    // Display error if Firebase initialization failed
+    // Render error if Firebase initialization failed (Auth Provider handles this mostly)
    if (firebaseInitializationError) {
       return (
            <div className="flex items-center justify-center min-h-screen bg-background p-4">
-              <Alert variant="destructive" className="max-w-md">
+              <Alert variant = "destructive" className="max-w-md">
+                <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Application Error</AlertTitle>
                 <AlertDescription>
                   Could not connect to authentication service. {firebaseInitializationError.message}
@@ -296,17 +227,18 @@ export default function LoginPage() {
       );
   }
 
-
-   // If user is loaded and exists, don't render the login form (will be redirected)
+   // If user exists after loading, redirect is handled by useEffect, render null briefly
    if (user) {
        return null;
    }
+
+   // Determine if any action is in progress
+   const isAnyLoading = isLoggingIn || isSigningUp || isGoogleLoading;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-1 text-center">
-          {/* Using inline SVG for the logo */}
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 mx-auto text-primary">
                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                <path d="M2 17l10 5 10-5"/>
@@ -327,7 +259,7 @@ export default function LoginPage() {
                      required
                      value={name}
                      onChange={(e) => setName(e.target.value)}
-                     disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                     disabled={isAnyLoading}
                  />
                  </div>
              )}
@@ -340,7 +272,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                disabled={isAnyLoading}
                 autoComplete="email"
               />
             </div>
@@ -352,7 +284,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                disabled={isAnyLoading}
                 placeholder={showSignupFields ? 'Create a password (min. 6 characters)' : 'Enter your password'}
                 autoComplete={showSignupFields ? "new-password" : "current-password"}
               />
@@ -360,18 +292,18 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
              {showSignupFields ? (
-                <Button type="submit" className="w-full" disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password || !name}>
+                <Button type="submit" className="w-full" disabled={isAnyLoading || !email || !password || !name}>
                     {isSigningUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Sign Up
                 </Button>
              ) : (
-                <Button type="submit" className="w-full" disabled={isLoggingIn || isSigningUp || isGoogleLoading || !email || !password}>
+                <Button type="submit" className="w-full" disabled={isAnyLoading || !email || !password}>
                     {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Login
                 </Button>
              )}
 
-             <Button type="button" variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoggingIn || isSigningUp || isGoogleLoading}>
+             <Button type="button" variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isAnyLoading}>
                  {isGoogleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (
                      <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
                          <path fill="currentColor" d="M488 261.8C488 403.3 381.5 512 244 512 109.8 512 0 398.9 0 256S109.8 0 244 0c71.8 0 139.8 29.4 188.1 77.4l-69.8 67.9C338.8 110.9 294.3 88 244 88c-78.2 0-141.7 64.2-141.7 143.1s63.5 143.1 141.7 143.1c92.8 0 124.1-68.2 128.7-102.9H244v-85.1h243.8c1.6 9.3 2.2 19.1 2.2 29.9z"></path>
@@ -385,17 +317,11 @@ export default function LoginPage() {
                 variant="link"
                 className="w-full text-sm"
                 onClick={() => setShowSignupFields(!showSignupFields)}
-                disabled={isLoggingIn || isSigningUp || isGoogleLoading}
+                disabled={isAnyLoading}
                 >
                 {showSignupFields ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
              </Button>
 
-             {/* Link for password reset (optional) */}
-             {/* {!showSignupFields && (
-                 <Link href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
-                    Forgot password?
-                 </Link>
-             )} */}
           </CardFooter>
         </form>
       </Card>
@@ -403,3 +329,4 @@ export default function LoginPage() {
   );
 }
 
+    

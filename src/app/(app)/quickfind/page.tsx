@@ -13,16 +13,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge'; // Added Badge import
+import { Badge } from '@/components/ui/badge';
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB for PDFs
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const ALLOWED_FILE_TYPE = 'application/pdf';
 
 export default function QuickFindPage() {
   const [file, setFile] = useState<File | null>(null);
   const [question, setQuestion] = useState('');
   const [results, setResults] = useState<QuickFindOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // General loading state
+  const [isLoading, setIsLoading] = useState(false); // Loading state for the search process
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,7 +30,7 @@ export default function QuickFindPage() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     setFile(null);
-    setResults(null); // Clear previous results when file changes
+    setResults(null);
 
     if (selectedFile) {
       if (selectedFile.type !== ALLOWED_FILE_TYPE) {
@@ -58,19 +58,19 @@ export default function QuickFindPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-      toast({ title: "Authentication Required", description: "Please log in.", variant: "destructive" });
+      toast({ title: "Authentication Required", description: "Please log in.", variant = "destructive" });
       return;
     }
     if (!file) {
-      toast({ title: "Input Required", description: "Please select a PDF file.", variant: "destructive" });
+      toast({ title: "Input Required", description: "Please select a PDF file.", variant = "destructive" });
       return;
     }
     if (!question.trim()) {
-        toast({ title: "Input Required", description: "Please enter a question to search for.", variant: "destructive" });
+        toast({ title: "Input Required", description: "Please enter a question to search for.", variant = "destructive" });
         return;
     }
 
-    setIsLoading(true); // Start loading indicator
+    setIsLoading(true); // Start loading indicator *before* async operation
     setResults(null);
 
     const reader = new FileReader();
@@ -79,7 +79,7 @@ export default function QuickFindPage() {
     reader.onload = async () => {
       const fileDataUri = reader.result as string;
       if (!fileDataUri || !fileDataUri.startsWith(`data:${ALLOWED_FILE_TYPE};base64,`)) {
-        toast({ title: "File Read Error", description: "Failed to read the PDF file.", variant: "destructive" });
+        toast({ title: "File Read Error", description: "Failed to read the PDF file.", variant = "destructive" });
         setIsLoading(false);
         return;
       }
@@ -87,7 +87,7 @@ export default function QuickFindPage() {
       try {
         const input = { fileDataUri, question: question.trim() };
         console.log("Sending PDF and question to QuickFind flow...");
-        const searchResult = await findInDocument(input);
+        const searchResult = await findInDocument(input); // Call Server Action
         console.log("QuickFind results received:", searchResult);
 
         if (searchResult.status === 'success' && searchResult.results && searchResult.results.length > 0) {
@@ -95,9 +95,8 @@ export default function QuickFindPage() {
         } else if (searchResult.status === 'not_found') {
              toast({ title: "Not Found", description: "Could not find a relevant answer in the document.", variant:"default"});
         } else if (searchResult.status === 'error') {
-            toast({ title: "Search Error", description: searchResult.errorMessage || "An error occurred during the search.", variant:"destructive"});
+            toast({ title: "Search Error", description: searchResult.errorMessage || "An error occurred during the search.", variant = "destructive" });
         } else {
-            // Handle success but no results specifically
             toast({ title: "Search Complete", description: "No specific answer snippets found, but the search completed.", variant:"default"});
         }
 
@@ -106,9 +105,8 @@ export default function QuickFindPage() {
         console.error("Error in QuickFind:", error);
          let errorDesc = "Failed to perform search. Please try again.";
          if (error instanceof Error) {
-             // Use startsWith for more robust matching
             if (error.message.startsWith("QuickFind Error:")) {
-                 errorDesc = error.message.replace("QuickFind Error:", "").trim(); // Clean up prefix
+                 errorDesc = error.message.replace("QuickFind Error:", "").trim();
             } else if (error.message.includes("blocked")) {
                  errorDesc = "Search was blocked, possibly due to content safety filters.";
             } else if (error.message.includes("format")) {
@@ -117,16 +115,16 @@ export default function QuickFindPage() {
                 errorDesc = error.message;
             }
          }
-        toast({ title: "Error Searching Document", description: errorDesc, variant: "destructive" });
-        setResults({ status: 'error', errorMessage: errorDesc, results: [] }); // Set error state
+        toast({ title: "Error Searching Document", description: errorDesc, variant = "destructive" });
+        setResults({ status: 'error', errorMessage: errorDesc, results: [] });
       } finally {
-        setIsLoading(false); // Stop loading indicator
+        setIsLoading(false); // Stop loading indicator regardless of success/failure
       }
     };
 
     reader.onerror = (error) => {
       console.error("Error reading file:", error);
-      toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
+      toast({ title: "File Read Error", description: "Could not read the selected file.", variant = "destructive" });
       setIsLoading(false);
     };
   };
@@ -191,7 +189,7 @@ export default function QuickFindPage() {
               />
             </div>
             {!user && !authLoading && (
-               <Alert variant="destructive">
+               <Alert variant = "destructive">
                   <AlertTriangle className="h-4 w-4" />
                    <AlertTitle>Login Required</AlertTitle>
                   <AlertDescription>Please log in to use QuickFind.</AlertDescription>
@@ -199,11 +197,15 @@ export default function QuickFindPage() {
             )}
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button type="submit" disabled={isLoading || !file || !question.trim() || authLoading || !user} className="w-full sm:w-auto">
+            <Button
+                type="submit"
+                disabled={isLoading || !file || !question.trim() || authLoading || !user} // Comprehensive disable check
+                className="w-full sm:w-auto"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Searching Document...
+                  Searching...
                 </>
               ) : (
                 <>
@@ -211,7 +213,7 @@ export default function QuickFindPage() {
                 </>
               )}
             </Button>
-             {(file || question || results) && ( // Show clear button if there's anything to clear
+             {(file || question || results) && (
                <Button variant="ghost" type="button" onClick={handleClear} disabled={isLoading} className="text-xs">
                    Clear All
                </Button>
@@ -226,7 +228,7 @@ export default function QuickFindPage() {
              <CardContent className="flex flex-col items-center justify-center h-full p-10">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                 <p className="text-muted-foreground">Searching document for "{question.substring(0, 50)}{question.length > 50 ? '...' : ''}"...</p>
-                <p className="text-xs text-muted-foreground mt-1">(This may take a few moments depending on the PDF size)</p>
+                <p className="text-xs text-muted-foreground mt-1">(This may take a few moments)</p>
              </CardContent>
           </Card>
        )}
@@ -267,10 +269,10 @@ export default function QuickFindPage() {
                      {results.status === 'not_found'
                        ? "The AI couldn't find a direct answer to your question in the document."
                        : "No relevant snippets were extracted, but the search finished."}
-                     <p className="text-xs mt-1">Try rephrasing your question or uploading a different document section.</p>
+                     <p className="text-xs mt-1">Try rephrasing your question or using a different document section.</p>
                    </div>
                 ) : (
-                     <Alert variant="destructive">
+                     <Alert variant = "destructive">
                         <AlertTriangle className="h-4 w-4" />
                          <AlertTitle>Search Failed</AlertTitle>
                          <AlertDescription>{results.errorMessage || 'An unexpected error occurred during the search.'}</AlertDescription>
@@ -282,3 +284,5 @@ export default function QuickFindPage() {
     </div>
   );
 }
+
+    

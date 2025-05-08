@@ -6,66 +6,61 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, AlertTriangle } from 'lucide-react'; // Added FileTextIcon, AlertTriangle
+import { Text, AudioLines, BrainCircuit, Loader2, Upload, FileText as FileTextIcon, AlertTriangle } from 'lucide-react';
 import { generateTextbookSummary, type GenerateTextbookSummaryOutput } from '@/ai/flows/textbook-summarization';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
+import { useAuth } from '@/context/AuthContext';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = [
     'image/jpeg', 'image/png', 'image/webp', 'image/gif',
     'application/pdf',
     'text/plain',
-    'application/msword', // .doc
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' // .docx
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ];
 const IMAGE_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function TextbookSummaryPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // Store Data URI for images
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isImageFile, setIsImageFile] = useState(false);
   const [summary, setSummary] = useState<GenerateTextbookSummaryOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // State for AI processing
+  const [isLoading, setIsLoading] = useState(false); // Loading state for summary generation
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth(); // Get user auth state
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
+  const { user, loading: authLoading } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
-    setFile(null); // Reset states first
+    setFile(null);
     setPreviewUrl(null);
     setIsImageFile(false);
     setSummary(null);
 
     if (selectedFile) {
-      // Validate file type
       if (!ALLOWED_FILE_TYPES.includes(selectedFile.type)) {
           toast({
               title: "Invalid File Type",
               description: `Unsupported file. Please upload: ${ALLOWED_FILE_TYPES.map(t => t.split('/')[1]).join(', ')}.`,
-              variant: "destructive",
+              variant = "destructive",
           });
-          event.target.value = ''; // Clear the input
+          if (event.target) event.target.value = '';
           return;
       }
-
-      // Validate file size
       if (selectedFile.size > MAX_FILE_SIZE) {
           toast({
               title: "File Too Large",
               description: `File must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
-              variant: "destructive",
+              variant = "destructive",
           });
-          event.target.value = ''; // Clear the input
+          if (event.target) event.target.value = '';
           return;
       }
-
       setFile(selectedFile);
 
-      // Generate preview only for actual image types
       if (IMAGE_FILE_TYPES.includes(selectedFile.type)) {
         setIsImageFile(true);
         const reader = new FileReader();
@@ -75,7 +70,7 @@ export default function TextbookSummaryPage() {
         reader.readAsDataURL(selectedFile);
       } else {
         setIsImageFile(false);
-        setPreviewUrl(null); // No preview for non-image files
+        setPreviewUrl(null);
       }
     }
   };
@@ -83,35 +78,33 @@ export default function TextbookSummaryPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
      if (!user) {
-        toast({ title: "Error", description: "Please log in to generate summaries.", variant: "destructive" });
+        toast({ title: "Error", description: "Please log in to generate summaries.", variant = "destructive" });
         return;
     }
     if (!file) {
-      toast({ title: "Error", description: "Please select a file first.", variant: "destructive" });
+      toast({ title: "Error", description: "Please select a file first.", variant = "destructive" });
       return;
     }
 
-    setIsLoading(true); // Start loading indicator
+    setIsLoading(true); // Start loading indicator *before* async operation
     setSummary(null);
 
-    // Read file as Data URI to pass to the flow
     const reader = new FileReader();
     reader.readAsDataURL(file);
 
     reader.onload = async () => {
         const fileDataUri = reader.result as string;
         if (!fileDataUri || !fileDataUri.startsWith('data:')) {
-            toast({ title: "File Read Error", description: "Failed to read the file correctly.", variant: "destructive" });
+            toast({ title: "File Read Error", description: "Failed to read the file correctly.", variant = "destructive" });
             setIsLoading(false);
             return;
         }
         try {
             const input = { fileDataUri: fileDataUri, fileType: file.type };
              console.log(`Sending ${file.type} to summary flow...`);
-            const result = await generateTextbookSummary(input);
+            const result = await generateTextbookSummary(input); // Call Server Action
             console.log("Summary received:", { textLen: result?.textSummary?.length, audioLen: result?.audioSummary?.length, mindMapLen: result?.mindMap?.length });
 
-            // Check if AI indicated inability to process
             if (result.textSummary.includes("Cannot process") || result.textSummary.includes("unclear")) {
                  toast({ title: "Processing Issue", description: result.textSummary, variant:"default", duration: 5000 });
             } else {
@@ -129,17 +122,17 @@ export default function TextbookSummaryPage() {
                  } else if (error.message.includes("unexpected format")) {
                       errorDesc = "The AI returned the summary in an unexpected format. Please try again or with a different file.";
                  } else {
-                    errorDesc = error.message; // Use specific error from flow if available
+                    errorDesc = error.message;
                  }
             }
-            toast({ title: "Error Generating Summary", description: errorDesc, variant: "destructive" });
+            toast({ title: "Error Generating Summary", description: errorDesc, variant = "destructive" });
         } finally {
-            setIsLoading(false); // Stop loading indicator
+            setIsLoading(false); // Stop loading indicator regardless of success/failure
         }
     };
     reader.onerror = (error) => {
         console.error("Error reading file:", error);
-        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant = "destructive" });
         setIsLoading(false);
     };
 };
@@ -150,7 +143,7 @@ export default function TextbookSummaryPage() {
       setIsImageFile(false);
       setSummary(null);
       if (fileInputRef.current) {
-          fileInputRef.current.value = ''; // Reset the file input visually
+          fileInputRef.current.value = '';
       }
   };
 
@@ -163,9 +156,9 @@ export default function TextbookSummaryPage() {
         The AI generates text, audio script, and mind map summaries.
       </p>
 
-      <div className="grid lg:grid-cols-2 gap-8 items-start"> {/* Use items-start */}
+      <div className="grid lg:grid-cols-2 gap-8 items-start">
         {/* Upload Section */}
-        <Card className="shadow-lg rounded-lg sticky top-8"> {/* Make upload sticky */}
+        <Card className="shadow-lg rounded-lg sticky top-8">
           <CardHeader>
             <CardTitle className="text-xl">Upload Content</CardTitle>
             <CardDescription>Select an image, PDF, TXT, or DOC/DOCX file.</CardDescription>
@@ -178,14 +171,13 @@ export default function TextbookSummaryPage() {
                   ref={fileInputRef}
                   id="textbook-content"
                   type="file"
-                  accept={ALLOWED_FILE_TYPES.join(',')} // Use defined allowed types
+                  accept={ALLOWED_FILE_TYPES.join(',')}
                   onChange={handleFileChange}
-                  disabled={isLoading || authLoading} // Also disable if auth is loading
+                  disabled={isLoading || authLoading}
                   required
                   className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                 />
               </div>
-              {/* Display preview for images, or file info for other types */}
               {file && (
                 <div className="mt-4 border rounded-md overflow-hidden min-h-[150px] max-h-80 flex flex-col justify-center items-center bg-muted/50 p-3">
                  {isImageFile && previewUrl ? (
@@ -207,7 +199,7 @@ export default function TextbookSummaryPage() {
                 </div>
               )}
                {!user && !authLoading && (
-                 <Alert variant="destructive">
+                 <Alert variant = "destructive">
                     <AlertTriangle className="h-4 w-4" />
                      <AlertTitle>Login Required</AlertTitle>
                     <AlertDescription>Please log in to generate summaries.</AlertDescription>
@@ -215,7 +207,11 @@ export default function TextbookSummaryPage() {
                )}
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button type="submit" disabled={isLoading || !file || authLoading || !user} className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                disabled={isLoading || !file || authLoading || !user} // Comprehensive disable check
+                className="w-full sm:w-auto"
+               >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -237,19 +233,19 @@ export default function TextbookSummaryPage() {
         </Card>
 
         {/* Summary Section */}
-        <Card className="shadow-lg rounded-lg min-h-[400px] flex flex-col"> {/* Ensure min height & flex */}
+        <Card className="shadow-lg rounded-lg min-h-[400px] flex flex-col">
           <CardHeader>
             <CardTitle className="text-xl">Generated Summaries</CardTitle>
             <CardDescription>View the AI-generated summaries below.</CardDescription>
           </CardHeader>
-          <CardContent className="relative flex-1"> {/* Add relative & flex-1 */}
-            {isLoading && ( // Show overlay loader
+          <CardContent className="relative flex-1">
+            {isLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-b-lg">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground">Generating summaries...</p>
               </div>
             )}
-            {!isLoading && summary ? ( // Show content when not loading and summary exists
+            {!isLoading && summary ? (
               <Tabs defaultValue="text" className="w-full h-full flex flex-col">
                 <TabsList className="grid w-full grid-cols-3 mb-4 flex-shrink-0">
                   <TabsTrigger value="text"><Text className="mr-1 h-4 w-4" /> Text</TabsTrigger>
@@ -278,13 +274,12 @@ export default function TextbookSummaryPage() {
                 </TabsContent>
               </Tabs>
             ) : (
-                // Show placeholder only when not loading and no summary exists
                !isLoading && <p className="text-muted-foreground text-center flex items-center justify-center h-full">Upload a file and click "Generate Summaries" to see the results here.</p>
             )}
           </CardContent>
-           {summary && ( // Footer only shows if there are results
+           {summary && (
                <CardFooter className="pt-4 border-t flex justify-end flex-shrink-0">
-                  <Button variant="outline" size="sm" onClick={handleClear}>Clear Results</Button>
+                  <Button variant="outline" size="sm" onClick={handleClear} disabled={isLoading}>Clear Results</Button>
                </CardFooter>
            )}
         </Card>
@@ -292,3 +287,5 @@ export default function TextbookSummaryPage() {
     </div>
   );
 }
+
+    

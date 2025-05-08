@@ -7,54 +7,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress"; // Keep Progress for potential future use
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
-import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config'; // Import persistenceEnabled
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; // Import Firestore getDoc variants
-import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile as updateAuthProfile } from 'firebase/auth'; // Rename Firebase updateProfile
-// Removed Firebase Storage imports as we are using Data URIs
+import { db, ensureFirebaseInitialized, persistenceEnabled } from '@/lib/firebase/config';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile as updateAuthProfile } from 'firebase/auth';
 import { Loader2, UploadCloud, AlertTriangle } from 'lucide-react';
-import { getSchoolBoards, type SchoolBoard } from '@/services/school-board'; // Assuming this exists
+import { getSchoolBoards, type SchoolBoard } from '@/services/school-board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { UserProfile } from '@/types/user'; // Import UserProfile type
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import AlertTitle
+import type { UserProfile } from '@/types/user';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// Max avatar size (e.g., 1MB) - adjust as needed
 const MAX_AVATAR_SIZE = 1 * 1024 * 1024;
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth(); // Get user from AuthContext
+  const { user, loading: authLoading } = useAuth();
 
-  // State for profile data
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState('');
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null); // Store Data URL for avatar
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [schoolBoard, setSchoolBoard] = useState('');
   const [grade, setGrade] = useState('');
   const [password, setPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState(''); // For re-authentication
+  const [currentPassword, setCurrentPassword] = useState('');
 
-  // Loading and state management
-  const [isLoading, setIsLoading] = useState(true); // For profile data fetching
-  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Loading for profile data
+  const [isSaving, setIsSaving] = useState(false); // Loading for save operation
   const [schoolBoards, setSchoolBoards] = useState<SchoolBoard[]>([]);
-  const [isLoadingBoards, setIsLoadingBoards] = useState(true); // For boards list
-  const [avatarFile, setAvatarFile] = useState<File | null>(null); // Still track the file for temporary use
-  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server'); // Track data source
-  const [fetchError, setFetchError] = useState<string | null>(null); // Store fetch error
+  const [isLoadingBoards, setIsLoadingBoards] = useState(true);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [dataFetchSource, setDataFetchSource] = useState<'cache' | 'server' | 'default' | 'error'>('server');
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fetch school boards (this typically won't be cached by Firestore persistence)
+  // Fetch school boards
   useEffect(() => {
       const fetchBoards = async () => {
           setIsLoadingBoards(true);
           try {
-              const boards = await getSchoolBoards(); // Assuming this makes a network request
+              const boards = await getSchoolBoards();
               setSchoolBoards(boards);
           } catch (error) {
               console.error("Failed to fetch school boards:", error);
-              toast({ title: "Error", description: "Could not load school boards list.", variant: "destructive" });
+              toast({ title: "Error", description: "Could not load school boards list.", variant = "destructive" });
           } finally {
               setIsLoadingBoards(false);
           }
@@ -62,20 +57,18 @@ export default function ProfilePage() {
       fetchBoards();
   }, [toast]);
 
-  // Fetch user profile data from Firestore
+  // Fetch user profile data
   useEffect(() => {
-      // Wait for auth state to be resolved
       if (authLoading) {
-           setIsLoading(true); // Keep loading true while auth is resolving
+           setIsLoading(true);
            return;
       }
-      // Only fetch if user is loaded and exists
       if (user) {
           const fetchProfile = async () => {
-            setIsLoading(true); // Set loading true before fetch starts
-            setFetchError(null); // Reset error
+            setIsLoading(true);
+            setFetchError(null);
             try {
-                ensureFirebaseInitialized(); // Ensure Firebase is ready
+                ensureFirebaseInitialized();
                 const userDocRef = doc(db!, 'users', user.uid);
                 const docSnap = await getDoc(userDocRef);
 
@@ -84,92 +77,83 @@ export default function ProfilePage() {
 
                 if (docSnap.exists()) {
                     const data = docSnap.data() as UserProfile;
-                    // Basic validation (can be more thorough)
                     if (data && typeof data.name === 'string' && typeof data.email === 'string') {
                         setProfile(data);
                         setName(data.name || user.displayName || '');
-                        // Use avatarUrl from Firestore first, then auth, then fallback
                         const currentAvatar = data.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
-                        setAvatarDataUrl(currentAvatar); // Set initial avatar display URL/Data URL
-                        setSchoolBoard(data.schoolBoard || 'none'); // Default to 'none' if empty
-                        setGrade(data.grade || 'none'); // Default to 'none' if empty
+                        setAvatarDataUrl(currentAvatar);
+                        setSchoolBoard(data.schoolBoard || 'none');
+                        setGrade(data.grade || 'none');
                     } else {
                         console.warn("Fetched profile data has invalid structure:", data);
                         setFetchError("Profile data is corrupted. Creating default.");
                         await createDefaultProfile(userDocRef, user);
-                        setDataFetchSource('default'); // Mark as default data
+                        setDataFetchSource('default');
                     }
                 } else {
-                     // Create a default profile if it doesn't exist
                      console.log("User document not found in Firestore for UID:", user.uid, ". Creating default profile.");
                      await createDefaultProfile(userDocRef, user);
                      setDataFetchSource('default');
-                     setFetchError(null); // Clear any previous error if creating default
+                     setFetchError(null);
                 }
             } catch (error: any) {
                 console.error("Error fetching user profile:", error);
                  let errorDesc = "Could not load profile data.";
                  if (error.code === 'unavailable') {
                      errorDesc = "Network unavailable. Displaying cached or default data if possible.";
-                     setDataFetchSource('error'); // Indicate data might be stale or default
+                     setDataFetchSource('error');
                  } else if (error.code === 'permission-denied') {
                      errorDesc = "Permission denied. Could not load profile. Check Firestore rules.";
-                     console.error("Firestore permission denied. Check your security rules in firestore.rules and ensure they are deployed.");
                      setDataFetchSource('error');
                  } else {
                       setDataFetchSource('error');
                  }
                  setFetchError(errorDesc);
-                 toast({ title: "Error Loading Profile", description: errorDesc, variant: "destructive" });
-                 // Attempt to show fallback data even on error
+                 toast({ title: "Error Loading Profile", description: errorDesc, variant = "destructive" });
                  setName(user.displayName || user.email?.split('@')[0] || 'User');
                  const fallbackAvatar = user.photoURL || `https://avatar.vercel.sh/${user.email}.png`;
                  setAvatarDataUrl(fallbackAvatar);
-                 setSchoolBoard('none'); // Default on error
-                 setGrade('none'); // Default on error
+                 setSchoolBoard('none');
+                 setGrade('none');
             } finally {
-              setIsLoading(false); // Stop loading after fetch attempt
+              setIsLoading(false);
             }
           };
           fetchProfile();
       } else {
-          // Handle case where user is null after auth check
-          setIsLoading(false); // Stop loading if no user
+          setIsLoading(false);
           setFetchError("User not logged in.");
       }
-  }, [user, authLoading, toast]); // Depend on user and authLoading
+  }, [user, authLoading, toast]);
 
 
-    // Helper function to create and set the default profile
    const createDefaultProfile = async (docRef: any, currentUser: any) => {
         const defaultProfileData: UserProfile = {
             uid: currentUser.uid,
             name: currentUser.displayName || currentUser.email?.split('@')[0] || "New User",
             email: currentUser.email!,
-            // Use auth photoURL if available, else generate fallback
             avatarUrl: currentUser.photoURL || `https://avatar.vercel.sh/${currentUser.email}.png`,
-            schoolBoard: '', // Store empty in DB initially
-            grade: '', // Store empty in DB initially
+            schoolBoard: '',
+            grade: '',
             joinDate: currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toISOString() : new Date().toISOString(),
         };
          try {
-             await setDoc(docRef, defaultProfileData); // This write will be queued if offline
+             await setDoc(docRef, defaultProfileData);
              setProfile(defaultProfileData);
              setName(defaultProfileData.name);
-             setAvatarDataUrl(defaultProfileData.avatarUrl); // Use the URL set in defaultProfileData
-             setSchoolBoard('none'); // Set state to 'none'
-             setGrade('none'); // Set state to 'none'
-             console.log("Created/set default profile in Firestore (queued if offline).");
+             setAvatarDataUrl(defaultProfileData.avatarUrl);
+             setSchoolBoard('none');
+             setGrade('none');
+             console.log("Created/set default profile in Firestore.");
          } catch (creationError: any) {
              console.error("Error creating/setting default profile:", creationError);
              let errorDesc = "Could not initialize profile data.";
              if (creationError.code === 'permission-denied') {
                   errorDesc = "Permission denied. Cannot create default profile.";
              }
-             toast({ title: "Error", description: errorDesc, variant: "destructive" });
-             setFetchError(errorDesc); // Set fetch error state
-             // Attempt to set local state even if Firestore write fails
-             setProfile(defaultProfileData);
+             toast({ title: "Error", description: errorDesc, variant = "destructive" });
+             setFetchError(errorDesc);
+             setProfile(defaultProfileData); // Still set local state
              setName(defaultProfileData.name);
              setAvatarDataUrl(defaultProfileData.avatarUrl);
              setSchoolBoard('none');
@@ -177,59 +161,51 @@ export default function ProfilePage() {
          }
    }
 
-
   const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (file) {
           if (!file.type.startsWith('image/')) {
-              toast({ title: "Invalid File", description: "Please select an image file (PNG, JPG, GIF, WEBP).", variant: "destructive" });
+              toast({ title: "Invalid File", description: "Please select an image file (PNG, JPG, GIF, WEBP).", variant = "destructive" });
               setAvatarFile(null);
-              // Don't reset preview immediately, let user see the original
-              // setAvatarDataUrl(profile?.avatarUrl || user?.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
               event.target.value = '';
               return;
           }
           if (file.size > MAX_AVATAR_SIZE) {
-               toast({ title: "File Too Large", description: `Avatar image must be smaller than ${MAX_AVATAR_SIZE / 1024 / 1024}MB.`, variant: "destructive" });
+               toast({ title: "File Too Large", description: `Avatar image must be smaller than ${MAX_AVATAR_SIZE / 1024 / 1024}MB.`, variant = "destructive" });
                setAvatarFile(null);
                event.target.value = '';
                return;
           }
 
-          setAvatarFile(file); // Keep track of the selected file temporarily
+          setAvatarFile(file);
 
-          // Read the file as Data URL for preview and potential saving
           const reader = new FileReader();
           reader.onloadend = () => {
-              setAvatarDataUrl(reader.result as string); // Update state with Data URL for preview
+              setAvatarDataUrl(reader.result as string);
           };
           reader.readAsDataURL(file);
 
       } else {
-           // If user cancels file selection, reset file state but keep current preview
            setAvatarFile(null);
       }
-      // Don't clear event.target.value here, allows re-selecting the same file if needed
   };
 
 
    const handleUpdateProfile = async () => {
       if (!user) {
-          toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
+          toast({ title: "Error", description: "You must be logged in to update your profile.", variant = "destructive" });
           return;
       }
-       // Re-check initialization just in case
        try {
            ensureFirebaseInitialized();
        } catch (initErr: any) {
-            toast({ title: "Application Error", description: `Cannot save profile: ${initErr.message}`, variant: "destructive" });
+            toast({ title: "Application Error", description: `Cannot save profile: ${initErr.message}`, variant = "destructive" });
             return;
        }
 
-      setIsSaving(true);
-      let finalAvatarUrl = profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`; // Start with existing URL or fallback
+      setIsSaving(true); // Start saving indicator *before* async operations
+      let finalAvatarUrl = profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`;
 
-      // If a new avatar file was selected and converted to Data URL, use that
       if (avatarFile && avatarDataUrl && avatarDataUrl.startsWith('data:image')) {
           finalAvatarUrl = avatarDataUrl;
       }
@@ -237,21 +213,16 @@ export default function ProfilePage() {
       const userDocRef = doc(db!, 'users', user.uid);
       const changesToSave: Partial<Omit<UserProfile, 'uid' | 'email' | 'joinDate'>> = {
           name: name,
-          avatarUrl: finalAvatarUrl, // Save the Data URL or the original URL
+          avatarUrl: finalAvatarUrl,
           schoolBoard: schoolBoard === 'none' ? '' : schoolBoard,
           grade: grade === 'none' ? '' : grade,
-          // lastUpdated: serverTimestamp() // Consider adding if tracking updates is needed
       };
 
       try {
-           // Update Firestore document (will be queued if offline)
-           // Check if the document exists before updating, or use set with merge
            const docSnap = await getDoc(userDocRef);
            if (docSnap.exists()) {
                 await updateDoc(userDocRef, changesToSave);
            } else {
-               // If somehow the doc doesn't exist (e.g., error during initial creation),
-               // create it now with the updated info + essentials.
                console.warn("Profile document didn't exist during update, creating now.");
                await setDoc(userDocRef, {
                    ...changesToSave,
@@ -260,43 +231,37 @@ export default function ProfilePage() {
                    joinDate: profile?.joinDate || user.metadata.creationTime || new Date().toISOString(),
                });
            }
-           console.log("Firestore profile update queued (will sync when online).");
+           console.log("Firestore profile update queued.");
 
-           // Update local profile state immediately
-            setProfile(prev => ({
-                ...(prev || { uid: user.uid, email: user.email!, name: '', joinDate: new Date().toISOString() }), // Base default if prev is null
-                ...changesToSave // Apply changes
+           setProfile(prev => ({
+                ...(prev || { uid: user.uid, email: user.email!, name: '', joinDate: new Date().toISOString() }),
+                ...changesToSave
             }));
-            setAvatarFile(null); // Clear the temporary file state after saving
+            setAvatarFile(null);
 
-
-           // Attempt to update Firebase Auth profile (requires network)
            const authProfileNeedsUpdate = (name !== user.displayName || finalAvatarUrl !== user.photoURL);
            if (navigator.onLine && authProfileNeedsUpdate) {
                try {
                    await updateAuthProfile(user, {
                        displayName: name,
-                       // Only update photoURL if it's *not* a Data URL (Firebase Auth expects a real URL)
                        photoURL: finalAvatarUrl.startsWith('http') ? finalAvatarUrl : user.photoURL,
                    });
                     console.log("Firebase Auth profile updated (if URL was http).");
                } catch (authUpdateError: any) {
-                    console.warn("Could not update Firebase Auth profile (requires recent login or network):", authUpdateError);
+                    console.warn("Could not update Firebase Auth profile:", authUpdateError);
                      if (authUpdateError.code === 'auth/requires-recent-login') {
-                          toast({ title: "Auth Update Recommended", description: "Please log out and log back in to fully update your profile display name/picture.", variant: "default"});
+                          toast({ title: "Auth Update Recommended", description: "Log out and log back in to fully update your profile display.", variant: "default"});
                      } else {
-                         toast({ title: "Auth Update Info", description: "Could not update auth profile details (name/picture). Firestore data saved.", variant: "default"});
+                         toast({ title: "Auth Update Info", description: "Could not update auth profile details. Firestore data saved.", variant: "default"});
                      }
                }
            } else if (!navigator.onLine && authProfileNeedsUpdate) {
                 console.warn("Skipping Firebase Auth profile update while offline.");
            }
 
-
-           // Handle password change (Requires network)
            if (password) {
                if (!navigator.onLine) {
-                    toast({ title: "Offline", description: "Cannot change password while offline.", variant: "destructive"});
+                    toast({ title: "Offline", description: "Cannot change password while offline.", variant = "destructive"});
                } else if (!currentPassword) {
                    toast({ title: "Password Update Skipped", description: "Enter your current password to change it.", variant: "default" });
                } else {
@@ -304,11 +269,8 @@ export default function ProfilePage() {
                       ensureFirebaseInitialized();
                       if (!user.email) throw new Error("User email is not available for re-authentication.");
                       const credential = EmailAuthProvider.credential(user.email, currentPassword);
-                      console.log("Attempting re-authentication for password change...");
                       await reauthenticateWithCredential(user, credential);
-                      console.log("Re-authentication successful. Attempting password update...");
                       await updatePassword(user, password);
-                      console.log("Password update successful.");
                       toast({ title: "Password Updated", description: "Your password has been successfully updated." });
                       setPassword('');
                       setCurrentPassword('');
@@ -326,7 +288,7 @@ export default function ProfilePage() {
                        } else {
                             passErrorDesc = `Password update failed: ${passwordError.message || passwordError.code}`;
                        }
-                        toast({ title: "Password Update Failed", description: passErrorDesc, variant: "destructive" });
+                        toast({ title: "Password Update Failed", description: passErrorDesc, variant = "destructive" });
                    }
                }
            }
@@ -340,34 +302,30 @@ export default function ProfilePage() {
             let errorDesc = "Could not update profile Firestore data.";
             if (error.code === 'unavailable') {
                  errorDesc = "Network unavailable. Profile changes saved locally and will sync later.";
-                 // Optimistic update already happened, so just inform user
                  toast({ title: "Offline", description: errorDesc, variant: "default"});
             } else if (error.code === 'permission-denied') {
                  errorDesc = "Permission denied. Could not save profile data. Check Firestore rules.";
-                 console.error("Firestore permission denied during update. Check your security rules.");
-                 // Revert optimistic update if save failed due to permissions
-                  setProfile(profile); // Revert to original profile state
-                  setName(profile?.name || '');
-                  setAvatarDataUrl(profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
-                  setSchoolBoard(profile?.schoolBoard || 'none');
-                  setGrade(profile?.grade || 'none');
-                 toast({ title: "Save Failed", description: errorDesc, variant: "destructive" });
-            } else {
-                // Generic save error, revert UI changes
-                 setProfile(profile);
+                 setProfile(profile); // Revert optimistic update
                  setName(profile?.name || '');
                  setAvatarDataUrl(profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
                  setSchoolBoard(profile?.schoolBoard || 'none');
                  setGrade(profile?.grade || 'none');
-                 toast({ title: "Update Failed", description: error.message || errorDesc, variant: "destructive" });
+                 toast({ title: "Save Failed", description: errorDesc, variant = "destructive" });
+            } else {
+                 setProfile(profile); // Revert optimistic update
+                 setName(profile?.name || '');
+                 setAvatarDataUrl(profile?.avatarUrl || user.photoURL || `https://avatar.vercel.sh/${user?.email}.png`);
+                 setSchoolBoard(profile?.schoolBoard || 'none');
+                 setGrade(profile?.grade || 'none');
+                 toast({ title: "Update Failed", description: error.message || errorDesc, variant = "destructive" });
             }
       } finally {
-          setIsSaving(false);
+          setIsSaving(false); // Stop saving indicator regardless of success/failure
       }
   };
 
 
-  // Combine loading states for the main spinner
+  // Combine loading states
   if (isLoading || authLoading || isLoadingBoards) {
       return (
           <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -382,7 +340,7 @@ export default function ProfilePage() {
        return (
           <div className="container mx-auto py-8 text-center">
               <h1 className="text-3xl font-bold mb-6">My Profile</h1>
-               <Alert variant="destructive" className="max-w-md mx-auto">
+               <Alert variant = "destructive" className="max-w-md mx-auto">
                  <AlertTriangle className="h-4 w-4" />
                  <AlertTitle>{fetchError ? "Error Loading Profile" : "Not Logged In"}</AlertTitle>
                  <AlertDescription>{fetchError || "Please log in to view your profile."}</AlertDescription>
@@ -395,7 +353,7 @@ export default function ProfilePage() {
   const getInitials = (nameString: string | undefined) => {
     if (!nameString) return '??';
     const names = nameString.trim().split(' ');
-    if (names.length === 1 && names[0] === '') return '??'; // Handle empty string case
+    if (names.length === 1 && names[0] === '') return '??';
     const initials = names.map(n => n[0]).join('');
     return initials.slice(0, 2).toUpperCase();
   }
@@ -417,10 +375,9 @@ export default function ProfilePage() {
        }
    }
 
-   // Use 'none' as the value for the unselected state in Select components
    const schoolBoardValue = schoolBoard || 'none';
    const gradeValue = grade || 'none';
-   const displayAvatar = avatarDataUrl || `https://avatar.vercel.sh/${user?.email}.png`; // Fallback if state is null
+   const displayAvatar = avatarDataUrl || `https://avatar.vercel.sh/${user?.email}.png`;
 
   return (
     <div className="container mx-auto py-8">
@@ -435,7 +392,6 @@ export default function ProfilePage() {
         <CardHeader className="flex flex-col items-center text-center">
            <div className="relative group">
              <Avatar className="h-24 w-24 mb-4">
-               {/* Key forces re-render if URL/Data URL changes */}
                <AvatarImage key={displayAvatar} src={displayAvatar} alt={name} data-ai-hint="user avatar placeholder" />
                <AvatarFallback>{getInitials(name)}</AvatarFallback>
              </Avatar>
@@ -444,13 +400,12 @@ export default function ProfilePage() {
                  <Input id="avatar-upload" type="file" accept="image/*" onChange={handleAvatarChange} className="sr-only" disabled={isSaving}/>
              </Label>
            </div>
-           {/* Progress bar removed as Data URL generation is instant */}
            {avatarFile && (
              <p className="text-xs text-muted-foreground mt-1">New avatar selected. Click Update Profile to save.</p>
            )}
 
           <CardTitle className="text-2xl mt-2">{name}</CardTitle>
-          <CardDescription>{user?.email}</CardDescription> {/* Use safe access */}
+          <CardDescription>{user?.email!}</CardDescription>
           <div className="flex flex-wrap justify-center gap-2 mt-2">
              {schoolBoardValue !== 'none' && <Badge variant="secondary">{schoolBoards.find(b => b.id === schoolBoardValue)?.name || schoolBoardValue}</Badge>}
              {gradeValue !== 'none' && <Badge variant="outline">Grade {gradeValue}</Badge>}
@@ -472,7 +427,7 @@ export default function ProfilePage() {
           <div className="space-y-2">
               <Label htmlFor="school-board">School Board</Label>
               <Select
-                  value={schoolBoardValue} // Use state value here
+                  value={schoolBoardValue}
                   onValueChange={setSchoolBoard}
                   disabled={isLoadingBoards || isSaving}
               >
@@ -490,7 +445,7 @@ export default function ProfilePage() {
           <div className="space-y-2">
               <Label htmlFor="grade-level">Grade Level</Label>
               <Select
-                  value={gradeValue} // Use state value here
+                  value={gradeValue}
                   onValueChange={setGrade}
                   disabled={isSaving}
               >
@@ -502,7 +457,7 @@ export default function ProfilePage() {
                       {[...Array(12)].map((_, i) => (
                           <SelectItem key={i + 1} value={`${i + 1}`}>Grade {i + 1}</SelectItem>
                       ))}
-                      <SelectItem value="other">Other/Not Applicable</SelectItem> {/* Added Other option */}
+                      <SelectItem value="other">Other/Not Applicable</SelectItem>
                   </SelectContent>
               </Select>
           </div>
@@ -548,7 +503,10 @@ export default function ProfilePage() {
 
         </CardContent>
         <CardFooter className="flex justify-end">
-          <Button onClick={handleUpdateProfile} disabled={isSaving}>
+          <Button
+              onClick={handleUpdateProfile}
+              disabled={isSaving || isLoading} // Disable if saving or still loading profile
+            >
             {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Update Profile'}
           </Button>
         </CardFooter>
@@ -557,3 +515,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
