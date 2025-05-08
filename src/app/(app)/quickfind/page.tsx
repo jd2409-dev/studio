@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent, useRef } from 'react';
@@ -58,15 +59,27 @@ export default function QuickFindPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-      toast({ title: "Authentication Required", description: "Please log in.", variant = "destructive" });
+      toast({
+        title: "Authentication Required",
+        description: "Please log in.",
+        variant: "destructive" // Fixed syntax: changed = to :
+      });
       return;
     }
     if (!file) {
-      toast({ title: "Input Required", description: "Please select a PDF file.", variant = "destructive" });
+      toast({
+        title: "Input Required",
+        description: "Please select a PDF file.",
+        variant: "destructive" // Fixed syntax: changed = to :
+      });
       return;
     }
     if (!question.trim()) {
-        toast({ title: "Input Required", description: "Please enter a question to search for.", variant = "destructive" });
+        toast({
+          title: "Input Required",
+          description: "Please enter a question to search for.",
+          variant: "destructive" // Fixed syntax: changed = to :
+        });
         return;
     }
 
@@ -79,7 +92,7 @@ export default function QuickFindPage() {
     reader.onload = async () => {
       const fileDataUri = reader.result as string;
       if (!fileDataUri || !fileDataUri.startsWith(`data:${ALLOWED_FILE_TYPE};base64,`)) {
-        toast({ title: "File Read Error", description: "Failed to read the PDF file.", variant = "destructive" });
+        toast({ title: "File Read Error", description: "Failed to read the PDF file.", variant: "destructive" });
         setIsLoading(false);
         return;
       }
@@ -93,11 +106,11 @@ export default function QuickFindPage() {
         if (searchResult.status === 'success' && searchResult.results && searchResult.results.length > 0) {
              toast({ title: "Success", description: "Found potential answers in the document." });
         } else if (searchResult.status === 'not_found') {
-             toast({ title: "Not Found", description: "Could not find a relevant answer in the document.", variant:"default"});
+             toast({ title: "Not Found", description: "Could not find a relevant answer in the document.", variant: "default"});
         } else if (searchResult.status === 'error') {
-            toast({ title: "Search Error", description: searchResult.errorMessage || "An error occurred during the search.", variant = "destructive" });
+            toast({ title: "Search Error", description: searchResult.errorMessage || "An error occurred during the search.", variant: "destructive" });
         } else {
-            toast({ title: "Search Complete", description: "No specific answer snippets found, but the search completed.", variant:"default"});
+            toast({ title: "Search Complete", description: "No specific answer snippets found, but the search completed.", variant: "default"});
         }
 
         setResults(searchResult);
@@ -115,16 +128,16 @@ export default function QuickFindPage() {
                 errorDesc = error.message;
             }
          }
-        toast({ title: "Error Searching Document", description: errorDesc, variant = "destructive" });
+        toast({ title: "Error Searching Document", description: errorDesc, variant: "destructive" });
         setResults({ status: 'error', errorMessage: errorDesc, results: [] });
       } finally {
-        setIsLoading(false); // Stop loading indicator regardless of success/failure
+        setIsLoading(false); // Stop loading indicator regardless of success or failure
       }
     };
 
     reader.onerror = (error) => {
       console.error("Error reading file:", error);
-      toast({ title: "File Read Error", description: "Could not read the selected file.", variant = "destructive" });
+      toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
       setIsLoading(false);
     };
   };
@@ -238,10 +251,10 @@ export default function QuickFindPage() {
              <CardHeader>
                 <CardTitle className="text-xl">Search Results</CardTitle>
                 <CardDescription>
-                    {results.status === 'success' && results.results.length > 0 && `Found ${results.results.length} potential answer(s) for your question.`}
+                    {results.status === 'success' && results.results && results.results.length > 0 && `Found ${results.results.length} potential answer(s) for your question.`}
                     {results.status === 'not_found' && "Could not find a relevant answer in the document."}
                     {results.status === 'error' && `An error occurred: ${results.errorMessage || 'Unknown error'}`}
-                    {results.status === 'success' && results.results.length === 0 && "Search complete, but no specific snippets found."}
+                    {results.status === 'success' && (!results.results || results.results.length === 0) && "Search complete, but no specific snippets found."}
                 </CardDescription>
              </CardHeader>
              <CardContent>
@@ -284,5 +297,3 @@ export default function QuickFindPage() {
     </div>
   );
 }
-
-    

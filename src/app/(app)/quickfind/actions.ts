@@ -1,6 +1,8 @@
 'use server';
 
-import { quickFindFlow, QuickFindInput, QuickFindInputSchema, QuickFindOutput } from '@/ai/flows/quickfind-flow';
+// Ensure flow and types are imported correctly
+import { quickFindFlow, type QuickFindInput, QuickFindInputSchema, type QuickFindOutput } from '@/ai/flows/quickfind-flow';
+import { z } from 'zod'; // Import Zod for error checking
 
 /**
  * Server action to trigger the QuickFind AI flow.
@@ -28,7 +30,7 @@ export async function findInDocument(input: QuickFindInput): Promise<QuickFindOu
     // Handle potential errors (validation or flow execution)
     console.error("Server Action findInDocument: Error occurred:", err.message, err.stack);
 
-    if (err.name === 'ZodError') {
+    if (err instanceof z.ZodError) { // Use instanceof for Zod errors
         // Specific handling for validation errors
         const validationErrors = err.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join('; ');
         console.error("Server Action findInDocument: Zod validation failed:", validationErrors);

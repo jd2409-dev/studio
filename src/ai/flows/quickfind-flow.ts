@@ -1,4 +1,4 @@
-'use server';
+'use client'; // Changed from 'use server' to 'use client' or remove entirely if not needed client-side
 
 /**
  * @fileOverview AI Document Search (QuickFind) Flow.
@@ -8,6 +8,10 @@
  * - QuickFindInput - The input type for the flow.
  * - QuickFindOutput - The return type for the flow.
  */
+
+// Removed 'use server' directive from here.
+// It should only be in the file exporting the server action function(s),
+// like src/app/(app)/quickfind/actions.ts.
 
 import { ai, z, gemini15Flash } from '@/lib/genkit/instance';
 
