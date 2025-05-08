@@ -17,11 +17,13 @@ import { cn } from '@/lib/utils';
 const ALLOWED_UPLOAD_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
 const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
 
+type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+
 export default function UploadTextbookPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false); // Tracks the entire upload process
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadStatus, setUploadStatus] = 'idle' | 'uploading' | 'success' | 'error' ('idle');
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [isOnline, setIsOnline] = useState(true);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -95,7 +97,6 @@ export default function UploadTextbookPage() {
       setUploadStatus('error');
       return;
     }
-
 
     try {
         ensureFirebaseInitialized();
@@ -183,25 +184,26 @@ export default function UploadTextbookPage() {
     }
   };
 
-   // Show loader if auth is still loading
-   if (authLoading) {
-      return (
-         <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-           <Loader2 className="h-16 w-16 animate-spin text-primary" />
-         </div>
-      );
-   }
+   // Function to clear selected file and reset the state
+   const handleClearFile = () => {
+    setFile(null);
+    setUploadProgress(null);
+    setUploadStatus('idle');
+    if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Reset the file input
+    }
+};
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-2">Upload Textbook Content</h1>
       <p className="text-muted-foreground mb-8 max-w-xl">
-        Upload chapters or sections (PDF, DOCX, TXT). Files are stored securely and can be used later for AI features. Max size: {MAX_UPLOAD_SIZE / 1024 / 1024}MB.
+        Upload chapters or sections (PDF, DOC/DOCX, TXT). Files are stored securely and can be used later for AI features. Max size: {MAX_UPLOAD_SIZE / 1024 / 1024}MB.
       </p>
 
       {!isOnline && (
            <Alert variant = "destructive" className="mb-6 max-w-lg mx-auto shadow">
-              <WifiOff className="h-4 w-4" />
+              <AlertTriangle className="h-4 w-4" />
              <AlertTitle>You are currently offline</AlertTitle>
              <AlertDescription>
                File uploading requires an active internet connection. Please reconnect.
@@ -270,13 +272,13 @@ export default function UploadTextbookPage() {
                  </Alert>
                )}
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex justify-between">
             <Button
               type="submit"
               disabled={isLoading || !file || uploadStatus === 'success' || !isOnline || authLoading || !user || uploadStatus === 'uploading'}
               className="w-full"
             >
-              {isLoading && uploadStatus === 'uploading' ? ( // Show loading only when actively uploading
+              {isLoading && uploadStatus === 'uploading' ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Uploading...
@@ -295,6 +297,9 @@ export default function UploadTextbookPage() {
                 </>
               )}
             </Button>
+            {file && (
+                <Button variant="ghost" type="button" onClick={handleClearFile} disabled={isLoading}>Clear</Button>
+            )}
           </CardFooter>
         </form>
       </Card>
@@ -302,5 +307,3 @@ export default function UploadTextbookPage() {
   );
 }
 
-    
-    
