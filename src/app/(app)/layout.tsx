@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -104,81 +105,81 @@ export default function AppLayout({ children }: { children: ReactNode }) {
              {/* Main Features */}
              <SidebarMenuItem>
                <Link href="/" passHref>
-                  <SidebarMenuButton asChild isActive={pathname === '/'}>
-                        <Home />
-                        <span>Dashboard</span>
+                  <SidebarMenuButton isActive={pathname === '/'}> {/* Removed asChild */}
+                     <Home />
+                     <span>Dashboard</span>
                   </SidebarMenuButton>
                </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
                 <Link href="/textbook-summary" passHref>
-                   <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
-                         <BookOpen />
-                         <span>Textbook Summary</span>
+                   <SidebarMenuButton isActive={pathname === '/textbook-summary'}> {/* Removed asChild */}
+                      <BookOpen />
+                      <span>Textbook Summary</span>
                    </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
               <SidebarMenuItem>
                   <Link href="/textbook-explainer" passHref>
-                     <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'}>
-                           <MessageSquareQuote />
-                           <span>Textbook Explainer</span>
+                     <SidebarMenuButton isActive={pathname === '/textbook-explainer'}> {/* Removed asChild */}
+                        <MessageSquareQuote />
+                        <span>Textbook Explainer</span>
                      </SidebarMenuButton>
                    </Link>
               </SidebarMenuItem>
               <SidebarMenuItem>
                   <Link href="/quickfind" passHref>
-                     <SidebarMenuButton asChild isActive={pathname === '/quickfind'}>
-                           <Search />
-                           <span>QuickFind</span>
+                     <SidebarMenuButton isActive={pathname === '/quickfind'}> {/* Removed asChild */}
+                        <Search />
+                        <span>QuickFind</span>
                      </SidebarMenuButton>
                   </Link>
               </SidebarMenuItem>
              <SidebarMenuItem>
                  <Link href="/quiz" passHref>
-                   <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
-                          <HelpCircle />
-                          <span>Quiz Generation</span>
+                   <SidebarMenuButton isActive={pathname === '/quiz'}> {/* Removed asChild */}
+                       <HelpCircle />
+                       <span>Quiz Generation</span>
                    </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
             <SidebarMenuItem>
                 <Link href="/upload-textbook" passHref>
-                   <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
-                         <Upload />
-                         <span>Upload Textbook</span>
+                   <SidebarMenuButton isActive={pathname === '/upload-textbook'}> {/* Removed asChild */}
+                      <Upload />
+                      <span>Upload Textbook</span>
                    </SidebarMenuButton>
                  </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
                   <Link href="/study-planner" passHref>
-                     <SidebarMenuButton asChild isActive={pathname === '/study-planner'}>
-                          <CalendarDays />
-                          <span>Study Planner</span>
+                     <SidebarMenuButton isActive={pathname === '/study-planner'}> {/* Removed asChild */}
+                       <CalendarDays />
+                       <span>Study Planner</span>
                      </SidebarMenuButton>
                    </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
                   <Link href="/performance" passHref>
-                     <SidebarMenuButton asChild isActive={pathname === '/performance'}>
-                          <Activity />
-                          <span>Performance</span>
+                     <SidebarMenuButton isActive={pathname === '/performance'}> {/* Removed asChild */}
+                       <Activity />
+                       <span>Performance</span>
                      </SidebarMenuButton>
                    </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
                  <Link href="/ai-tutor" passHref>
-                     <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'}>
-                           <BrainCircuit />
-                           <span>AI Tutor</span>
+                     <SidebarMenuButton isActive={pathname === '/ai-tutor'}> {/* Removed asChild */}
+                        <BrainCircuit />
+                        <span>AI Tutor</span>
                      </SidebarMenuButton>
                   </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
                  <Link href="/reflection" passHref>
-                    <SidebarMenuButton asChild isActive={pathname === '/reflection'}>
-                            <ListChecks />
-                            <span>Reflection</span>
+                    <SidebarMenuButton isActive={pathname === '/reflection'}> {/* Removed asChild */}
+                       <ListChecks />
+                       <span>Reflection</span>
                     </SidebarMenuButton>
                  </Link>
              </SidebarMenuItem>
@@ -190,21 +191,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu className="space-y-1">
             <SidebarMenuItem>
                <Link href="/settings" passHref>
-                  <SidebarMenuButton asChild isActive={pathname === '/settings'}>
-                       <Settings />
-                       <span>Settings</span>
+                  <SidebarMenuButton isActive={pathname === '/settings'}> {/* Removed asChild */}
+                     <Settings />
+                     <span>Settings</span>
                   </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
                <Link href="/profile" passHref>
-                  <SidebarMenuButton asChild isActive={pathname === '/profile'}>
-                       <User />
-                       <span>Profile</span>
+                  <SidebarMenuButton isActive={pathname === '/profile'}> {/* Removed asChild */}
+                     <User />
+                     <span>Profile</span>
                   </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              {/* Logout doesn't need Link, just a button */}
               <SidebarMenuButton onClick={handleLogout}>
                 <LogOut />
                  <span>Log Out</span>
