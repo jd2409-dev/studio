@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar'; // Removed SidebarTrigger
 import { Home, BookOpen, HelpCircle, Settings, User, Upload, LogOut, Activity, BrainCircuit, CalendarDays, ListChecks, MessageSquareQuote, Search } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -80,12 +80,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // If we reach here, auth is loaded, user exists, and no critical errors.
   console.log("AppLayout: Auth loaded, user exists. Rendering layout.");
   return (
+    // Ensure sidebar is open by default since toggle is removed
     <SidebarProvider defaultOpen={true}>
-      {/* Desktop Sidebar */}
-      <Sidebar className="hidden md:flex flex-col" collapsible="icon"> {/* Ensure collapsible="icon" */}
+      {/* Desktop Sidebar - Set collapsible to "none" so it doesn't collapse */}
+      <Sidebar className="hidden md:flex flex-col" collapsible="none">
         <SidebarHeader className="flex items-center justify-between p-2 border-b border-sidebar-border">
-            {/* Expanded Logo/Title */}
-            <Link href="/" className="flex items-center gap-2 group-data-[state=expanded]:flex group-data-[state=collapsed]:hidden">
+            {/* Logo/Title */}
+            <Link href="/" className="flex items-center gap-2">
                {/* SVG Logo */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
                   <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -94,16 +95,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </svg>
                 <span className="font-semibold text-lg text-sidebar-foreground">NexusLearn AI</span>
             </Link>
-             {/* Collapsed Logo/Icon */}
-            <Link href="/" className="items-center gap-2 hidden group-data-[state=collapsed]:flex group-data-[state=expanded]:hidden p-1.5" aria-label="NexusLearn AI Home">
-                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
-                   <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                   <path d="M2 17l10 5 10-5"/>
-                   <path d="M2 12l10 5 10-5"/>
-                 </svg>
-            </Link>
-          {/* Trigger is only visually relevant when expanded */}
-          <SidebarTrigger className="ml-auto group-data-[state=collapsed]:hidden"/>
+             {/* Removed SidebarTrigger */}
         </SidebarHeader>
 
         {/* Scrollable Content Area */}
@@ -111,109 +103,133 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu className="space-y-1">
              {/* Main Features */}
              <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-                 <Link href="/">
-                   <Home />
-                   <span>Dashboard</span>
-                 </Link>
-               </SidebarMenuButton>
+               <Link href="/" passHref legacyBehavior>
+                  <SidebarMenuButton asChild isActive={pathname === '/'}>
+                     <a> {/* Use anchor tag */}
+                        <Home />
+                        <span>Dashboard</span>
+                     </a>
+                  </SidebarMenuButton>
+               </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'} tooltip="Textbook Summary">
-                 <Link href="/textbook-summary">
-                   <BookOpen />
-                   <span>Textbook Summary</span>
+                <Link href="/textbook-summary" passHref legacyBehavior>
+                   <SidebarMenuButton asChild isActive={pathname === '/textbook-summary'}>
+                      <a>
+                         <BookOpen />
+                         <span>Textbook Summary</span>
+                      </a>
+                   </SidebarMenuButton>
                  </Link>
-               </SidebarMenuButton>
              </SidebarMenuItem>
               <SidebarMenuItem>
-                 <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'} tooltip="Textbook Explainer">
-                   <Link href="/textbook-explainer">
-                      <MessageSquareQuote />
-                      <span>Textbook Explainer</span>
+                  <Link href="/textbook-explainer" passHref legacyBehavior>
+                     <SidebarMenuButton asChild isActive={pathname === '/textbook-explainer'}>
+                        <a>
+                           <MessageSquareQuote />
+                           <span>Textbook Explainer</span>
+                        </a>
+                     </SidebarMenuButton>
                    </Link>
-                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                 <SidebarMenuButton asChild isActive={pathname === '/quickfind'} tooltip="QuickFind Document Search">
-                   <Link href="/quickfind">
-                      <Search />
-                      <span>QuickFind</span>
-                   </Link>
-                 </SidebarMenuButton>
+                  <Link href="/quickfind" passHref legacyBehavior>
+                     <SidebarMenuButton asChild isActive={pathname === '/quickfind'}>
+                        <a>
+                           <Search />
+                           <span>QuickFind</span>
+                        </a>
+                     </SidebarMenuButton>
+                  </Link>
               </SidebarMenuItem>
              <SidebarMenuItem>
-               <SidebarMenuButton asChild isActive={pathname === '/quiz'} tooltip="Quiz Generation">
-                 <Link href="/quiz">
-                   <HelpCircle />
-                    <span>Quiz Generation</span>
+                 <Link href="/quiz" passHref legacyBehavior>
+                   <SidebarMenuButton asChild isActive={pathname === '/quiz'}>
+                       <a>
+                          <HelpCircle />
+                          <span>Quiz Generation</span>
+                       </a>
+                   </SidebarMenuButton>
                  </Link>
-               </SidebarMenuButton>
              </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'} tooltip="Upload Textbook">
-                <Link href="/upload-textbook">
-                  <Upload />
-                   <span>Upload Textbook</span>
-                </Link>
-              </SidebarMenuButton>
+                <Link href="/upload-textbook" passHref legacyBehavior>
+                   <SidebarMenuButton asChild isActive={pathname === '/upload-textbook'}>
+                      <a>
+                         <Upload />
+                         <span>Upload Textbook</span>
+                      </a>
+                   </SidebarMenuButton>
+                 </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/study-planner'} tooltip="Study Planner">
-                  <Link href="/study-planner">
-                    <CalendarDays />
-                     <span>Study Planner</span>
-                  </Link>
-                </SidebarMenuButton>
+                  <Link href="/study-planner" passHref legacyBehavior>
+                     <SidebarMenuButton asChild isActive={pathname === '/study-planner'}>
+                       <a>
+                          <CalendarDays />
+                          <span>Study Planner</span>
+                       </a>
+                     </SidebarMenuButton>
+                   </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/performance'} tooltip="Performance Analytics">
-                  <Link href="/performance">
-                    <Activity />
-                     <span>Performance</span>
-                  </Link>
-                </SidebarMenuButton>
+                  <Link href="/performance" passHref legacyBehavior>
+                     <SidebarMenuButton asChild isActive={pathname === '/performance'}>
+                       <a>
+                          <Activity />
+                          <span>Performance</span>
+                       </a>
+                     </SidebarMenuButton>
+                   </Link>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'} tooltip="AI Tutor">
-                  <Link href="/ai-tutor">
-                    <BrainCircuit />
-                     <span>AI Tutor</span>
+                 <Link href="/ai-tutor" passHref legacyBehavior>
+                     <SidebarMenuButton asChild isActive={pathname === '/ai-tutor'}>
+                        <a>
+                           <BrainCircuit />
+                           <span>AI Tutor</span>
+                        </a>
+                     </SidebarMenuButton>
                   </Link>
-                </SidebarMenuButton>
              </SidebarMenuItem>
              <SidebarMenuItem>
-                 <SidebarMenuButton asChild isActive={pathname === '/reflection'} tooltip="Reflection">
-                    <Link href="/reflection">
-                        <ListChecks />
-                        <span>Reflection</span>
-                    </Link>
-                 </SidebarMenuButton>
+                 <Link href="/reflection" passHref legacyBehavior>
+                    <SidebarMenuButton asChild isActive={pathname === '/reflection'}>
+                        <a>
+                            <ListChecks />
+                            <span>Reflection</span>
+                        </a>
+                    </SidebarMenuButton>
+                 </Link>
              </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
 
         {/* Footer Section */}
-        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto group-data-[state=collapsed]:group-data-[collapsible=icon]:border-t-0">
+        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
           <SidebarMenu className="space-y-1">
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
-                <Link href="/settings">
-                  <Settings />
-                   <span>Settings</span>
+               <Link href="/settings" passHref legacyBehavior>
+                  <SidebarMenuButton asChild isActive={pathname === '/settings'}>
+                    <a>
+                       <Settings />
+                       <span>Settings</span>
+                    </a>
+                  </SidebarMenuButton>
                 </Link>
-              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/profile'} tooltip="Profile">
-                <Link href="/profile">
-                  <User />
-                   <span>Profile</span>
+               <Link href="/profile" passHref legacyBehavior>
+                  <SidebarMenuButton asChild isActive={pathname === '/profile'}>
+                    <a>
+                       <User />
+                       <span>Profile</span>
+                    </a>
+                  </SidebarMenuButton>
                 </Link>
-              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleLogout} tooltip="Log Out">
+              <SidebarMenuButton onClick={handleLogout}>
                 <LogOut />
                  <span>Log Out</span>
               </SidebarMenuButton>
@@ -224,7 +240,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Main Content Area */}
       <SidebarInset className="flex-1 flex flex-col">
-        {/* Mobile Header */}
+        {/* Mobile Header - Removed the trigger */}
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 md:hidden">
            <Link href="/" className="flex items-center gap-2" aria-label="NexusLearn AI Home">
               {/* SVG Logo */}
@@ -235,7 +251,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </svg>
              <span className="font-semibold text-lg">NexusLearn AI</span>
            </Link>
-          <SidebarTrigger /> {/* Mobile Menu Trigger */}
+          {/* <SidebarTrigger /> Mobile Menu Trigger REMOVED */}
+          {/* Note: Removing the trigger means the mobile sidebar cannot be opened easily. */}
+          {/* You might need an alternative way to show the mobile menu if required. */}
         </header>
 
         {/* Main Scrollable Content */}
@@ -246,3 +264,5 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
+    
