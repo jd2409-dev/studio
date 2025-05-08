@@ -1,5 +1,3 @@
-
-
 'use client'; // Corrected directive
 
 import * as React from "react";
@@ -25,7 +23,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem"; // Approx 256px
 const SIDEBAR_WIDTH_MOBILE = "18rem"; // Slightly wider for mobile
-const SIDEBAR_WIDTH_ICON = "3rem"; // Approx 48px + padding
+const SIDEBAR_WIDTH_ICON = "3.5rem"; // Approx 56px for icon + padding
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContext = {
@@ -425,7 +423,7 @@ const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex flex-col gap-2 p-2 border-b border-sidebar-border flex-shrink-0", className)} // Add flex-shrink-0
+      className={cn("flex flex-col gap-2 p-2 border-b border-sidebar-border flex-shrink-0 group-data-[state=collapsed]:group-data-[collapsible=icon]:p-0 group-data-[state=collapsed]:group-data-[collapsible=icon]:border-b-0", className)} // Add flex-shrink-0 and icon collapse styles
       {...props}
     />
   );
@@ -455,7 +453,7 @@ const SidebarSeparator = React.forwardRef<
     <Separator
       ref={ref}
       data-sidebar="separator"
-      className={cn("mx-2 my-1 w-auto bg-sidebar-border", className)} // Use theme color
+      className={cn("mx-2 my-1 w-auto bg-sidebar-border group-data-[state=collapsed]:group-data-[collapsible=icon]:mx-auto group-data-[state=collapsed]:group-data-[collapsible=icon]:w-3/4", className)} // Use theme color and center when collapsed
       {...props}
     />
   );
@@ -587,6 +585,7 @@ const sidebarMenuButtonVariants = cva(
    // Icon collapse specific styles: fixed size, center content
    "group-data-[collapsible=icon]:group-data-[state=collapsed]:size-9 group-data-[collapsible=icon]:group-data-[state=collapsed]:p-0 group-data-[collapsible=icon]:group-data-[state=collapsed]:items-center group-data-[collapsible=icon]:group-data-[state=collapsed]:justify-center",
    // Hide the text span specifically when collapsed in icon mode, targeting any span after the first child (icon)
+   // IMPORTANT: Target the direct child span, assuming structure is <Icon/><span/>
    "group-data-[collapsible=icon]:group-data-[state=collapsed]:[&>span]:hidden",
    // Ensure icon size is consistent
    "[&>svg]:size-4 [&>svg]:shrink-0", // Base icon size
