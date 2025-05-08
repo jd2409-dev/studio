@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent, useRef } from 'react';
@@ -45,7 +46,7 @@ export default function TextbookSummaryPage() {
           toast({
               title: "Invalid File Type",
               description: `Unsupported file. Please upload: ${ALLOWED_FILE_TYPES.map(t => t.split('/')[1]).join(', ')}.`,
-              variant = "destructive",
+              variant: "destructive", // Added comma
           });
           if (event.target) event.target.value = '';
           return;
@@ -54,7 +55,7 @@ export default function TextbookSummaryPage() {
           toast({
               title: "File Too Large",
               description: `File must be smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
-              variant = "destructive",
+              variant: "destructive", // Added comma
           });
           if (event.target) event.target.value = '';
           return;
@@ -78,11 +79,11 @@ export default function TextbookSummaryPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
      if (!user) {
-        toast({ title: "Error", description: "Please log in to generate summaries.", variant = "destructive" });
+        toast({ title: "Error", description: "Please log in to generate summaries.", variant: "destructive" });
         return;
     }
     if (!file) {
-      toast({ title: "Error", description: "Please select a file first.", variant = "destructive" });
+      toast({ title: "Error", description: "Please select a file first.", variant: "destructive" });
       return;
     }
 
@@ -95,7 +96,7 @@ export default function TextbookSummaryPage() {
     reader.onload = async () => {
         const fileDataUri = reader.result as string;
         if (!fileDataUri || !fileDataUri.startsWith('data:')) {
-            toast({ title: "File Read Error", description: "Failed to read the file correctly.", variant = "destructive" });
+            toast({ title: "File Read Error", description: "Failed to read the file correctly.", variant: "destructive" });
             setIsLoading(false);
             return;
         }
@@ -125,14 +126,14 @@ export default function TextbookSummaryPage() {
                     errorDesc = error.message;
                  }
             }
-            toast({ title: "Error Generating Summary", description: errorDesc, variant = "destructive" });
+            toast({ title: "Error Generating Summary", description: errorDesc, variant: "destructive" });
         } finally {
             setIsLoading(false); // Stop loading indicator regardless of success/failure
         }
     };
     reader.onerror = (error) => {
         console.error("Error reading file:", error);
-        toast({ title: "File Read Error", description: "Could not read the selected file.", variant = "destructive" });
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
         setIsLoading(false);
     };
 };
@@ -288,4 +289,3 @@ export default function TextbookSummaryPage() {
   );
 }
 
-    
