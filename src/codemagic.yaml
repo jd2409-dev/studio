@@ -1,0 +1,39 @@
+workflows:
+  react-native-workflow:
+    name: React Native CI/CD
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        PACKAGE_NAME: "com.nexuslearn.ai"
+        NODE_VERSION: 18
+        GRADLE_VERSION: 7.5
+        XCODE_SCHEME: "NexusLearnAI"
+    scripts:
+      - name: Install dependencies
+        script: |
+          echo "Setting up Node.js..."
+          nvm install $NODE_VERSION
+          nvm use $NODE_VERSION
+          npm install
+
+      - name: Set up Android build environment
+        script: |
+          echo "Configuring Android SDK..."
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Build Android release
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --parallel
+
+      - name: Build iOS release
+        script: |
+          cd ios
+          pod install
+          xcodebuild -workspace NexusLearnAI.xcworkspace \
+            -scheme $XCODE_SCHEME \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
